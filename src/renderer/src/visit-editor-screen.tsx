@@ -129,7 +129,7 @@ export function VisitEditorScreen(props: {
                     note: {
                       ...current.note,
                       treatmentNumber: num,
-                      noteType: getSuggestedNoteType(num),
+                      noteType: num !== null ? getSuggestedNoteType(num) : current.note.noteType,
                       structuredFields: {
                         ...current.note.structuredFields,
                         siteSnapshots: current.note.structuredFields.siteSnapshots.map((site) => ({ ...site, cumulativeDose: site.dailyDose * (num ?? 0) }))
