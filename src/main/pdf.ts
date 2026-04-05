@@ -172,19 +172,19 @@ function drawDiagnosisHeading(
 
   const accent = rgb(0.24, 0.4, 0.67);
   const muted = rgb(0.48, 0.5, 0.55);
-  const indexSize = 12;
-  const diagnosisSize = 12.5;
-  const icdSize = 10.5;
+  const indexSize = 11;
+  const diagnosisSize = 11.4;
+  const icdSize = 9.4;
   const indexX = margin;
-  const diagnosisX = margin + 30;
+  const diagnosisX = margin + 18;
   const diagnosisY = y;
-  const icdY = y - 13;
+  const icdY = y - 10.5;
 
   drawSimpleLine(page, parsed.indexLabel, indexX, diagnosisY, indexSize, boldFont, accent);
   drawSimpleLine(page, parsed.diagnosis, diagnosisX, diagnosisY, diagnosisSize, boldFont, accent);
-  drawSimpleLine(page, parsed.icd10, diagnosisX, icdY, icdSize, boldFont, muted);
+  drawSimpleLine(page, parsed.icd10, diagnosisX, icdY, icdSize, regularFont, muted);
 
-  return icdY - 10;
+  return icdY - 9.5;
 }
 
 function parseMetadataFields(metadataLines: string[]) {
