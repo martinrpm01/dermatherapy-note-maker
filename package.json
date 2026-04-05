@@ -10,6 +10,7 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "build:browser": "vite build --config vite.browser.config.ts",
+    "build:icons": "node scripts/generate-icons.js",
     "preview:browser": "vite preview --config vite.browser.config.ts",
     "package": "npm run build && electron-builder",
     "verify:shortcut": "powershell -ExecutionPolicy Bypass -File scripts/verify-start-shortcut.ps1",
@@ -66,6 +67,7 @@
     "electron": "41.1.0",
     "electron-builder": "26.8.1",
     "electron-vite": "5.0.0",
+    "sharp": "^0.34.5",
     "typescript": "6.0.2",
     "vite": "7.3.1",
     "vitest": "4.1.2"
