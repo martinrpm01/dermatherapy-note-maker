@@ -94,6 +94,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
   const [completedSearch, setCompletedSearch] = useState("");
   const [archive, setArchive] = useState<ArchiveSnapshot | null>(null);
   const [settingsPayload, setSettingsPayload] = useState<SettingsPayload | null>(null);
+  const [setupSettings, setSetupSettings] = useState<BootstrapPayload["settings"] | null>(null);
   const [templates, setTemplates] = useState<TemplateDefinitionRecord[]>([]);
   const [visitEditor, setVisitEditor] = useState<VisitEditorState | null>(null);
   const [patientForm, setPatientForm] = useState<PatientInput | null>(null);
@@ -139,6 +140,18 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
   useEffect(() => {
     if (navigator.storage?.persist) void navigator.storage.persist();
   }, []);
+
+  useEffect(() => {
+    if (!boot?.requiresPinSetup) {
+      return;
+    }
+    setSetupSettings({
+      ...boot.settings,
+      inactivityTimeoutMinutes: 5,
+      dermatologyOfficeLogoUpload: null,
+      removeDermatologyOfficeLogo: false
+    });
+  }, [boot]);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
@@ -303,9 +316,15 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
       return;
     }
     if (!appClient) return;
+    if (!setupSettings) return;
     const recoveryCode = await appClient.setInitialPin(setupPin);
+    const savedSettings = await appClient.saveSettings({
+      ...setupSettings,
+      inactivityTimeoutMinutes: 5
+    });
     setPendingRecoveryCode(recoveryCode);
-    setBoot(await appClient.bootstrap());
+    setBoot((await appClient.bootstrap()));
+    setSettingsPayload((current) => current ? { ...current, settings: savedSettings } : { settings: savedSettings, savedOptions: [] });
     setSetupPin("");
     setConfirmPin("");
     setStatusMessage("");
@@ -710,9 +729,33 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
           unlockPin={unlockPin}
           setupPin={setupPin}
           confirmPin={confirmPin}
+          setupSettings={setupSettings ?? { ...boot.settings, inactivityTimeoutMinutes: 5 }}
           onUnlockPinChange={setUnlockPin}
           onSetupPinChange={setSetupPin}
           onConfirmPinChange={setConfirmPin}
+          onSetupSettingsChange={setSetupSettings}
+          onSetupLogoSelected={(file) => {
+            void (async () => {
+              if (!file || !setupSettings) return;
+              const upload = await fileToCompressedUpload(file, 1400);
+              setSetupSettings({
+                ...setupSettings,
+                dermatologyOfficeLogoUpload: upload,
+                dermatologyOfficeLogoAsset: setupSettings.dermatologyOfficeLogoAsset,
+                removeDermatologyOfficeLogo: false
+              });
+            })();
+          }}
+          onRemoveSetupLogo={() =>
+            setupSettings
+              ? setSetupSettings({
+                  ...setupSettings,
+                  dermatologyOfficeLogoUpload: null,
+                  dermatologyOfficeLogoAsset: null,
+                  removeDermatologyOfficeLogo: true
+                })
+              : undefined
+          }
           onUnlock={() => void handleUnlock()}
           onSetup={() => void handleSetupPin()}
           onForgotPin={!boot.requiresPinSetup ? () => {

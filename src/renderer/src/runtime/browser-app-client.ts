@@ -358,7 +358,10 @@ export class BrowserAppClient implements AppClient {
     }
 
     return {
-      settings: structuredDataStore.toSettingsView(settings),
+      settings: {
+        ...structuredDataStore.toSettingsView(settings),
+        inactivityTimeoutMinutes: 5
+      },
       requiresPinSetup,
       isLocked: this.isLocked
     };
@@ -1140,7 +1143,10 @@ export class BrowserAppClient implements AppClient {
     this.assertUnlocked();
     const structuredDataStore = await this.getStructuredDataStore();
     return {
-      settings: structuredDataStore.toSettingsView(structuredDataStore.getSettingsRecord()),
+      settings: {
+        ...structuredDataStore.toSettingsView(structuredDataStore.getSettingsRecord()),
+        inactivityTimeoutMinutes: 5
+      },
       savedOptions: structuredDataStore.getSavedOptions()
     };
   }
@@ -1173,6 +1179,7 @@ export class BrowserAppClient implements AppClient {
 
     structuredDataStore.updateSettings({
       ...input,
+      inactivityTimeoutMinutes: 5,
       dermatologyOfficeLogoAsset: binaryAssetStore.createAssetReference(logoPath, "settings_logo"),
       dermatologyOfficeLogoPath: logoPath,
       dermatologyOfficeLogoUpload: undefined,
@@ -1180,7 +1187,10 @@ export class BrowserAppClient implements AppClient {
     });
 
     await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
-    return structuredDataStore.toSettingsView(structuredDataStore.getSettingsRecord());
+    return {
+      ...structuredDataStore.toSettingsView(structuredDataStore.getSettingsRecord()),
+      inactivityTimeoutMinutes: 5
+    };
   }
 
   // fully-portable: removes a remembered option from local settings state.

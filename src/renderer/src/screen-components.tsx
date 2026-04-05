@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { PatientArchiveExportResult, PatientArchivePreflightResult, PatientArchiveRestoreBlocker, PatientArchiveRestoreResult, PatientArchiveValidationIssue } from "../../shared/archive";
 import { TEMPLATE_PLACEHOLDERS } from "../../shared/templates";
-import type { AppClient, ArchiveSnapshot, AssetReference, DashboardSnapshot, PatientDetail, SettingsPayload, TemplateDefinitionRecord } from "../../shared/types";
+import type { AppClient, ArchiveSnapshot, AssetReference, DashboardSnapshot, PatientDetail, SettingsPayload, TemplateDefinitionRecord, AppSettingsView } from "../../shared/types";
 import { formatDisplayDate } from "../../shared/note-rules";
 import { useResolvedAssetUrl } from "./asset-url";
 
@@ -346,9 +346,13 @@ export function LockScreen(props: {
   unlockPin: string;
   setupPin: string;
   confirmPin: string;
+  setupSettings: AppSettingsView;
   onUnlockPinChange: (value: string) => void;
   onSetupPinChange: (value: string) => void;
   onConfirmPinChange: (value: string) => void;
+  onSetupSettingsChange: (settings: AppSettingsView) => void;
+  onSetupLogoSelected: (file: File | undefined) => void;
+  onRemoveSetupLogo: () => void;
   onUnlock: () => void;
   onSetup: () => void;
   onForgotPin?: () => void;
@@ -361,6 +365,42 @@ export function LockScreen(props: {
         <p>{props.requiresPinSetup ? "Set a local PIN to protect patient notes on this device." : "Unlock with PIN to access patient records."}</p>
         {props.requiresPinSetup ? (
           <>
+            <label>
+              Default Therapist
+              <input
+                value={props.setupSettings.defaultTherapist}
+                onChange={(event) => props.onSetupSettingsChange({ ...props.setupSettings, defaultTherapist: event.target.value })}
+              />
+            </label>
+            <label>
+              Supervising Physician Name
+              <input
+                placeholder="e.g. David S. Sax, M.D."
+                value={props.setupSettings.supervisingPhysician}
+                onChange={(event) => props.onSetupSettingsChange({ ...props.setupSettings, supervisingPhysician: event.target.value })}
+              />
+            </label>
+            <label>
+              Dermatology Office Name
+              <input
+                placeholder="e.g. University Park Dermatology"
+                value={props.setupSettings.dermatologyOfficeName}
+                onChange={(event) => props.onSetupSettingsChange({ ...props.setupSettings, dermatologyOfficeName: event.target.value })}
+              />
+            </label>
+            <div className="logo-settings">
+              <span className="strong">Dermatology Office Logo</span>
+              <img className="settings-logo-preview" src={props.setupSettings.dermatologyOfficeLogoUpload?.dataUrl || props.logoSrc} alt="Dermatology office logo preview" />
+              <div className="button-row">
+                <label className="logo-upload-button">
+                  Upload Logo
+                  <input type="file" accept="image/*" onChange={(event) => props.onSetupLogoSelected(event.target.files?.[0])} />
+                </label>
+                <button type="button" onClick={props.onRemoveSetupLogo}>
+                  Use Default Logo
+                </button>
+              </div>
+            </div>
             <input type="password" inputMode="numeric" placeholder="New PIN" value={props.setupPin} onChange={(event) => props.onSetupPinChange(event.target.value)} />
             <input type="password" inputMode="numeric" placeholder="Confirm PIN" value={props.confirmPin} onChange={(event) => props.onConfirmPinChange(event.target.value)} />
             <button className="primary" onClick={props.onSetup}>
@@ -1247,7 +1287,7 @@ export function SettingsScreen(props: {
       <div className="screen-header">
         <div>
           <h2>Settings</h2>
-          <p>Desktop app branding, note defaults, inactivity lock, and PIN maintenance.</p>
+          <p>Branding, note defaults, and PIN maintenance.</p>
         </div>
         <button className="primary" onClick={props.onSave}>
           Save Settings
@@ -1278,10 +1318,6 @@ export function SettingsScreen(props: {
               <button onClick={props.onRemoveLogo}>Use Default Logo</button>
             </div>
           </div>
-          <label>
-            Inactivity Timeout (minutes)
-            <input type="number" min={1} value={props.settingsPayload.settings.inactivityTimeoutMinutes} onChange={(event) => props.onSettingsChange({ ...props.settingsPayload.settings, inactivityTimeoutMinutes: Number(event.target.value || 1) })} />
-          </label>
         </div>
         <div className="panel">
           <h3>Change PIN</h3>

@@ -194,7 +194,7 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
       dermatologyOfficeLogoAsset: record.dermatologyOfficeLogoPath
         ? createAssetReferenceForPath("settings_logo", record.dermatologyOfficeLogoPath)
         : null,
-      inactivityTimeoutMinutes: record.inactivityTimeoutMinutes
+      inactivityTimeoutMinutes: 5
     };
   }
 
@@ -229,7 +229,7 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
       supervisingPhysician: input.supervisingPhysician,
       dermatologyOfficeName: input.dermatologyOfficeName,
       dermatologyOfficeLogoPath: input.dermatologyOfficeLogoPath ?? null,
-      inactivityTimeoutMinutes: input.inactivityTimeoutMinutes,
+      inactivityTimeoutMinutes: 5,
       updatedAt: nowIso()
     };
     this.queuePut("settings", this.settings);
