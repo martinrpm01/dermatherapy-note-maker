@@ -196,6 +196,14 @@ textarea {
   backdrop-filter: blur(10px);
 }
 
+.install-helper-banner-setup {
+  top: 1rem;
+  bottom: auto;
+  z-index: 10003;
+  max-width: min(980px, calc(100vw - 2rem));
+  margin: 0 auto;
+}
+
 .install-helper-banner strong {
   font-size: 1rem;
 }

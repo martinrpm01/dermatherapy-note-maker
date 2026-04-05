@@ -433,12 +433,17 @@ export function LockScreen(props: {
 
 export function InstallPromptBanner(props: {
   onDismiss: () => void;
+  setupFirst?: boolean;
 }) {
   return (
-    <aside className="install-helper-banner" role="dialog" aria-label="Add to your Home Screen">
+    <aside className={`install-helper-banner${props.setupFirst ? " install-helper-banner-setup" : ""}`} role="dialog" aria-label="Add to your Home Screen">
       <div className="install-helper-copy">
         <strong>Add to your Home Screen</strong>
-        <p>For the best iPad experience, install Dermatherapy Note Maker so it opens like a native app.</p>
+        <p>
+          {props.setupFirst
+            ? "Do this first before setup, or you may need to enter everything again."
+            : "For the best iPad experience, install Dermatherapy Note Maker so it opens like a native app."}
+        </p>
         <ol>
           <li>Tap the Safari Share button, the square with an upward arrow.</li>
           <li>Scroll down and tap Add to Home Screen.</li>
@@ -446,7 +451,11 @@ export function InstallPromptBanner(props: {
         </ol>
       </div>
       <div className="install-helper-actions">
-        <span className="install-helper-hint">Safari only. This prompt goes away once dismissed or installed.</span>
+        <span className="install-helper-hint">
+          {props.setupFirst
+            ? "Safari only. Add it to Home Screen before creating your PIN."
+            : "Safari only. This prompt goes away once dismissed or installed."}
+        </span>
         <button className="ghost" onClick={props.onDismiss}>Maybe Later</button>
       </div>
     </aside>
