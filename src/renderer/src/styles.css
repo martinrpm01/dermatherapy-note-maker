@@ -662,6 +662,32 @@ input.search {
   cursor: pointer;
 }
 
+.update-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10003;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  background: var(--accent-strong);
+  color: white;
+  font-size: 0.95rem;
+}
+
+.update-banner button {
+  background: white;
+  color: var(--accent-strong);
+  border-color: white;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.88rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;

@@ -124,6 +124,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
   const [archivePreflightResult, setArchivePreflightResult] = useState<PatientArchivePreflightResult | null>(null);
   const [archiveRestoreResult, setArchiveRestoreResult] = useState<PatientArchiveRestoreResult | null>(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+  const [updateReady, setUpdateReady] = useState(false);
   const resolvedLogoSrc = useResolvedAssetUrl(appClient, boot?.settings.dermatologyOfficeLogoAsset);
   const authGateActive = Boolean(pendingRecoveryCode) || browserRecoveryFlow !== "auth";
 
@@ -133,6 +134,16 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
 
   useEffect(() => {
     setShowInstallPrompt(shouldShowInstallPrompt());
+  }, []);
+
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    const initialController = navigator.serviceWorker.controller;
+    const handleControllerChange = () => {
+      if (initialController) setUpdateReady(true);
+    };
+    navigator.serviceWorker.addEventListener("controllerchange", handleControllerChange);
+    return () => navigator.serviceWorker.removeEventListener("controllerchange", handleControllerChange);
   }, []);
 
   useEffect(() => {
@@ -1020,6 +1031,12 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
           />
         ) : null}
       </div>
+      {updateReady ? (
+        <div className="update-banner">
+          <span>A new version is available.</span>
+          <button onClick={() => window.location.reload()}>Refresh</button>
+        </div>
+      ) : null}
       {showInstallPrompt ? (
         <InstallPromptBanner
           onDismiss={() => {
