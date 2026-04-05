@@ -210,6 +210,7 @@ export function buildSiteSnapshots(
     additionalDevices: string;
     dailyDose: number;
     totalDose: number;
+    prescribedFractions?: number;
   }>,
   treatmentNumber: number | null
 ): SiteSnapshot[] {

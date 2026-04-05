@@ -110,6 +110,7 @@ export interface TreatmentSiteRecord {
   additionalDevices: string;
   dailyDose: number;
   totalDose: number;
+  prescribedFractions?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -169,6 +170,7 @@ export interface SiteSnapshot {
   dailyDose: number;
   totalDose: number;
   cumulativeDose: number;
+  prescribedFractions?: number;
 }
 
 export interface VisitStructuredFields {
@@ -262,6 +264,7 @@ export interface TreatmentSiteInput {
   additionalDevices: string;
   dailyDose: number;
   totalDose: number;
+  prescribedFractions?: number;
 }
 
 export interface CourseInput {

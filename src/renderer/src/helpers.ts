@@ -122,7 +122,8 @@ export function buildVisitPreviewText(
     additionalDevices: "",
     dailyDose: 0,
     totalDose: 0,
-    cumulativeDose: 0
+    cumulativeDose: 0,
+    prescribedFractions: undefined
   });
 
   const normalizedSites = applyAutoNumberOfBlocks(note.noteType, note.structuredFields.siteSnapshots);
@@ -130,6 +131,7 @@ export function buildVisitPreviewText(
   const site2Base = normalizedSites.find((site) => site.siteNumber === 2) || emptySite(2);
   const site1 = {
     ...site1Base,
+    prescribedFractions: site1Base.prescribedFractions ?? course.prescribedFractions,
     cutoutSize: normalizeCutoutSizeLabel(site1Base.cutoutSize),
     machine: getDefaultMachine(site1Base.machine),
     treatmentDepth: getDefaultTreatmentDepth(site1Base.treatmentDepth),
@@ -144,6 +146,7 @@ export function buildVisitPreviewText(
     };
   const site2 = {
     ...site2Base,
+    prescribedFractions: site2Base.prescribedFractions ?? course.prescribedFractions,
     cutoutSize: normalizeCutoutSizeLabel(site2Base.cutoutSize),
     machine: getDefaultMachine(site2Base.machine),
     treatmentDepth: getDefaultTreatmentDepth(site2Base.treatmentDepth),
@@ -257,7 +260,8 @@ export function createCourseFormFromDetail(courseDetail: CourseDetail): CourseIn
         treatmentInterval: site.treatmentInterval,
         additionalDevices: site.additionalDevices,
         dailyDose: site.dailyDose > 0 ? site.dailyDose : fallbackSite.dailyDose,
-        totalDose: site.totalDose > 0 ? site.totalDose : fallbackSite.totalDose
+        totalDose: site.totalDose > 0 ? site.totalDose : fallbackSite.totalDose,
+        prescribedFractions: site.prescribedFractions ?? courseDetail.course.prescribedFractions
       }))
     : fallback.sites;
 

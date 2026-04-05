@@ -78,6 +78,7 @@ export function CourseModal(props: {
   const [fractionMode, setFractionMode] = useState<"preset" | "other">("preset");
   const showFractionsField = Boolean(courseForm.id);
   const [doseModes, setDoseModes] = useState<Record<number, { dailyDose: "preset" | "other"; totalDose: "preset" | "other" }>>({});
+  const [siteFractionModes, setSiteFractionModes] = useState<Record<number, { mode: "preset" | "other"; custom: string }>>({});
 
   useEffect(() => {
     if (FRACTION_PRESETS.includes(courseForm.prescribedFractions)) {
@@ -102,6 +103,35 @@ export function CourseModal(props: {
       return next;
     });
   }, [courseForm.id, courseForm.sites.length]);
+
+  useEffect(() => {
+    setSiteFractionModes((current) => {
+      const next: typeof current = {};
+      courseForm.sites.forEach((site, index) => {
+        const fracs = site.prescribedFractions ?? courseForm.prescribedFractions ?? 0;
+        next[index] = current[index] ?? {
+          mode: FRACTION_PRESETS.includes(fracs) ? "preset" : (fracs > 0 ? "other" : "preset"),
+          custom: FRACTION_PRESETS.includes(fracs) ? "" : (fracs > 0 ? String(fracs) : "")
+        };
+      });
+      return next;
+    });
+  }, [courseForm.id, courseForm.sites.length]);
+
+  function getSiteFractionMode(index: number): "preset" | "other" {
+    const site = courseForm.sites[index];
+    const fracs = site.prescribedFractions ?? 0;
+    return siteFractionModes[index]?.mode ?? (FRACTION_PRESETS.includes(fracs) ? "preset" : (fracs > 0 ? "other" : "preset"));
+  }
+
+  function updateSiteFractions(index: number, fracs: number) {
+    const newSites = courseForm.sites.map((s, i) => i === index ? { ...s, prescribedFractions: fracs } : s);
+    props.onChange({
+      ...courseForm,
+      sites: newSites,
+      prescribedFractions: index === 0 ? fracs : courseForm.prescribedFractions
+    });
+  }
 
   function getSelectedDevices(value: string) {
     const parsed = parseAdditionalDevices(value);
@@ -185,7 +215,7 @@ export function CourseModal(props: {
               <option value="two_site">2 Lesions</option>
             </select>
           </label>
-          {showFractionsField ? <label>
+          {showFractionsField && !isTwoSite ? <label>
             Prescribed Fractions
             <select
               value={fractionMode === "other" ? "other" : selectValue(courseForm.prescribedFractions, FRACTION_PRESETS)}
@@ -225,6 +255,37 @@ export function CourseModal(props: {
           {courseForm.sites.map((site, index) => (
             <div className="subpanel" key={site.siteNumber}>
               <h4>{isTwoSite ? `Lesion ${site.siteNumber}` : "Lesion"}</h4>
+              {showFractionsField && isTwoSite && (
+                <label>
+                  Prescribed Fractions
+                  <select
+                    value={getSiteFractionMode(index) === "other" ? "other" : selectValue(site.prescribedFractions ?? 0, FRACTION_PRESETS)}
+                    onChange={(event) => {
+                      if (event.target.value === "other") {
+                        setSiteFractionModes((prev) => ({ ...prev, [index]: { mode: "other", custom: String(site.prescribedFractions ?? "") } }));
+                      } else {
+                        setSiteFractionModes((prev) => ({ ...prev, [index]: { mode: "preset", custom: "" } }));
+                        updateSiteFractions(index, Number(event.target.value));
+                      }
+                    }}
+                  >
+                    {FRACTION_PRESETS.map((n) => <option key={n} value={n}>{n}</option>)}
+                    <option value="other">Other</option>
+                  </select>
+                  {getSiteFractionMode(index) === "other" && (
+                    <input
+                      type="number"
+                      placeholder="Enter fractions"
+                      value={siteFractionModes[index]?.custom ?? ""}
+                      style={{ marginTop: "0.4rem" }}
+                      onChange={(event) => {
+                        setSiteFractionModes((prev) => ({ ...prev, [index]: { ...prev[index], mode: "other", custom: event.target.value } }));
+                        updateSiteFractions(index, Number(event.target.value || 0));
+                      }}
+                    />
+                  )}
+                </label>
+              )}
               <label>
                 Treatment Lesion
                 <input placeholder="Treatment location" value={site.treatmentLocationText} onChange={(event) => {

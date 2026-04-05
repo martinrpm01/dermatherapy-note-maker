@@ -365,6 +365,7 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
         additionalDevices: siteInput.additionalDevices,
         dailyDose: siteInput.dailyDose,
         totalDose: siteInput.totalDose,
+        ...(siteInput.prescribedFractions !== undefined ? { prescribedFractions: siteInput.prescribedFractions } : {}),
         createdAt: nowIso(),
         updatedAt: nowIso()
       };

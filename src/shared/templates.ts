@@ -562,7 +562,7 @@ Focused Exam Sites 1 & 2:
 
 Treatment Site 1 Prescription:
 {{structured.impressionPlanComments}}
-Number of Treatments: {{course.prescribedFractions}}
+Number of Treatments: {{site1.prescribedFractions}}
 Treatment Depth: {{site1.treatmentDepthDisplay}}
 Daily Dose: {{site1.dailyDose}} cGy
 Total Dose: {{site1.totalDose}} cGy
@@ -572,7 +572,7 @@ Additional Treatment Devices: {{site1.additionalDevices}}
 
 Treatment Site 2 Prescription:
 {{structured.impressionPlanComments}}
-Number of Treatments: {{course.prescribedFractions}}
+Number of Treatments: {{site2.prescribedFractions}}
 Treatment Depth: {{site2.treatmentDepthDisplay}}
 Daily Dose: {{site2.dailyDose}} cGy
 Total Dose: {{site2.totalDose}} cGy
@@ -585,6 +585,7 @@ Body Location 1: {{site1.bodyLocation}}
 {{site1.simulationComplicationsLine}}
 Therapist Site 1: {{visit.therapistName}}
 Current Treatment Number: {{visit.treatmentNumber}}
+Total Treatments Site 1: {{site1.prescribedFractions}}
 Treatment Interval Site 1: {{site1.treatmentInterval}}
 Cumulative Dose Site 1: {{site1.cumulativeDose}} cGy
 Target Dose Site 1: {{site1.totalDose}} cGy
@@ -597,6 +598,7 @@ Body Location 2: {{site2.bodyLocation}}
 {{site2.simulationComplicationsLine}}
 Therapist Site 2: {{visit.therapistName}}
 Current Treatment Number: {{visit.treatmentNumber}}
+Total Treatments Site 2: {{site2.prescribedFractions}}
 Treatment Interval Site 2: {{site2.treatmentInterval}}
 Cumulative Dose Site 2: {{site2.cumulativeDose}} cGy
 Target Dose Site 2: {{site2.totalDose}} cGy
@@ -651,6 +653,7 @@ Body Location 1: {{site1.bodyLocation}}
 {{site1.simulationComplicationsLine}}
 Therapist Site 1: {{visit.therapistName}}
 Current Treatment Number: {{visit.treatmentNumber}}
+Total Treatments Site 1: {{site1.prescribedFractions}}
 Treatment Interval Site 1: {{site1.treatmentInterval}}
 Cumulative Dose Site 1: {{site1.cumulativeDose}} cGy
 Target Dose Site 1: {{site1.totalDose}} cGy
@@ -663,6 +666,7 @@ Body Location 2: {{site2.bodyLocation}}
 {{site2.simulationComplicationsLine}}
 Therapist Site 2: {{visit.therapistName}}
 Current Treatment Number: {{visit.treatmentNumber}}
+Total Treatments Site 2: {{site2.prescribedFractions}}
 Treatment Interval Site 2: {{site2.treatmentInterval}}
 Cumulative Dose Site 2: {{site2.cumulativeDose}} cGy
 Target Dose Site 2: {{site2.totalDose}} cGy
@@ -726,6 +730,7 @@ Body Location 1: {{site1.bodyLocation}}
 {{site1.simulationComplicationsLine}}
 Therapist Site 1: {{visit.therapistName}}
 Current Treatment Number: {{visit.treatmentNumber}}
+Total Treatments Site 1: {{site1.prescribedFractions}}
 Treatment Interval Site 1: {{site1.treatmentInterval}}
 Cumulative Dose Site 1: {{site1.cumulativeDose}} cGy
 Target Dose Site 1: {{site1.totalDose}} cGy
@@ -738,6 +743,7 @@ Body Location 2: {{site2.bodyLocation}}
 {{site2.simulationComplicationsLine}}
 Therapist Site 2: {{visit.therapistName}}
 Current Treatment Number: {{visit.treatmentNumber}}
+Total Treatments Site 2: {{site2.prescribedFractions}}
 Treatment Interval Site 2: {{site2.treatmentInterval}}
 Cumulative Dose Site 2: {{site2.cumulativeDose}} cGy
 Target Dose Site 2: {{site2.totalDose}} cGy
