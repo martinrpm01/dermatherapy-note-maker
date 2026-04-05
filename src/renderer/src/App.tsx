@@ -601,7 +601,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
         </div>
         {showInstallPrompt ? (
           <InstallPromptBanner
-            setupFirst={Boolean(boot?.requiresPinSetup)}
+            setupFirst={false}
             onDismiss={() => {
               try {
                 window.localStorage.setItem("install-prompt-dismissed", "true");
