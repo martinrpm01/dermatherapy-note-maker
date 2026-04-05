@@ -141,28 +141,33 @@ export function VisitEditorScreen(props: {
               </label>
             )}
             {otvEligible ? (
-              <label
-                className="checkbox-label"
-                title="Uncheck if this should be a normal treatment visit instead of OTV, for example when the doctor is out of office."
-              >
-                <input
-                  type="checkbox"
-                  checked={editor.note.noteType === "otv"}
-                  onChange={(event) =>
-                    props.onUpdate(
-                      (current) => ({
-                        ...current,
-                        note: {
-                          ...current.note,
-                          noteType: event.target.checked ? "otv" : "standard_treatment"
-                        }
-                      }),
-                      { regenerate: true, overwriteEdited: !props.textDirty }
-                    )
-                  }
-                />
-                OTV?
-              </label>
+              <div className="checkbox-with-help">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={editor.note.noteType === "otv"}
+                    onChange={(event) =>
+                      props.onUpdate(
+                        (current) => ({
+                          ...current,
+                          note: {
+                            ...current.note,
+                            noteType: event.target.checked ? "otv" : "standard_treatment"
+                          }
+                        }),
+                        { regenerate: true, overwriteEdited: !props.textDirty }
+                      )
+                    }
+                  />
+                  OTV?
+                </label>
+                <span className="help-chip" tabIndex={0} aria-label="OTV help">
+                  ?
+                  <span className="help-popover">
+                    Uncheck if this should be a normal treatment visit instead of OTV, for example when the doctor is out of office.
+                  </span>
+                </span>
+              </div>
             ) : null}
             {showPrescribedFractionsInput ? (
               <label>

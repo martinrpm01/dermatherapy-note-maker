@@ -239,6 +239,54 @@ label select {
   margin: 0;
 }
 
+.checkbox-with-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.help-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: help;
+}
+
+.help-popover {
+  position: absolute;
+  left: calc(100% + 0.5rem);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 220px;
+  padding: 0.55rem 0.65rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--accent-strong);
+  color: white;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  box-shadow: 0 10px 24px rgba(23, 50, 74, 0.22);
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  z-index: 20;
+}
+
+.help-chip:hover .help-popover,
+.help-chip:focus-visible .help-popover {
+  opacity: 1;
+  visibility: visible;
+}
+
 .checkbox-group {
   display: grid;
   gap: 0.55rem;
