@@ -63,6 +63,7 @@ select {
 input[type="date"] {
   -webkit-appearance: none;
   appearance: none;
+  line-height: 1.5;
 }
 
 textarea {
