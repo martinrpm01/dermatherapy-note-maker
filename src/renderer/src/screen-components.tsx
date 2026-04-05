@@ -353,6 +353,8 @@ export function LockScreen(props: {
   onSetupSettingsChange: (settings: AppSettingsView) => void;
   onSetupLogoSelected: (file: File | undefined) => void;
   onRemoveSetupLogo: () => void;
+  showSetupInstallPrompt?: boolean;
+  onDismissSetupInstallPrompt?: () => void;
   onUnlock: () => void;
   onSetup: () => void;
   onForgotPin?: () => void;
@@ -365,6 +367,21 @@ export function LockScreen(props: {
         <p>{props.requiresPinSetup ? "Set a local PIN to protect patient notes on this device." : "Unlock with PIN to access patient records."}</p>
         {props.requiresPinSetup ? (
           <div className="settings-grid lock-setup-grid">
+            {props.showSetupInstallPrompt ? (
+              <div className="panel lock-setup-install-panel">
+                <strong>Add to Home Screen First</strong>
+                <p>Do this first before setup, or you may need to enter everything again.</p>
+                <ol>
+                  <li>Tap the Safari Share button, the square with an upward arrow.</li>
+                  <li>Scroll down and tap Add to Home Screen.</li>
+                  <li>Tap Add.</li>
+                </ol>
+                <div className="button-row">
+                  <span className="install-helper-hint">Safari only. Add it to Home Screen before creating your PIN.</span>
+                  <button type="button" className="ghost" onClick={props.onDismissSetupInstallPrompt}>Maybe Later</button>
+                </div>
+              </div>
+            ) : null}
             <div className="panel">
               <label>
                 Default Therapist

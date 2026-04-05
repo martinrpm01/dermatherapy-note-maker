@@ -125,6 +125,24 @@ textarea {
   align-items: start;
 }
 
+.lock-setup-install-panel {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.lock-setup-install-panel p,
+.lock-setup-install-panel ol {
+  margin: 0;
+}
+
+.lock-setup-install-panel ol {
+  padding-left: 1.2rem;
+  color: var(--muted);
+  display: grid;
+  gap: 0.3rem;
+}
+
 .lock-setup-pin-panel {
   display: grid;
   gap: 0.9rem;

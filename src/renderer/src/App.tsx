@@ -757,6 +757,14 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
                 })
               : undefined
           }
+          showSetupInstallPrompt={boot.requiresPinSetup && showInstallPrompt}
+          onDismissSetupInstallPrompt={() => {
+            try {
+              window.localStorage.setItem("install-prompt-dismissed", "true");
+            } catch {
+            }
+            setShowInstallPrompt(false);
+          }}
           onUnlock={() => void handleUnlock()}
           onSetup={() => void handleSetupPin()}
           onForgotPin={!boot.requiresPinSetup ? () => {
@@ -768,7 +776,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
             setStatusMessage("");
           } : undefined}
         />
-        {showInstallPrompt ? (
+        {showInstallPrompt && !boot.requiresPinSetup ? (
           <InstallPromptBanner
             onDismiss={() => {
               try {
