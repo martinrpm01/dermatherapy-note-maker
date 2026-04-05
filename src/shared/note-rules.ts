@@ -89,6 +89,52 @@ export function formatAdditionalDevices(value: string): string {
   return devices.length ? devices.join(", ") : "None";
 }
 
+export function buildShieldSummary(shields: string, additionalDevices: string): string {
+  const ordered: string[] = [];
+  const seen = new Set<string>();
+
+  const pushShield = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    const normalized = normalizeOptionValue(trimmed);
+    if (!normalized || normalized === "none") {
+      return;
+    }
+
+    const label =
+      normalized === "eye shield"
+        ? "eye shield"
+        : normalized === "ear shield"
+          ? "ear shield"
+          : trimmed;
+    const key = normalizeOptionValue(label);
+    if (seen.has(key)) {
+      return;
+    }
+
+    seen.add(key);
+    ordered.push(label);
+  };
+
+  shields
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .forEach(pushShield);
+
+  parseAdditionalDevices(additionalDevices)
+    .filter((device) => {
+      const normalized = normalizeOptionValue(device);
+      return normalized === "eye shield" || normalized === "ear shield" || normalized.includes("shield");
+    })
+    .forEach(pushShield);
+
+  return ordered.length ? ordered.join(", ") : "none";
+}
+
 export function normalizeCutoutSizeLabel(value: string): string {
   const normalized = normalizeOptionValue(value);
   if (!normalized || normalized === "none" || normalized === "open cone") {

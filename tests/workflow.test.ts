@@ -261,7 +261,7 @@ describe("RadiationNoteService workflow", () => {
     expect(form.sites[0].machine).toBe("Xoft Elekta 1200 SPX");
 
     const draft = service.buildVisitDraft(course.id, "next_treatment");
-    expect(draft.note.generatedText).toContain("Tx machine: Xoft Elekta 1200 SPX");
+    expect(draft.note.generatedText).toContain("Machine: Xoft Elekta 1200 SPX");
   });
 
   it("defaults treatment depth text when a site depth is blank", async () => {
@@ -581,7 +581,7 @@ describe("RadiationNoteService workflow", () => {
 
     expect(preview).toContain("Current Treatment Number: 2");
     expect(preview).toContain("Current Cumulative Dose to Date: 1000 cGy");
-    expect(preview).toContain("Cutout / Shield Details: 18mm");
+    expect(preview).toContain("Other Shield Details: 18mm");
     expect(preview).toContain("Cone Size: 30mm");
     expect(preview).not.toContain("Cone Size: cone");
   });

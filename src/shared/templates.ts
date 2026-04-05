@@ -249,19 +249,21 @@ Current Cumulative Dose to Date: {{site1.cumulativeDose}} cGy
 Total Target Dose: {{site1.totalDose}} cGy
 Treatment Parameters:
 Shields: {{site1.shields}}
-Cutout / Shield Details: {{site1.cutoutSizeDisplay}}
+Other Shield Details: {{site1.cutoutSizeDisplay}}
 kV: {{site1.energyKv}}
 Dose: {{site1.dailyDose}} cGy
 Cone Size: {{site1.coneSizeDisplay}}
+Machine: {{site1.machine}}
+Treatment Depth: {{site1.treatmentDepthDisplay}}
 
 Written consent obtained. The risks and benefits of XRT therapy were discussed in detail. Specifically, the risks of infection, scarring, bleeding, radiation dermatitis, prolonged wound healing, incomplete removal, nerve injury, inability to clear the tumor, and recurrence were addressed. The treatment site was clearly identified and confirmed by the patient. The patient received XRT as outlined above.
 
 Post Care:
 {{structured.postCare}}
 
-Comments: Tx machine: {{site1.machine}}, Treatment Depth: {{site1.treatmentDepthDisplay}}
-
 {{structured.treatmentComment}}
+
+{{structured.mipsSection}}
 
 Treatment Supervised by:
 
@@ -280,8 +282,6 @@ Date
 
 Follow Up:
 {{structured.followUp}}
-
-{{structured.mipsSection}}
     `
   ),
   buildTemplate(
@@ -322,19 +322,21 @@ Current Cumulative Dose to Date: {{site1.cumulativeDose}} cGy
 Total Target Dose: {{site1.totalDose}} cGy
 Treatment Parameters:
 Shields: {{site1.shields}}
-Cutout / Shield Details: {{site1.cutoutSizeDisplay}}
+Other Shield Details: {{site1.cutoutSizeDisplay}}
 kV: {{site1.energyKv}}
 Dose: {{site1.dailyDose}} cGy
 Cone Size: {{site1.coneSizeDisplay}}
+Machine: {{site1.machine}}
+Treatment Depth: {{site1.treatmentDepthDisplay}}
 
 Written consent obtained. The risks and benefits of XRT therapy were discussed in detail. Specifically, the risks of infection, scarring, bleeding, radiation dermatitis, prolonged wound healing, incomplete removal, nerve injury, inability to clear the tumor, and recurrence were addressed. The treatment site was clearly identified and confirmed by the patient. The patient received XRT as outlined above.
 
 Post Care:
 {{structured.postCare}}
 
-Comments: Tx machine: {{site1.machine}}, Treatment Depth: {{site1.treatmentDepthDisplay}}
-
 {{structured.treatmentComment}}
+
+{{structured.mipsSection}}
 
 Treatment Supervised by:
 
@@ -353,8 +355,6 @@ Date
 
 Follow Up:
 {{structured.followUp}}
-
-{{structured.mipsSection}}
     `
   ),
   buildTemplate(
@@ -404,23 +404,25 @@ Current Cumulative Dose to Date: {{site1.cumulativeDose}} cGy
 Total Target Dose: {{site1.totalDose}} cGy
 Treatment Parameters:
 Shields: {{site1.shields}}
-Cutout / Shield Details: {{site1.cutoutSizeDisplay}}
+Other Shield Details: {{site1.cutoutSizeDisplay}}
 kV: {{site1.energyKv}}
 Dose: {{site1.dailyDose}} cGy
 Cone Size: {{site1.coneSizeDisplay}}
+Machine: {{site1.machine}}
+Treatment Depth: {{site1.treatmentDepthDisplay}}
 
 Written consent obtained. The risks and benefits of XRT therapy were discussed in detail. Specifically, the risks of infection, scarring, bleeding, radiation dermatitis, prolonged wound healing, incomplete removal, nerve injury, inability to clear the tumor, and recurrence were addressed. The treatment site was clearly identified and confirmed by the patient. The patient received XRT as outlined above.
 
 Post Care:
 {{structured.postCare}}
 
-Comments: Tx machine: {{site1.machine}}, Treatment Depth: {{site1.treatmentDepthDisplay}}
-
 {{structured.treatmentComment}}
 
 Plan: Radiation Physics Consultation.
 Physics Consultation: Fraction Number: {{visit.treatmentNumber}} of {{course.prescribedFractions}}
 {{structured.physicsComment}}
+
+{{structured.mipsSection}}
 
 Treatment Supervised by:
 
@@ -439,8 +441,6 @@ Date
 
 Follow Up:
 {{structured.followUp}}
-
-{{structured.mipsSection}}
     `
   ),
   buildTemplate(
@@ -633,11 +633,12 @@ Current Cumulative Dose to Date: {{site1.cumulativeDose}} cGy
 Total Target Dose: {{site1.totalDose}} cGy
 Treatment Parameters:
 Shields: {{site1.shields}}
-Cutout / Shield Details: {{site1.cutoutSizeDisplay}}
+Other Shield Details: {{site1.cutoutSizeDisplay}}
 kV: {{site1.energyKv}}
 Dose: {{site1.dailyDose}} cGy
 Cone Size: {{site1.coneSizeDisplay}}
 Machine: {{site1.machine}}
+Treatment Depth: {{site1.treatmentDepthDisplay}}
 
 2. {{site2.diagnosisText}} ({{site2.icd10}})
 {{structured.healingDescription}}
@@ -660,11 +661,12 @@ Current Cumulative Dose to Date: {{site2.cumulativeDose}} cGy
 Total Target Dose: {{site2.totalDose}} cGy
 Treatment Parameters:
 Shields: {{site2.shields}}
-Cutout / Shield Details: {{site2.cutoutSizeDisplay}}
+Other Shield Details: {{site2.cutoutSizeDisplay}}
 kV: {{site2.energyKv}}
 Dose: {{site2.dailyDose}} cGy
 Cone Size: {{site2.coneSizeDisplay}}
 Machine: {{site2.machine}}
+Treatment Depth: {{site2.treatmentDepthDisplay}}
 
 Written consent obtained. The risks and benefits of XRT therapy were discussed in detail. Specifically, the risks of infection, scarring, bleeding, radiation dermatitis, prolonged wound healing, incomplete removal, nerve injury, inability to clear the tumor, and recurrence were addressed. The treatment sites were clearly identified and confirmed by the patient. The patient received XRT as outlined above.
 
@@ -672,6 +674,8 @@ Post Care:
 {{structured.postCare}}
 
 {{structured.treatmentComment}}
+
+{{structured.mipsSection}}
 
 Treatment Supervised by:
 
@@ -690,8 +694,6 @@ Date
 
 Follow Up:
 {{structured.followUp}}
-
-{{structured.mipsSection}}
     `
   ),
   buildTemplate(
@@ -731,11 +733,12 @@ Current Cumulative Dose to Date: {{site1.cumulativeDose}} cGy
 Total Target Dose: {{site1.totalDose}} cGy
 Treatment Parameters:
 Shields: {{site1.shields}}
-Cutout / Shield Details: {{site1.cutoutSizeDisplay}}
+Other Shield Details: {{site1.cutoutSizeDisplay}}
 kV: {{site1.energyKv}}
 Dose: {{site1.dailyDose}} cGy
 Cone Size: {{site1.coneSizeDisplay}}
 Machine: {{site1.machine}}
+Treatment Depth: {{site1.treatmentDepthDisplay}}
 
 2. {{site2.diagnosisText}} ({{site2.icd10}})
 {{structured.healingDescription}}
@@ -758,11 +761,12 @@ Current Cumulative Dose to Date: {{site2.cumulativeDose}} cGy
 Total Target Dose: {{site2.totalDose}} cGy
 Treatment Parameters:
 Shields: {{site2.shields}}
-Cutout / Shield Details: {{site2.cutoutSizeDisplay}}
+Other Shield Details: {{site2.cutoutSizeDisplay}}
 kV: {{site2.energyKv}}
 Dose: {{site2.dailyDose}} cGy
 Cone Size: {{site2.coneSizeDisplay}}
 Machine: {{site2.machine}}
+Treatment Depth: {{site2.treatmentDepthDisplay}}
 
 Written consent obtained. The risks and benefits of XRT therapy were discussed in detail. Specifically, the risks of infection, scarring, bleeding, radiation dermatitis, prolonged wound healing, incomplete removal, nerve injury, inability to clear the tumor, and recurrence were addressed. The treatment sites were clearly identified and confirmed by the patient. The patient received XRT as outlined above.
 
@@ -770,6 +774,8 @@ Post Care:
 {{structured.postCare}}
 
 {{structured.treatmentComment}}
+
+{{structured.mipsSection}}
 
 Treatment Supervised by:
 
@@ -788,8 +794,6 @@ Date
 
 Follow Up:
 {{structured.followUp}}
-
-{{structured.mipsSection}}
     `
   ),
   buildTemplate(
@@ -838,11 +842,12 @@ Current Cumulative Dose to Date: {{site1.cumulativeDose}} cGy
 Total Target Dose: {{site1.totalDose}} cGy
 Treatment Parameters:
 Shields: {{site1.shields}}
-Cutout / Shield Details: {{site1.cutoutSizeDisplay}}
+Other Shield Details: {{site1.cutoutSizeDisplay}}
 kV: {{site1.energyKv}}
 Dose: {{site1.dailyDose}} cGy
 Cone Size: {{site1.coneSizeDisplay}}
 Machine: {{site1.machine}}
+Treatment Depth: {{site1.treatmentDepthDisplay}}
 
 Plan: Radiation Physics Consultation.
 Physics Consultation: Fraction Number: {{visit.treatmentNumber}} of {{site1.prescribedFractions}}
@@ -869,11 +874,12 @@ Current Cumulative Dose to Date: {{site2.cumulativeDose}} cGy
 Total Target Dose: {{site2.totalDose}} cGy
 Treatment Parameters:
 Shields: {{site2.shields}}
-Cutout / Shield Details: {{site2.cutoutSizeDisplay}}
+Other Shield Details: {{site2.cutoutSizeDisplay}}
 kV: {{site2.energyKv}}
 Dose: {{site2.dailyDose}} cGy
 Cone Size: {{site2.coneSizeDisplay}}
 Machine: {{site2.machine}}
+Treatment Depth: {{site2.treatmentDepthDisplay}}
 
 Plan: Radiation Physics Consultation.
 Physics Consultation: Fraction Number: {{visit.treatmentNumber}} of {{site2.prescribedFractions}}
@@ -885,6 +891,8 @@ Post Care:
 {{structured.postCare}}
 
 {{structured.treatmentComment}}
+
+{{structured.mipsSection}}
 
 Treatment Supervised by:
 
@@ -903,8 +911,6 @@ Date
 
 Follow Up:
 {{structured.followUp}}
-
-{{structured.mipsSection}}
     `
   )
 ];

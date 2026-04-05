@@ -1,5 +1,6 @@
 import {
   applyAutoNumberOfBlocks,
+  buildShieldSummary,
   buildSimulationComplicationLine,
   buildSimulationComplicationText,
   calculateAgeAtDate,
@@ -133,6 +134,7 @@ export function buildVisitPreviewText(
     ...site1Base,
     prescribedFractions: site1Base.prescribedFractions ?? course.prescribedFractions,
     cutoutSize: normalizeCutoutSizeLabel(site1Base.cutoutSize),
+    shields: buildShieldSummary(site1Base.shields, site1Base.additionalDevices),
     machine: getDefaultMachine(site1Base.machine),
     treatmentDepth: getDefaultTreatmentDepth(site1Base.treatmentDepth),
     coneSizeDisplay: formatMeasurement(site1Base.coneSize),
@@ -148,6 +150,7 @@ export function buildVisitPreviewText(
     ...site2Base,
     prescribedFractions: site2Base.prescribedFractions ?? course.prescribedFractions,
     cutoutSize: normalizeCutoutSizeLabel(site2Base.cutoutSize),
+    shields: buildShieldSummary(site2Base.shields, site2Base.additionalDevices),
     machine: getDefaultMachine(site2Base.machine),
     treatmentDepth: getDefaultTreatmentDepth(site2Base.treatmentDepth),
     coneSizeDisplay: formatMeasurement(site2Base.coneSize),

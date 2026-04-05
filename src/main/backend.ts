@@ -18,6 +18,7 @@ import { DesktopPatientArchiveRestoreService } from "./archive-restore";
 import {
   applyAutoNumberOfBlocks,
   buildDefaultStructuredFields,
+  buildShieldSummary,
   buildSimulationComplicationLine,
   buildSimulationComplicationText,
   calculateAgeAtDate,
@@ -1004,6 +1005,7 @@ export class RadiationNoteService {
     const site1Render = {
       ...site1,
       cutoutSize: normalizeCutoutSizeLabel(site1.cutoutSize),
+      shields: buildShieldSummary(site1.shields, site1.additionalDevices),
       machine: getDefaultMachine(site1.machine),
       treatmentDepth: getDefaultTreatmentDepth(site1.treatmentDepth),
       coneSizeDisplay: formatMeasurement(site1.coneSize),
@@ -1018,6 +1020,7 @@ export class RadiationNoteService {
     const site2Render = {
       ...site2,
       cutoutSize: normalizeCutoutSizeLabel(site2.cutoutSize),
+      shields: buildShieldSummary(site2.shields, site2.additionalDevices),
       machine: getDefaultMachine(site2.machine),
       treatmentDepth: getDefaultTreatmentDepth(site2.treatmentDepth),
       coneSizeDisplay: formatMeasurement(site2.coneSize),
