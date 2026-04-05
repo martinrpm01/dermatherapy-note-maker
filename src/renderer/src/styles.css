@@ -114,6 +114,27 @@ textarea {
   box-shadow: 0 24px 60px rgba(44, 55, 61, 0.12);
 }
 
+.lock-card-setup {
+  width: min(980px, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  align-content: start;
+}
+
+.lock-setup-grid {
+  align-items: start;
+}
+
+.lock-setup-pin-panel {
+  display: grid;
+  gap: 0.9rem;
+  align-content: start;
+}
+
+.lock-setup-pin-panel h3 {
+  margin: 0;
+}
+
 .brand-logo {
   display: block;
   width: min(220px, 100%);

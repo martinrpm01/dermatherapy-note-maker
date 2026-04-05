@@ -359,54 +359,59 @@ export function LockScreen(props: {
 }) {
   return (
     <div className="lock-shell">
-      <div className="lock-card">
+      <div className={`lock-card${props.requiresPinSetup ? " lock-card-setup" : ""}`}>
         {props.logoSrc ? <img className="brand-logo lock-logo" src={props.logoSrc} alt={`${props.appName} logo`} /> : null}
         <h1>{props.appName}</h1>
         <p>{props.requiresPinSetup ? "Set a local PIN to protect patient notes on this device." : "Unlock with PIN to access patient records."}</p>
         {props.requiresPinSetup ? (
-          <>
-            <label>
-              Default Therapist
-              <input
-                value={props.setupSettings.defaultTherapist}
-                onChange={(event) => props.onSetupSettingsChange({ ...props.setupSettings, defaultTherapist: event.target.value })}
-              />
-            </label>
-            <label>
-              Supervising Physician Name
-              <input
-                placeholder="e.g. David S. Sax, M.D."
-                value={props.setupSettings.supervisingPhysician}
-                onChange={(event) => props.onSetupSettingsChange({ ...props.setupSettings, supervisingPhysician: event.target.value })}
-              />
-            </label>
-            <label>
-              Dermatology Office Name
-              <input
-                placeholder="e.g. University Park Dermatology"
-                value={props.setupSettings.dermatologyOfficeName}
-                onChange={(event) => props.onSetupSettingsChange({ ...props.setupSettings, dermatologyOfficeName: event.target.value })}
-              />
-            </label>
-            <div className="logo-settings">
-              <span className="strong">Dermatology Office Logo</span>
-              <img className="settings-logo-preview" src={props.setupSettings.dermatologyOfficeLogoUpload?.dataUrl || props.logoSrc} alt="Dermatology office logo preview" />
-              <div className="button-row">
-                <label className="logo-upload-button">
-                  Upload Logo
-                  <input type="file" accept="image/*" onChange={(event) => props.onSetupLogoSelected(event.target.files?.[0])} />
-                </label>
-                <button type="button" onClick={props.onRemoveSetupLogo}>
-                  Use Default Logo
-                </button>
+          <div className="settings-grid lock-setup-grid">
+            <div className="panel">
+              <label>
+                Default Therapist
+                <input
+                  value={props.setupSettings.defaultTherapist}
+                  onChange={(event) => props.onSetupSettingsChange({ ...props.setupSettings, defaultTherapist: event.target.value })}
+                />
+              </label>
+              <label>
+                Supervising Physician Name
+                <input
+                  placeholder="e.g. David S. Sax, M.D."
+                  value={props.setupSettings.supervisingPhysician}
+                  onChange={(event) => props.onSetupSettingsChange({ ...props.setupSettings, supervisingPhysician: event.target.value })}
+                />
+              </label>
+              <label>
+                Dermatology Office Name
+                <input
+                  placeholder="e.g. University Park Dermatology"
+                  value={props.setupSettings.dermatologyOfficeName}
+                  onChange={(event) => props.onSetupSettingsChange({ ...props.setupSettings, dermatologyOfficeName: event.target.value })}
+                />
+              </label>
+              <div className="logo-settings">
+                <span className="strong">Dermatology Office Logo</span>
+                <img className="settings-logo-preview" src={props.setupSettings.dermatologyOfficeLogoUpload?.dataUrl || props.logoSrc} alt="Dermatology office logo preview" />
+                <div className="button-row">
+                  <label className="logo-upload-button">
+                    Upload Logo
+                    <input type="file" accept="image/*" onChange={(event) => props.onSetupLogoSelected(event.target.files?.[0])} />
+                  </label>
+                  <button type="button" onClick={props.onRemoveSetupLogo}>
+                    Use Default Logo
+                  </button>
+                </div>
               </div>
             </div>
-            <input type="password" inputMode="numeric" placeholder="New PIN" value={props.setupPin} onChange={(event) => props.onSetupPinChange(event.target.value)} />
-            <input type="password" inputMode="numeric" placeholder="Confirm PIN" value={props.confirmPin} onChange={(event) => props.onConfirmPinChange(event.target.value)} />
-            <button className="primary" onClick={props.onSetup}>
-              Set PIN
-            </button>
-          </>
+            <div className="panel lock-setup-pin-panel">
+              <h3>Set PIN</h3>
+              <input type="password" inputMode="numeric" placeholder="New PIN" value={props.setupPin} onChange={(event) => props.onSetupPinChange(event.target.value)} />
+              <input type="password" inputMode="numeric" placeholder="Confirm PIN" value={props.confirmPin} onChange={(event) => props.onConfirmPinChange(event.target.value)} />
+              <button className="primary" onClick={props.onSetup}>
+                Save Setup
+              </button>
+            </div>
+          </div>
         ) : (
           <>
             <input type="password" inputMode="numeric" placeholder="PIN" value={props.unlockPin} onChange={(event) => props.onUnlockPinChange(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") props.onUnlock(); }} />
