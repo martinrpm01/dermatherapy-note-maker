@@ -104,16 +104,15 @@ function applyWhereClause<T extends object>(rows: T[], whereClause?: string, par
     .map((part) => part.trim())
     .filter(Boolean);
 
-  let paramIndex = 0;
   return rows.filter((row) =>
-    clauses.every((clause) => {
+    clauses.every((clause, clauseIndex) => {
       const match = clause.match(/^([a-zA-Z0-9_]+)\s*=\s*\?$/);
       if (!match) {
         throw new Error(`BrowserStructuredDataStore does not support where clause: ${whereClause}`);
       }
 
       const column = match[1]!;
-      const expected = params[paramIndex++];
+      const expected = params[clauseIndex];
       const camelKey = column.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
       return (row as Record<string, unknown>)[camelKey] === expected;
     })
