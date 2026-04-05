@@ -467,6 +467,10 @@ label select {
   gap: 0.7rem;
 }
 
+.form-panel .form-grid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
 .form-panel input,
 .form-panel select,
 .form-panel textarea {
