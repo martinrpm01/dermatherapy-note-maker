@@ -75,6 +75,18 @@ textarea {
   padding: 2rem;
 }
 
+.lock-shell {
+  position: fixed;
+  inset: 0;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  min-height: 100dvh;
+  padding: 1rem;
+  z-index: 10002;
+}
+
 .loading-error {
   margin-top: 0.85rem;
   max-width: 520px;
@@ -83,6 +95,7 @@ textarea {
 
 .lock-card {
   width: min(420px, calc(100vw - 2rem));
+  max-width: calc(100vw - 2rem);
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 24px;
@@ -638,15 +651,23 @@ input.search {
 .modal-backdrop {
   position: fixed;
   inset: 0;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  min-height: 100dvh;
   z-index: 9999;
   background: rgba(20, 25, 28, 0.34);
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 1rem;
+  overflow: auto;
 }
 
 .modal-card {
   width: min(720px, calc(100vw - 2rem));
+  max-width: calc(100vw - 2rem);
   max-height: calc(100vh - 2rem);
   overflow: auto;
   background: var(--panel);
@@ -655,6 +676,7 @@ input.search {
   padding: 1.5rem;
   display: grid;
   gap: 1rem;
+  margin: auto;
 }
 
 .modal-card.wide {
