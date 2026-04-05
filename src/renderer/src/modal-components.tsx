@@ -110,8 +110,8 @@ export function CourseModal(props: {
       courseForm.sites.forEach((site, index) => {
         const fracs = site.prescribedFractions ?? courseForm.prescribedFractions ?? 0;
         next[index] = current[index] ?? {
-          mode: FRACTION_PRESETS.includes(fracs) ? "preset" : (fracs > 0 ? "other" : "preset"),
-          custom: FRACTION_PRESETS.includes(fracs) ? "" : (fracs > 0 ? String(fracs) : "")
+          mode: fracs > 0 && !FRACTION_PRESETS.includes(fracs) ? "other" : "preset",
+          custom: fracs > 0 && !FRACTION_PRESETS.includes(fracs) ? String(fracs) : ""
         };
       });
       return next;
@@ -121,7 +121,7 @@ export function CourseModal(props: {
   function getSiteFractionMode(index: number): "preset" | "other" {
     const site = courseForm.sites[index];
     const fracs = site.prescribedFractions ?? 0;
-    return siteFractionModes[index]?.mode ?? (FRACTION_PRESETS.includes(fracs) ? "preset" : (fracs > 0 ? "other" : "preset"));
+    return siteFractionModes[index]?.mode ?? (fracs > 0 && !FRACTION_PRESETS.includes(fracs) ? "other" : "preset");
   }
 
   function updateSiteFractions(index: number, fracs: number) {
@@ -259,7 +259,7 @@ export function CourseModal(props: {
                 <label>
                   Prescribed Fractions
                   <select
-                    value={getSiteFractionMode(index) === "other" ? "other" : selectValue(site.prescribedFractions ?? 0, FRACTION_PRESETS)}
+                    value={getSiteFractionMode(index) === "other" ? "other" : selectValue(site.prescribedFractions || 10, FRACTION_PRESETS)}
                     onChange={(event) => {
                       if (event.target.value === "other") {
                         setSiteFractionModes((prev) => ({ ...prev, [index]: { mode: "other", custom: String(site.prescribedFractions ?? "") } }));
