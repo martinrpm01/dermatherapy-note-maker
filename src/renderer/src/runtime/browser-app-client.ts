@@ -17,6 +17,10 @@ import type {
   PatientArchiveRestoreResult
 } from "../../../shared/archive";
 import {
+  applyAutoNumberOfBlocks,
+  buildDefaultStructuredFields,
+  buildSiteSnapshots,
+  createEmptyVitals,
   getCurrentFraction,
   getAutoNumberOfBlocks,
   getNextTreatmentNumber,
@@ -24,17 +28,22 @@ import {
   getTemplateKey,
   normalizeCutoutSizeLabel
 } from "../../../shared/note-rules";
-import type { AppClient, ArchiveSnapshot, DashboardSnapshot, SettingsPayload } from "../../../shared/types";
+import type { AppClient, ArchiveSnapshot, DashboardSnapshot, SettingsPayload, VisitEditorState, VisitInput } from "../../../shared/types";
 import {
   exportPatientArchiveFromBrowserStores,
   type BrowserArchiveExportPayload
 } from "./browser-archive-export";
 import { preflightBrowserArchiveRestore, restoreBrowserArchive } from "./browser-archive-restore";
+import { buildVisitPreviewText } from "../helpers";
 import { BrowserBinaryAssetStore } from "../storage/browser-binary-asset-store";
 import { BrowserStructuredDataStore } from "../storage/browser-structured-data-store";
 
 export interface BrowserArchiveClientDependencies {
   exportPatientArchive?: (patientId: string) => Promise<BrowserArchiveExportPayload>;
+}
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 /**
@@ -85,6 +94,75 @@ export class BrowserAppClient implements AppClient {
 
   private getDefaultTreatmentDepth(value: string) {
     return value.trim() || "3";
+  }
+
+  private buildVisitPhotoBaseName(note: VisitInput) {
+    const firstSite = note.structuredFields.siteSnapshots[0];
+    const siteLabel = firstSite?.treatmentLocationText || firstSite?.bodyLocation || "treatment-site";
+    return `${siteLabel} ${this.buildTreatmentLabel(note)}`.trim();
+  }
+
+  private buildVisitAttachmentBaseName(note: VisitInput) {
+    const firstSite = note.structuredFields.siteSnapshots[0];
+    const siteLabel = firstSite?.treatmentLocationText || firstSite?.bodyLocation || "attachment";
+    return `${siteLabel} ${this.buildTreatmentLabel(note)} attachment`.trim();
+  }
+
+  private buildTreatmentLabel(note: VisitInput) {
+    if (note.treatmentNumber === null) {
+      return "consult";
+    }
+
+    return `tx ${note.treatmentNumber}`;
+  }
+
+  private async loadExistingVisit(visitId: string): Promise<VisitEditorState> {
+    const structuredDataStore = await this.getStructuredDataStore();
+    const visit = structuredDataStore.fetchVisit(visitId);
+    if (!visit) {
+      throw new Error("Visit not found.");
+    }
+
+    const patient = structuredDataStore.fetchPatient(visit.patientId);
+    const course = structuredDataStore.fetchCourse(visit.courseId);
+    if (!patient || !course) {
+      throw new Error("Visit context is incomplete.");
+    }
+
+    return {
+      patient,
+      course,
+      sites: structuredDataStore.fetchSites([course.id]),
+      note: {
+        id: visit.id,
+        patientId: visit.patientId,
+        courseId: visit.courseId,
+        visitDate: visit.visitDate,
+        noteType: visit.noteType,
+        treatmentNumber: visit.treatmentNumber,
+        status: visit.status,
+        therapistName: visit.therapistName,
+        vitals: visit.vitals,
+        structuredFields: {
+          ...visit.structuredFields,
+          additionalNotes: visit.structuredFields.additionalNotes ?? "",
+          prescribedFractionsInput:
+            visit.structuredFields.prescribedFractionsInput ??
+            (visit.noteType !== "consult_sim" && course.prescribedFractions > 0 ? course.prescribedFractions : null),
+          biopsyDate: visit.structuredFields.biopsyDate ?? course.startDate ?? "",
+          lastTreatmentDate: visit.structuredFields.lastTreatmentDate ?? course.startDate ?? "",
+          siteSnapshots: applyAutoNumberOfBlocks(visit.noteType, visit.structuredFields.siteSnapshots)
+        },
+        generatedText: visit.generatedText,
+        editedText: visit.editedText,
+        newPhotoUploads: [],
+        newAttachmentUploads: []
+      },
+      existingPhotos: structuredDataStore.fetchVisitPhotos(visit.id),
+      existingAttachments: structuredDataStore.fetchVisitAttachments(visit.id),
+      generatedPdfs: structuredDataStore.fetchGeneratedPdfs(visit.id),
+      templateKey: getTemplateKey(course.courseType, visit.noteType)
+    };
   }
 
   private createArchiveHandle(fileName: string, blob: Blob): PatientArchiveIoHandle {
@@ -555,18 +633,186 @@ export class BrowserAppClient implements AppClient {
 
   // fully-portable: builds a visit draft/editor state from local business rules and history.
   // Browser implementation will reuse the same shared note logic against browser-local data.
-  buildVisitDraft(
-    _courseId: string,
-    _mode?: Parameters<AppClient["buildVisitDraft"]>[1],
-    _existingVisitId?: string
+  async buildVisitDraft(
+    courseId: string,
+    mode: Parameters<AppClient["buildVisitDraft"]>[1] = "next_treatment",
+    existingVisitId?: string
   ) {
-    return this.notImplemented("buildVisitDraft");
+    this.assertUnlocked();
+    if (existingVisitId) {
+      return this.loadExistingVisit(existingVisitId);
+    }
+
+    const structuredDataStore = await this.getStructuredDataStore();
+    const course = structuredDataStore.fetchCourse(courseId);
+    if (!course) {
+      throw new Error("Course not found.");
+    }
+
+    const patient = structuredDataStore.fetchPatient(course.patientId);
+    if (!patient) {
+      throw new Error("Patient not found.");
+    }
+
+    const sites = structuredDataStore.fetchSites([courseId]);
+    const visits = structuredDataStore.fetchVisitsByCourseIds([courseId]);
+    const hasConsultVisit = visits.some((visit) => visit.note.noteType === "consult_sim");
+    const shouldStartWithConsult = mode === "next_treatment" && !hasConsultVisit && course.prescribedFractions <= 0;
+    const treatmentNumber = mode === "consult_sim" || shouldStartWithConsult ? null : getNextTreatmentNumber(visits);
+    if (mode === "next_treatment" && treatmentNumber === null && !shouldStartWithConsult) {
+      throw new Error("This course has reached the maximum treatment number.");
+    }
+
+    const noteType = mode === "consult_sim" || shouldStartWithConsult ? "consult_sim" : getSuggestedNoteType(treatmentNumber);
+    const siteSnapshots = applyAutoNumberOfBlocks(noteType, buildSiteSnapshots(sites, treatmentNumber));
+    const settings = structuredDataStore.getSettingsRecord();
+    const mostRecentVisitDate =
+      visits
+        .map((visit) => visit.note.visitDate)
+        .filter(Boolean)
+        .sort()
+        .at(-1) ?? course.startDate;
+    const structuredFields = buildDefaultStructuredFields(noteType, siteSnapshots, settings.supervisingPhysician, {
+      biopsyDate: course.startDate,
+      lastTreatmentDate: mostRecentVisitDate
+    });
+    if (noteType !== "consult_sim" && course.prescribedFractions <= 0) {
+      structuredFields.prescribedFractionsInput = course.prescribedFractions > 0 ? course.prescribedFractions : null;
+    }
+
+    const note: VisitInput = {
+      patientId: patient.id,
+      courseId: course.id,
+      visitDate: todayIso(),
+      noteType,
+      treatmentNumber,
+      status: "draft",
+      therapistName: settings.defaultTherapist,
+      vitals: createEmptyVitals(),
+      structuredFields,
+      generatedText: "",
+      editedText: "",
+      newPhotoUploads: [],
+      newAttachmentUploads: []
+    };
+    const templates = structuredDataStore.getTemplates();
+    const generatedText = buildVisitPreviewText(patient ? templates : [], patient, course, note, structuredDataStore.toSettingsView(settings));
+    note.generatedText = generatedText;
+    note.editedText = generatedText;
+
+    return {
+      patient,
+      course,
+      sites,
+      note,
+      existingPhotos: [],
+      existingAttachments: [],
+      generatedPdfs: [],
+      templateKey: getTemplateKey(course.courseType, note.noteType)
+    } satisfies VisitEditorState;
   }
 
   // fully-portable: saves a visit note and associated structured fields.
   // Browser implementation will persist the visit and any uploads locally.
-  saveVisit(_input: Parameters<AppClient["saveVisit"]>[0]) {
-    return this.notImplemented("saveVisit");
+  async saveVisit(input: Parameters<AppClient["saveVisit"]>[0]) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    const patient = structuredDataStore.fetchPatient(input.patientId);
+    let course = structuredDataStore.fetchCourse(input.courseId);
+    if (!patient || !course) {
+      throw new Error("Visit context is incomplete.");
+    }
+
+    const prescribedFractionsInput =
+      input.noteType !== "consult_sim" ? input.structuredFields.prescribedFractionsInput ?? null : null;
+    if (prescribedFractionsInput && prescribedFractionsInput > 0 && prescribedFractionsInput !== course.prescribedFractions) {
+      structuredDataStore.updateCoursePrescribedFractions(course.id, prescribedFractionsInput);
+      course = structuredDataStore.fetchCourse(input.courseId);
+      if (!course) {
+        throw new Error("Visit context is incomplete.");
+      }
+    }
+
+    const structuredFields = {
+      ...input.structuredFields,
+      additionalNotes: input.structuredFields.additionalNotes ?? "",
+      prescribedFractionsInput: input.structuredFields.prescribedFractionsInput ?? null,
+      biopsyDate: input.structuredFields.biopsyDate ?? "",
+      lastTreatmentDate: input.structuredFields.lastTreatmentDate ?? "",
+      siteSnapshots: applyAutoNumberOfBlocks(
+        input.noteType,
+        input.structuredFields.siteSnapshots
+          .map((snapshot) => ({
+            ...snapshot,
+            cumulativeDose: snapshot.dailyDose * (input.treatmentNumber ?? 0)
+          }))
+          .map((snapshot) => ({ ...snapshot, cutoutSize: normalizeCutoutSizeLabel(snapshot.cutoutSize) }))
+      )
+    };
+
+    const normalizedInput: VisitInput = {
+      ...input,
+      therapistName: input.therapistName.trim(),
+      structuredFields
+    };
+
+    const templates = structuredDataStore.getTemplates();
+    const generatedText = buildVisitPreviewText(
+      templates,
+      patient,
+      course,
+      normalizedInput,
+      structuredDataStore.toSettingsView(structuredDataStore.getSettingsRecord())
+    );
+    const editedText = normalizedInput.editedText.trim() || generatedText;
+    const savedVisit = structuredDataStore.saveVisit(normalizedInput, generatedText, editedText);
+
+    const existingPhotos = structuredDataStore.fetchVisitPhotos(savedVisit.id);
+    const photoBaseName = this.buildVisitPhotoBaseName(normalizedInput);
+    normalizedInput.newPhotoUploads.forEach((upload, index) => {
+      const imageLabel = existingPhotos.length + index === 0 ? photoBaseName : `${photoBaseName}-${existingPhotos.length + index + 1}`;
+      const photoCaption =
+        upload.caption && upload.caption.trim() && upload.caption.trim() !== upload.name
+          ? upload.caption.trim()
+          : photoBaseName;
+      const filePath = binaryAssetStore.saveUpload(
+        upload,
+        binaryAssetStore.getVisitPhotosDir(patient.id, course.id, savedVisit.id),
+        imageLabel
+      );
+      structuredDataStore.addVisitPhoto(
+        savedVisit.id,
+        filePath,
+        existingPhotos.length + index + 1,
+        photoCaption
+      );
+    });
+
+    const existingAttachments = structuredDataStore.fetchVisitAttachments(savedVisit.id);
+    const attachmentBaseName = this.buildVisitAttachmentBaseName(normalizedInput);
+    normalizedInput.newAttachmentUploads.forEach((upload, index) => {
+      const attachmentLabel =
+        existingAttachments.length + index === 0
+          ? attachmentBaseName
+          : `${attachmentBaseName}-${existingAttachments.length + index + 1}`;
+      const filePath = binaryAssetStore.saveUpload(
+        upload,
+        binaryAssetStore.getVisitAttachmentsDir(patient.id, course.id, savedVisit.id),
+        attachmentLabel
+      );
+      structuredDataStore.addVisitAttachment(
+        savedVisit.id,
+        filePath,
+        existingAttachments.length + index + 1,
+        upload.caption?.trim() || upload.name,
+        upload.mimeType,
+        upload.name
+      );
+    });
+
+    await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
+    return structuredDataStore.fetchVisit(savedVisit.id)!;
   }
 
   // fully-portable: deletes a visit and related local assets under current rules.
