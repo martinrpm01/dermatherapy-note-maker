@@ -137,6 +137,56 @@ textarea {
   pointer-events: none;
 }
 
+.install-helper-banner {
+  position: fixed;
+  left: 1rem;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 10001;
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(36, 63, 90, 0.22);
+  border-radius: 18px;
+  background: rgba(255, 254, 252, 0.97);
+  box-shadow: 0 18px 40px rgba(23, 50, 74, 0.16);
+  backdrop-filter: blur(10px);
+}
+
+.install-helper-banner strong {
+  font-size: 1rem;
+}
+
+.install-helper-banner p,
+.install-helper-banner ol {
+  margin: 0;
+}
+
+.install-helper-banner ol {
+  padding-left: 1.2rem;
+  color: var(--muted);
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.95rem;
+}
+
+.install-helper-copy {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.install-helper-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.install-helper-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 label {
   display: flex;
   flex-direction: column;
@@ -618,5 +668,10 @@ input.search {
 
   .editor-layout {
     grid-template-columns: 1fr;
+  }
+
+  .install-helper-actions {
+    flex-direction: column;
+    align-items: stretch;
   }
 }

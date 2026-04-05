@@ -6,6 +6,7 @@ import {
   ArchiveScreen,
   CompletedScreen,
   DashboardScreen,
+  InstallPromptBanner,
   LockScreen,
   PatientScreen,
   PinRecoveryScreen,
@@ -46,6 +47,36 @@ interface AppProps {
 }
 
 type BrowserRecoveryFlow = "auth" | "recover_pin" | "wipe_data";
+
+type InstallAwareNavigator = Navigator & {
+  standalone?: boolean;
+};
+
+function shouldShowInstallPrompt() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const userAgent = window.navigator.userAgent;
+  const platform = window.navigator.platform;
+  const maxTouchPoints = window.navigator.maxTouchPoints ?? 0;
+  const isIosDevice =
+    /iphone|ipad|ipod/i.test(userAgent) || (platform === "MacIntel" && maxTouchPoints > 1);
+  const isSafari =
+    /safari/i.test(userAgent) && !/crios|fxios|edgios|opios/i.test(userAgent);
+  const isStandalone =
+    window.matchMedia?.("(display-mode: standalone)")?.matches === true ||
+    (window.navigator as InstallAwareNavigator).standalone === true;
+
+  let isDismissed = false;
+  try {
+    isDismissed = window.localStorage.getItem("install-prompt-dismissed") === "true";
+  } catch {
+    isDismissed = false;
+  }
+
+  return isIosDevice && isSafari && !isStandalone && !isDismissed;
+}
 
 export default function App({ appClient, initialClientError = "" }: AppProps) {
   const [boot, setBoot] = useState<BootstrapPayload | null>(null);
@@ -92,11 +123,16 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
   const [archiveExportError, setArchiveExportError] = useState<string | null>(null);
   const [archivePreflightResult, setArchivePreflightResult] = useState<PatientArchivePreflightResult | null>(null);
   const [archiveRestoreResult, setArchiveRestoreResult] = useState<PatientArchiveRestoreResult | null>(null);
+  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const resolvedLogoSrc = useResolvedAssetUrl(appClient, boot?.settings.dermatologyOfficeLogoAsset);
   const authGateActive = Boolean(pendingRecoveryCode) || browserRecoveryFlow !== "auth";
 
   useEffect(() => {
     void loadBootstrap();
+  }, []);
+
+  useEffect(() => {
+    setShowInstallPrompt(shouldShowInstallPrompt());
   }, []);
 
   useEffect(() => {
@@ -522,12 +558,26 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
 
   if (!boot) {
     return (
-      <div className="loading-screen">
-        <div>
-          <div>Loading application...</div>
-          {bootError ? <p className="loading-error">{bootError}</p> : null}
+      <>
+        <div className="loading-screen">
+          <div>
+            <div>Loading application...</div>
+            {bootError ? <p className="loading-error">{bootError}</p> : null}
+          </div>
         </div>
-      </div>
+        {showInstallPrompt ? (
+          <InstallPromptBanner
+            onDismiss={() => {
+              try {
+                window.localStorage.setItem("install-prompt-dismissed", "true");
+              } catch {
+                // Ignore storage write failures; banner still dismisses for the current session.
+              }
+              setShowInstallPrompt(false);
+            }}
+          />
+        ) : null}
+      </>
     );
   }
 
@@ -535,109 +585,166 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
 
   if (pendingRecoveryCode) {
     return (
-      <RecoveryCodeScreen
-        appName={boot.settings.appName}
-        logoSrc={activeLogoSrc}
-        recoveryCode={pendingRecoveryCode}
-        onAcknowledge={() => setPendingRecoveryCode(null)}
-      />
+      <>
+        <RecoveryCodeScreen
+          appName={boot.settings.appName}
+          logoSrc={activeLogoSrc}
+          recoveryCode={pendingRecoveryCode}
+          onAcknowledge={() => setPendingRecoveryCode(null)}
+        />
+        {showInstallPrompt ? (
+          <InstallPromptBanner
+            onDismiss={() => {
+              try {
+                window.localStorage.setItem("install-prompt-dismissed", "true");
+              } catch {
+                // Ignore storage write failures; banner still dismisses for the current session.
+              }
+              setShowInstallPrompt(false);
+            }}
+          />
+        ) : null}
+      </>
     );
   }
 
   if (browserRecoveryFlow === "recover_pin") {
     return (
-      <PinRecoveryScreen
-        appName={boot.settings.appName}
-        logoSrc={activeLogoSrc}
-        recoveryCode={recoveryCodeInput}
-        nextPin={recoveryNextPin}
-        confirmPin={recoveryConfirmPin}
-        statusMessage={statusMessage}
-        showWipeOption={showWipeOption}
-        onRecoveryCodeChange={setRecoveryCodeInput}
-        onNextPinChange={setRecoveryNextPin}
-        onConfirmPinChange={setRecoveryConfirmPin}
-        onSubmit={() => void handleRecoveryReset()}
-        onCancel={() => {
-          setBrowserRecoveryFlow("auth");
-          setRecoveryCodeInput("");
-          setRecoveryNextPin("");
-          setRecoveryConfirmPin("");
-          setShowWipeOption(false);
-          setStatusMessage("");
-        }}
-        onWipe={() => {
-          setBrowserRecoveryFlow("wipe_data");
-          setStatusMessage("");
-        }}
-      />
+      <>
+        <PinRecoveryScreen
+          appName={boot.settings.appName}
+          logoSrc={activeLogoSrc}
+          recoveryCode={recoveryCodeInput}
+          nextPin={recoveryNextPin}
+          confirmPin={recoveryConfirmPin}
+          statusMessage={statusMessage}
+          showWipeOption={showWipeOption}
+          onRecoveryCodeChange={setRecoveryCodeInput}
+          onNextPinChange={setRecoveryNextPin}
+          onConfirmPinChange={setRecoveryConfirmPin}
+          onSubmit={() => void handleRecoveryReset()}
+          onCancel={() => {
+            setBrowserRecoveryFlow("auth");
+            setRecoveryCodeInput("");
+            setRecoveryNextPin("");
+            setRecoveryConfirmPin("");
+            setShowWipeOption(false);
+            setStatusMessage("");
+          }}
+          onWipe={() => {
+            setBrowserRecoveryFlow("wipe_data");
+            setStatusMessage("");
+          }}
+        />
+        {showInstallPrompt ? (
+          <InstallPromptBanner
+            onDismiss={() => {
+              try {
+                window.localStorage.setItem("install-prompt-dismissed", "true");
+              } catch {
+                // Ignore storage write failures; banner still dismisses for the current session.
+              }
+              setShowInstallPrompt(false);
+            }}
+          />
+        ) : null}
+      </>
     );
   }
 
   if (browserRecoveryFlow === "wipe_data") {
     return (
-      <WipeLocalDataScreen
-        appName={boot.settings.appName}
-        logoSrc={activeLogoSrc}
-        confirmationText={wipeConfirmationText}
-        statusMessage={statusMessage}
-        onConfirmationTextChange={setWipeConfirmationText}
-        onCancel={() => {
-          setBrowserRecoveryFlow("recover_pin");
-          setWipeConfirmationText("");
-          setStatusMessage("");
-        }}
-        onConfirm={() => void handleWipeAllData()}
-      />
+      <>
+        <WipeLocalDataScreen
+          appName={boot.settings.appName}
+          logoSrc={activeLogoSrc}
+          confirmationText={wipeConfirmationText}
+          statusMessage={statusMessage}
+          onConfirmationTextChange={setWipeConfirmationText}
+          onCancel={() => {
+            setBrowserRecoveryFlow("recover_pin");
+            setWipeConfirmationText("");
+            setStatusMessage("");
+          }}
+          onConfirm={() => void handleWipeAllData()}
+        />
+        {showInstallPrompt ? (
+          <InstallPromptBanner
+            onDismiss={() => {
+              try {
+                window.localStorage.setItem("install-prompt-dismissed", "true");
+              } catch {
+                // Ignore storage write failures; banner still dismisses for the current session.
+              }
+              setShowInstallPrompt(false);
+            }}
+          />
+        ) : null}
+      </>
     );
   }
 
   if (boot.requiresPinSetup || boot.isLocked) {
     return (
-      <LockScreen
-        appName={boot.settings.appName}
-        logoSrc={activeLogoSrc}
-        requiresPinSetup={boot.requiresPinSetup}
-        statusMessage={statusMessage}
-        unlockPin={unlockPin}
-        setupPin={setupPin}
-        confirmPin={confirmPin}
-        onUnlockPinChange={setUnlockPin}
-        onSetupPinChange={setSetupPin}
-        onConfirmPinChange={setConfirmPin}
-        onUnlock={() => void handleUnlock()}
-        onSetup={() => void handleSetupPin()}
-        onForgotPin={!boot.requiresPinSetup ? () => {
-          setBrowserRecoveryFlow("recover_pin");
-          setRecoveryCodeInput("");
-          setRecoveryNextPin("");
-          setRecoveryConfirmPin("");
-          setShowWipeOption(false);
-          setStatusMessage("");
-        } : undefined}
-      />
+      <>
+        <LockScreen
+          appName={boot.settings.appName}
+          logoSrc={activeLogoSrc}
+          requiresPinSetup={boot.requiresPinSetup}
+          statusMessage={statusMessage}
+          unlockPin={unlockPin}
+          setupPin={setupPin}
+          confirmPin={confirmPin}
+          onUnlockPinChange={setUnlockPin}
+          onSetupPinChange={setSetupPin}
+          onConfirmPinChange={setConfirmPin}
+          onUnlock={() => void handleUnlock()}
+          onSetup={() => void handleSetupPin()}
+          onForgotPin={!boot.requiresPinSetup ? () => {
+            setBrowserRecoveryFlow("recover_pin");
+            setRecoveryCodeInput("");
+            setRecoveryNextPin("");
+            setRecoveryConfirmPin("");
+            setShowWipeOption(false);
+            setStatusMessage("");
+          } : undefined}
+        />
+        {showInstallPrompt ? (
+          <InstallPromptBanner
+            onDismiss={() => {
+              try {
+                window.localStorage.setItem("install-prompt-dismissed", "true");
+              } catch {
+                // Ignore storage write failures; banner still dismisses for the current session.
+              }
+              setShowInstallPrompt(false);
+            }}
+          />
+        ) : null}
+      </>
     );
   }
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div>
-          <img className="brand-logo" src={activeLogoSrc} alt="Dermatherapy logo" />
-          <h1>{boot.settings.appName}</h1>
-          <p className="muted">Local-first treatment note workflow</p>
-        </div>
-        <nav>
-          <button className={screen.name === "dashboard" ? "nav active" : "nav"} onClick={() => setScreen({ name: "dashboard" })}>Active Workflow</button>
-          <button className={screen.name === "completed" ? "nav active" : "nav"} onClick={() => setScreen({ name: "completed" })}>Completed Patients</button>
-          <button className={screen.name === "archive" ? "nav active" : "nav"} onClick={() => setScreen({ name: "archive" })}>Archive</button>
-          <button className={screen.name === "settings" ? "nav active" : "nav"} onClick={() => setScreen({ name: "settings" })}>Settings</button>
-        </nav>
-        <button className="ghost" onClick={() => void lockApp()}>Lock App</button>
-      </aside>
+    <>
+      <div className="app-shell">
+        <aside className="sidebar">
+          <div>
+            <img className="brand-logo" src={activeLogoSrc} alt="Dermatherapy logo" />
+            <h1>{boot.settings.appName}</h1>
+            <p className="muted">Local-first treatment note workflow</p>
+          </div>
+          <nav>
+            <button className={screen.name === "dashboard" ? "nav active" : "nav"} onClick={() => setScreen({ name: "dashboard" })}>Active Workflow</button>
+            <button className={screen.name === "completed" ? "nav active" : "nav"} onClick={() => setScreen({ name: "completed" })}>Completed Patients</button>
+            <button className={screen.name === "archive" ? "nav active" : "nav"} onClick={() => setScreen({ name: "archive" })}>Archive</button>
+            <button className={screen.name === "settings" ? "nav active" : "nav"} onClick={() => setScreen({ name: "settings" })}>Settings</button>
+          </nav>
+          <button className="ghost" onClick={() => void lockApp()}>Lock App</button>
+        </aside>
 
-      <main className="content-shell">
-        {statusMessage ? <div key={toastKey} className="toast">{statusMessage}</div> : null}
+        <main className="content-shell">
+          {statusMessage ? <div key={toastKey} className="toast">{statusMessage}</div> : null}
 
       {screen.name === "dashboard" ? (
           <DashboardScreen
@@ -883,35 +990,48 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
             }
           />
         ) : null}
-      </main>
+        </main>
 
-      {patientForm ? (
-        <PatientModal
-          patientForm={patientForm}
-          busy={busy}
-          onChange={setPatientForm}
-          onClose={() => setPatientForm(null)}
-          onSave={() => void savePatientForm()}
-          onFacePhotoSelected={(file) => {
-            void (async () => {
-              if (!file || !patientForm) return;
-              const upload = await fileToCompressedUpload(file, 900);
-              setPatientForm({ ...patientForm, facePhotoUpload: upload });
-            })();
+        {patientForm ? (
+          <PatientModal
+            patientForm={patientForm}
+            busy={busy}
+            onChange={setPatientForm}
+            onClose={() => setPatientForm(null)}
+            onSave={() => void savePatientForm()}
+            onFacePhotoSelected={(file) => {
+              void (async () => {
+                if (!file || !patientForm) return;
+                const upload = await fileToCompressedUpload(file, 900);
+                setPatientForm({ ...patientForm, facePhotoUpload: upload });
+              })();
+            }}
+          />
+        ) : null}
+
+        {courseForm ? (
+          <CourseModal
+            courseForm={courseForm}
+            busy={busy}
+            onChange={setCourseForm}
+            onClose={() => setCourseForm(null)}
+            onSave={() => void saveCourseForm()}
+            onDelete={() => void deleteCourseForm()}
+          />
+        ) : null}
+      </div>
+      {showInstallPrompt ? (
+        <InstallPromptBanner
+          onDismiss={() => {
+            try {
+              window.localStorage.setItem("install-prompt-dismissed", "true");
+            } catch {
+              // Ignore storage write failures; banner still dismisses for the current session.
+            }
+            setShowInstallPrompt(false);
           }}
         />
       ) : null}
-
-      {courseForm ? (
-        <CourseModal
-          courseForm={courseForm}
-          busy={busy}
-          onChange={setCourseForm}
-          onClose={() => setCourseForm(null)}
-          onSave={() => void saveCourseForm()}
-          onDelete={() => void deleteCourseForm()}
-        />
-      ) : null}
-    </div>
+    </>
   );
 }

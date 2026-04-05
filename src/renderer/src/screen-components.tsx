@@ -386,6 +386,28 @@ export function LockScreen(props: {
   );
 }
 
+export function InstallPromptBanner(props: {
+  onDismiss: () => void;
+}) {
+  return (
+    <aside className="install-helper-banner" role="dialog" aria-label="Add to your Home Screen">
+      <div className="install-helper-copy">
+        <strong>Add to your Home Screen</strong>
+        <p>For the best iPad experience, install Dermatherapy Note Maker so it opens like a native app.</p>
+        <ol>
+          <li>Tap the Safari Share button, the square with an upward arrow.</li>
+          <li>Scroll down and tap Add to Home Screen.</li>
+          <li>Tap Add.</li>
+        </ol>
+      </div>
+      <div className="install-helper-actions">
+        <span className="install-helper-hint">Safari only. This prompt goes away once dismissed or installed.</span>
+        <button className="ghost" onClick={props.onDismiss}>Maybe Later</button>
+      </div>
+    </aside>
+  );
+}
+
 export function RecoveryCodeScreen(props: {
   appName: string;
   logoSrc?: string;
