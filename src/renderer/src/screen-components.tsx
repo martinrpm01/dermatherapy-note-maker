@@ -393,7 +393,7 @@ export function LockScreen(props: {
               <label>
                 Supervising Physician Name
                 <input
-                  placeholder="e.g. Jordan W. Hayes, M.D."
+                  placeholder="e.g. Avery Bennett, M.D."
                   value={props.setupSettings.supervisingPhysician}
                   onChange={(event) => props.onSetupSettingsChange({ ...props.setupSettings, supervisingPhysician: event.target.value })}
                 />
@@ -401,7 +401,7 @@ export function LockScreen(props: {
               <label>
                 Dermatology Office Name
                 <input
-                  placeholder="e.g. Lakeside Dermatology"
+                  placeholder="e.g. Northfield Skin Clinic"
                   value={props.setupSettings.dermatologyOfficeName}
                   onChange={(event) => props.onSetupSettingsChange({ ...props.setupSettings, dermatologyOfficeName: event.target.value })}
                 />
@@ -1332,11 +1332,11 @@ export function SettingsScreen(props: {
           </label>
           <label>
             Supervising Physician Name
-            <input placeholder="e.g. Jordan W. Hayes, M.D." value={props.settingsPayload.settings.supervisingPhysician} onChange={(event) => props.onSettingsChange({ ...props.settingsPayload.settings, supervisingPhysician: event.target.value })} />
+            <input placeholder="e.g. Avery Bennett, M.D." value={props.settingsPayload.settings.supervisingPhysician} onChange={(event) => props.onSettingsChange({ ...props.settingsPayload.settings, supervisingPhysician: event.target.value })} />
           </label>
           <label>
             Dermatology Office Name
-            <input placeholder="e.g. Lakeside Dermatology" value={props.settingsPayload.settings.dermatologyOfficeName} onChange={(event) => props.onSettingsChange({ ...props.settingsPayload.settings, dermatologyOfficeName: event.target.value })} />
+            <input placeholder="e.g. Northfield Skin Clinic" value={props.settingsPayload.settings.dermatologyOfficeName} onChange={(event) => props.onSettingsChange({ ...props.settingsPayload.settings, dermatologyOfficeName: event.target.value })} />
           </label>
           <div className="logo-settings">
             <span className="strong">Dermatology Office Logo</span>
