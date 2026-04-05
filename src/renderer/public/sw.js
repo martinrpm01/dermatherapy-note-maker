@@ -1,0 +1,78 @@
+const CACHE_NAME = "dermatherapy-v1";
+
+// Bump CACHE_NAME when a deployment should invalidate previously cached shell files.
+const PRECACHE_URLS = ["/index.browser.html", "/manifest.json", "/icon-192.png", "/icon-512.png"];
+
+function isSameOriginRequest(url) {
+  return url.origin === self.location.origin;
+}
+
+function isStaticAssetRequest(url) {
+  return (
+    url.pathname.startsWith("/assets/") ||
+    /\.(?:js|css|png|jpg|jpeg|svg|webp|gif|ico|json)$/i.test(url.pathname)
+  );
+}
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)).then(() => self.skipWaiting())
+  );
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches
+      .keys()
+      .then((cacheNames) =>
+        Promise.all(
+          cacheNames
+            .filter((cacheName) => cacheName !== CACHE_NAME)
+            .map((cacheName) => caches.delete(cacheName))
+        )
+      )
+      .then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener("fetch", (event) => {
+  const { request } = event;
+  if (request.method !== "GET") {
+    return;
+  }
+
+  const requestUrl = new URL(request.url);
+  if (!isSameOriginRequest(requestUrl)) {
+    return;
+  }
+
+  const isNavigationRequest = request.mode === "navigate";
+  if (!isNavigationRequest && !isStaticAssetRequest(requestUrl)) {
+    return;
+  }
+
+  event.respondWith(
+    caches.open(CACHE_NAME).then(async (cache) => {
+      const cachedResponse = await cache.match(request, { ignoreSearch: isNavigationRequest });
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+
+      try {
+        const networkResponse = await fetch(request);
+        if (networkResponse && networkResponse.ok) {
+          cache.put(request, networkResponse.clone());
+        }
+        return networkResponse;
+      } catch (error) {
+        if (isNavigationRequest) {
+          const offlineShell = await cache.match("/index.browser.html");
+          if (offlineShell) {
+            return offlineShell;
+          }
+        }
+        throw error;
+      }
+    })
+  );
+});
