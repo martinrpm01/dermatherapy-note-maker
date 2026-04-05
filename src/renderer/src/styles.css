@@ -721,9 +721,9 @@ input.search {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 24px;
-  padding: 1.1rem 1.25rem;
+  padding: 1rem 1.1rem;
   display: grid;
-  gap: 0.7rem;
+  gap: 0.5rem;
   margin: auto;
 }
 
@@ -734,11 +734,24 @@ input.search {
 }
 
 .modal-card .form-grid {
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .modal-card .subpanel {
-  padding: 0.75rem;
+  padding: 0.6rem 0.75rem;
+}
+
+.modal-card h4 {
+  margin: 0 0 0.3rem;
+}
+
+.modal-card .site-grid {
+  gap: 0.5rem;
+}
+
+.modal-card .checkbox-group {
+  gap: 0.3rem;
+  padding-top: 0.3rem;
 }
 
 .modal-card.wide {
