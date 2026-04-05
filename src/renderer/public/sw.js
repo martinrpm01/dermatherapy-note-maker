@@ -51,13 +51,32 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  if (isNavigationRequest) {
+    // Network-first for HTML: always fetch fresh so new JS/CSS hashes load after a deploy.
+    // Fall back to cache only when offline.
+    event.respondWith(
+      fetch(request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.ok) {
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, networkResponse.clone()));
+          }
+          return networkResponse;
+        })
+        .catch(async () => {
+          const cache = await caches.open(CACHE_NAME);
+          return (await cache.match(request, { ignoreSearch: true })) || cache.match("/index.browser.html");
+        })
+    );
+    return;
+  }
+
+  // Cache-first for static assets (content-hashed filenames never change).
   event.respondWith(
     caches.open(CACHE_NAME).then(async (cache) => {
-      const cachedResponse = await cache.match(request, { ignoreSearch: isNavigationRequest });
+      const cachedResponse = await cache.match(request);
       if (cachedResponse) {
         return cachedResponse;
       }
-
       try {
         const networkResponse = await fetch(request);
         if (networkResponse && networkResponse.ok) {
@@ -65,12 +84,6 @@ self.addEventListener("fetch", (event) => {
         }
         return networkResponse;
       } catch (error) {
-        if (isNavigationRequest) {
-          const offlineShell = await cache.match("/index.browser.html");
-          if (offlineShell) {
-            return offlineShell;
-          }
-        }
         throw error;
       }
     })
