@@ -124,7 +124,6 @@ The patient presents for further evaluation and management and consultation and 
 
 Exam:
 {{structured.focusedExam}}
-{{structured.healingDescription}}
 
 Exam Vitals:
 Blood Pressure: {{vitals.bloodPressure}}
@@ -461,7 +460,6 @@ The patient presents for further evaluation and management and consultation and 
 
 Focused Exam:
 {{structured.focusedExam}}
-{{structured.healingDescription}}
 
 Exam Vitals:
 Blood Pressure: {{vitals.bloodPressure}}

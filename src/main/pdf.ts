@@ -144,6 +144,49 @@ function shouldBoldBodyLabel(label: string) {
   return label.trim() === "Plan:";
 }
 
+function parseDiagnosisHeading(line: string) {
+  const match = line.trim().match(/^(\d+\.)\s+(.+?)\s+\(([^)]+)\)$/);
+  if (!match) {
+    return null;
+  }
+
+  return {
+    indexLabel: match[1],
+    diagnosis: match[2],
+    icd10: `(${match[3]})`
+  };
+}
+
+function drawDiagnosisHeading(
+  page: Awaited<ReturnType<PDFDocument["addPage"]>>,
+  line: string,
+  y: number,
+  regularFont: Awaited<ReturnType<PDFDocument["embedFont"]>>,
+  boldFont: Awaited<ReturnType<PDFDocument["embedFont"]>>,
+  margin: number
+) {
+  const parsed = parseDiagnosisHeading(line);
+  if (!parsed) {
+    return null;
+  }
+
+  const accent = rgb(0.24, 0.4, 0.67);
+  const muted = rgb(0.48, 0.5, 0.55);
+  const indexSize = 12;
+  const diagnosisSize = 12.5;
+  const icdSize = 10.5;
+  const indexX = margin;
+  const diagnosisX = margin + 30;
+  const diagnosisY = y;
+  const icdY = y - 13;
+
+  drawSimpleLine(page, parsed.indexLabel, indexX, diagnosisY, indexSize, boldFont, accent);
+  drawSimpleLine(page, parsed.diagnosis, diagnosisX, diagnosisY, diagnosisSize, boldFont, accent);
+  drawSimpleLine(page, parsed.icd10, diagnosisX, icdY, icdSize, boldFont, muted);
+
+  return icdY - 10;
+}
+
 function parseMetadataFields(metadataLines: string[]) {
   const fields = new Map<string, string>();
 
@@ -554,6 +597,19 @@ export async function buildVisitPdf({ noteText, photoInputs, attachmentInputs, l
         cursorY -= bodyLineHeight;
       }
       cursorY -= 1.5;
+      continue;
+    }
+
+    const diagnosisHeadingY = drawDiagnosisHeading(
+      page,
+      cleanLine,
+      cursorY,
+      regularFont,
+      boldFont,
+      margin
+    );
+    if (diagnosisHeadingY !== null) {
+      cursorY = diagnosisHeadingY;
       continue;
     }
 
