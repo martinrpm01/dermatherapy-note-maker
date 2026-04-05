@@ -9,7 +9,7 @@ import { PDFDocument } from "pdf-lib";
 import { RadiationNoteRepository } from "../src/main/repository";
 import { RadiationNoteService } from "../src/main/backend";
 import { DesktopBinaryAssetStore } from "../src/main/storage/desktop-binary-asset-store";
-import { formatDisplayDate } from "../src/shared/note-rules";
+import { formatDisplayDate, getSuggestedNoteType } from "../src/shared/note-rules";
 import { buildVisitPreviewText, createCourseFormFromDetail, createEmptyCourseForm } from "../src/renderer/src/helpers";
 
 const pngDataUrl =
@@ -1876,5 +1876,11 @@ describe("RadiationNoteService workflow", () => {
     expect(restoreResult.restoredCounts).toBeNull();
     expect(restoreResult.blockers.length).toBeGreaterThan(0);
     expect(restoreResult.blockers.map((blocker) => blocker.code)).toContain("active_course_not_supported");
+  });
+
+  it("suggests otv on every 5th treatment including treatment 15", () => {
+    expect(getSuggestedNoteType(5)).toBe("otv");
+    expect(getSuggestedNoteType(10)).toBe("otv");
+    expect(getSuggestedNoteType(15)).toBe("otv");
   });
 });

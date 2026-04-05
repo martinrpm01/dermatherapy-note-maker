@@ -33,11 +33,16 @@ export function getSuggestedNoteType(treatmentNumber: number | null): NoteType {
     return "first_fraction";
   }
 
-  if (safeNumber === 5 || safeNumber === 10 || safeNumber === 15) {
+  if (isOtvTreatmentNumber(safeNumber)) {
     return "otv";
   }
 
   return "standard_treatment";
+}
+
+export function isOtvTreatmentNumber(treatmentNumber: number | null): boolean {
+  const safeNumber = clampTreatmentNumber(treatmentNumber);
+  return safeNumber === 5 || safeNumber === 10 || safeNumber === 15;
 }
 
 export function getTemplateKey(courseType: CourseType, noteType: NoteType): string {

@@ -1,5 +1,5 @@
 import type { AppClient, SettingsPayload, VisitEditorState } from "../../shared/types";
-import { NOTE_TYPE_LABELS, getSuggestedNoteType } from "../../shared/note-rules";
+import { NOTE_TYPE_LABELS, getSuggestedNoteType, isOtvTreatmentNumber } from "../../shared/note-rules";
 import { useResolvedAssetUrl } from "./asset-url";
 
 function ExistingPhotoTile(props: {
@@ -40,6 +40,7 @@ export function VisitEditorScreen(props: {
   const showPrescribedFractionsInput =
     editor.note.noteType !== "consult_sim" &&
     (editor.course.prescribedFractions <= 0 || (editor.note.structuredFields.prescribedFractionsInput ?? 0) > 0);
+  const otvEligible = editor.note.noteType !== "consult_sim" && isOtvTreatmentNumber(editor.note.treatmentNumber);
   return (
     <section className="screen">
       <div className="screen-header">
@@ -139,6 +140,27 @@ export function VisitEditorScreen(props: {
                 }} />
               </label>
             )}
+            {otvEligible ? (
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={editor.note.noteType === "otv"}
+                  onChange={(event) =>
+                    props.onUpdate(
+                      (current) => ({
+                        ...current,
+                        note: {
+                          ...current.note,
+                          noteType: event.target.checked ? "otv" : "standard_treatment"
+                        }
+                      }),
+                      { regenerate: true, overwriteEdited: !props.textDirty }
+                    )
+                  }
+                />
+                Include OTV + Physics for this 5th-fraction visit
+              </label>
+            ) : null}
             {showPrescribedFractionsInput ? (
               <label>
                 Prescribed Fractions
@@ -417,4 +439,3 @@ export function VisitEditorScreen(props: {
     </section>
   );
 }
-
