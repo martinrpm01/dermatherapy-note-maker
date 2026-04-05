@@ -228,7 +228,7 @@ The treatment plan developed by the physicist has been reviewed. There is excell
 Comments: See document named "Radiation Therapy Dose Calcs" attached to patient chart
 
 1. {{site1.diagnosisText}} ({{site1.icd10}})
-{{structured.healingDescription}}
+Appropriately healing biopsy site distributed on the {{site1.bodyLocation}}.
 
 Plan:
 Therapeutic Radiation Simulation.
@@ -641,7 +641,7 @@ Machine: {{site1.machine}}
 Treatment Depth: {{site1.treatmentDepthDisplay}}
 
 2. {{site2.diagnosisText}} ({{site2.icd10}})
-{{structured.healingDescription}}
+Appropriately healing biopsy site distributed on the {{site2.bodyLocation}}.
 
 Plan: Therapeutic Radiation Simulation.
 Number of Treatment Areas: 1
@@ -713,7 +713,7 @@ Focused Exam Sites 1 & 2:
 {{structured.focusedExam}}
 
 1. {{site1.diagnosisText}} ({{site1.icd10}})
-{{structured.healingDescription}}
+Appropriately healing biopsy site distributed on the {{site1.bodyLocation}}.
 
 Plan: Therapeutic Radiation Simulation.
 Number of Treatment Areas: 1
@@ -741,7 +741,7 @@ Machine: {{site1.machine}}
 Treatment Depth: {{site1.treatmentDepthDisplay}}
 
 2. {{site2.diagnosisText}} ({{site2.icd10}})
-{{structured.healingDescription}}
+Appropriately healing biopsy site distributed on the {{site2.bodyLocation}}.
 
 Plan: Therapeutic Radiation Simulation.
 Number of Treatment Areas: 1
@@ -822,7 +822,7 @@ Oxygen Saturation: {{vitals.oxygenSaturation}}
 Weight: {{vitals.weight}}
 
 1. {{site1.diagnosisText}} ({{site1.icd10}})
-{{structured.healingDescription}}
+Appropriately healing biopsy site distributed on the {{site1.bodyLocation}}.
 
 Plan: Therapeutic Radiation Simulation.
 Number of Treatment Areas: 1
@@ -854,7 +854,7 @@ Physics Consultation: Fraction Number: {{visit.treatmentNumber}} of {{site1.pres
 {{structured.physicsComment}}
 
 2. {{site2.diagnosisText}} ({{site2.icd10}})
-{{structured.healingDescription}}
+Appropriately healing biopsy site distributed on the {{site2.bodyLocation}}.
 
 Plan: Therapeutic Radiation Simulation.
 Number of Treatment Areas: 1
