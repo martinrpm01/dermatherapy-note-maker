@@ -60,6 +60,11 @@ select {
   background: white;
 }
 
+input[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
 textarea {
   min-height: 100px;
   resize: vertical;
