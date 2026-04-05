@@ -137,6 +137,10 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
   }, []);
 
   useEffect(() => {
+    if (navigator.storage?.persist) void navigator.storage.persist();
+  }, []);
+
+  useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
     const initialController = navigator.serviceWorker.controller;
     const handleControllerChange = () => {
