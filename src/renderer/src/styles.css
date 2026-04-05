@@ -435,7 +435,7 @@ label select {
 }
 
 .patient-form-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .editor-layout {
@@ -696,10 +696,6 @@ input.search {
 @media (max-width: 980px) {
   .app-shell {
     grid-template-columns: 1fr;
-  }
-
-  .patient-form-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .editor-layout {
