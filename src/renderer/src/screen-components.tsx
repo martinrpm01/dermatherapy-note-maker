@@ -373,7 +373,7 @@ export function LockScreen(props: {
                 <p>Do this first before setup, or you may need to enter everything again.</p>
                 <ol>
                   <li>Tap the Safari Share button, the square with an upward arrow.</li>
-                  <li>Scroll down and tap Add to Home Screen.</li>
+                  <li>Tap View More, then scroll down and tap Add to Home Screen.</li>
                   <li>Tap Add.</li>
                 </ol>
                 <div className="button-row">
@@ -463,7 +463,7 @@ export function InstallPromptBanner(props: {
         </p>
         <ol>
           <li>Tap the Safari Share button, the square with an upward arrow.</li>
-          <li>Scroll down and tap Add to Home Screen.</li>
+          <li>Tap View More, then scroll down and tap Add to Home Screen.</li>
           <li>Tap Add.</li>
         </ol>
       </div>
