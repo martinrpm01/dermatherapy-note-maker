@@ -196,6 +196,7 @@ export interface VisitStructuredFields {
   supervisedBy: string;
   startRadiationDate: string;
   ultrasoundPerformed: string;
+  addMips: boolean;
   siteSnapshots: SiteSnapshot[];
 }
 

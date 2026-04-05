@@ -775,7 +775,16 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
     this.patients = this.asMap(await this.getAllFromStore<PatientRecord>("patients"));
     this.courses = this.asMap(await this.getAllFromStore<TreatmentCourseRecord>("courses"));
     this.sites = this.asMap(await this.getAllFromStore<TreatmentSiteRecord>("sites"));
-    this.visitNotes = this.asMap(await this.getAllFromStore<VisitNoteRecord>("visitNotes"));
+    const rawVisitNotes = await this.getAllFromStore<VisitNoteRecord>("visitNotes");
+    const normalizedVisitNotes = rawVisitNotes.map((note) => {
+      // Migrate older records that predate the addMips field
+      const sf = note.structuredFields as VisitNoteRecord["structuredFields"] & { addMips?: boolean };
+      return {
+        ...note,
+        structuredFields: { ...sf, addMips: sf.addMips ?? false }
+      };
+    });
+    this.visitNotes = this.asMap(normalizedVisitNotes);
     this.visitPhotos = this.asMap(await this.getAllFromStore<VisitPhotoRecord>("visitPhotos"));
     this.visitAttachments = this.asMap(await this.getAllFromStore<VisitAttachmentRecord>("visitAttachments"));
     this.generatedPdfs = this.asMap(await this.getAllFromStore<GeneratedPdfRecord>("generatedPdfs"));

@@ -286,6 +286,23 @@ export function VisitEditorScreen(props: {
               Ultrasound Performed
             </label>
           )}
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={!!editor.note.structuredFields.addMips}
+              onChange={(event) => props.onUpdate((current) => ({
+                ...current,
+                note: {
+                  ...current.note,
+                  structuredFields: {
+                    ...current.note.structuredFields,
+                    addMips: event.target.checked
+                  }
+                }
+              }), { regenerate: true, overwriteEdited: !props.textDirty })}
+            />
+            Add MIPS
+          </label>
           {(editor.note.noteType === "consult_sim" || editor.note.noteType === "otv") && (
             <div>
               <h4 style={{ margin: "0 0 0.4rem" }}>Exam Vitals</h4>

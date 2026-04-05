@@ -191,7 +191,10 @@ export function buildVisitPreviewText(
         : "",
       startRadiationDate: formatDisplayDate(note.structuredFields.startRadiationDate),
       biopsyDate: formatDisplayDate(note.structuredFields.biopsyDate),
-      lastTreatmentDate: formatDisplayDate(note.structuredFields.lastTreatmentDate)
+      lastTreatmentDate: formatDisplayDate(note.structuredFields.lastTreatmentDate),
+      mipsSection: note.structuredFields.addMips
+        ? "MIPS:\nQuality measures have been documented for this encounter in accordance with Merit-based Incentive Payment System (MIPS) requirements."
+        : ""
     }
   });
 }

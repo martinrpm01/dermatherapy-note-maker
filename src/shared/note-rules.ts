@@ -324,6 +324,7 @@ export function buildDefaultStructuredFields(
     supervisedBy: supervisingPhysician || "",
     startRadiationDate: "",
     ultrasoundPerformed: "",
+    addMips: false,
     siteSnapshots
   };
 }

@@ -36,6 +36,7 @@ export const TEMPLATE_PLACEHOLDERS: TemplatePlaceholderDefinition[] = [
   { token: "site1.dailyDose", description: "Daily dose for site 1." },
   { token: "site1.totalDose", description: "Total target dose for site 1." },
   { token: "site1.cumulativeDose", description: "Cumulative dose to date for site 1." },
+  { token: "site1.prescribedFractions", description: "Prescribed fractions for site 1." },
   { token: "site2.bodyLocation", description: "Body location text for site 2." },
   { token: "site2.treatmentLocationText", description: "Treatment location text for site 2." },
   { token: "site2.diagnosisText", description: "Diagnosis text for site 2." },
@@ -59,6 +60,7 @@ export const TEMPLATE_PLACEHOLDERS: TemplatePlaceholderDefinition[] = [
   { token: "site2.dailyDose", description: "Daily dose for site 2." },
   { token: "site2.totalDose", description: "Total target dose for site 2." },
   { token: "site2.cumulativeDose", description: "Cumulative dose to date for site 2." },
+  { token: "site2.prescribedFractions", description: "Prescribed fractions for site 2." },
   { token: "vitals.bloodPressure", description: "Documented blood pressure." },
   { token: "vitals.heartRate", description: "Documented heart rate." },
   { token: "vitals.oxygenSaturation", description: "Documented oxygen saturation." },
@@ -85,6 +87,7 @@ export const TEMPLATE_PLACEHOLDERS: TemplatePlaceholderDefinition[] = [
   { token: "structured.supervisedBy", description: "Supervising clinician or service." },
   { token: "structured.startRadiationDate", description: "Planned treatment start date." },
   { token: "structured.ultrasoundPerformed", description: "Ultrasound wording if applicable." },
+  { token: "structured.mipsSection", description: "MIPS quality measure documentation section (when Add MIPS is checked)." },
   { token: "settings.supervisingPhysician", description: "Configured supervising physician name." },
   { token: "settings.dermatologyOfficeName", description: "Configured dermatology office name." }
 ];
@@ -146,7 +149,7 @@ Type of Blocks: Complex
 {{site1.simulationComplicationsLine}}
 Applicator: {{site1.coneSizeDisplay}}
 Flex Shield (Cutout Used): {{site1.cutoutSizeDisplay}}
-Lesion Size: {{site1.lesionSizeDisplay}}
+Pre-op Size: {{site1.lesionSizeDisplay}}
 Lesion / Treatment Location: {{site1.treatmentLocationText}}
 Treatment Depth: {{site1.treatmentDepthDisplay}}
 Additional Treatment Devices: {{site1.additionalDevices}}
@@ -177,6 +180,8 @@ See attachments within chart for further information. (Radiation Therapy Simulat
 After counseling, we decided on the following plan: Schedule Radiotherapy
 
 {{structured.ultrasoundPerformed}}
+
+{{structured.mipsSection}}
 
 Supervised by:
 
@@ -260,11 +265,6 @@ Comments: Tx machine: {{site1.machine}}, Treatment Depth: {{site1.treatmentDepth
 
 {{structured.treatmentComment}}
 
-{{structured.additionalNotesSection}}
-
-Follow Up:
-{{structured.followUp}}
-
 Treatment Supervised by:
 
 
@@ -277,6 +277,13 @@ Physician Signature
 
 ______________________
 Date
+
+{{structured.additionalNotesSection}}
+
+Follow Up:
+{{structured.followUp}}
+
+{{structured.mipsSection}}
     `
   ),
   buildTemplate(
@@ -332,11 +339,6 @@ Comments: Tx machine: {{site1.machine}}, Treatment Depth: {{site1.treatmentDepth
 
 {{structured.treatmentComment}}
 
-{{structured.additionalNotesSection}}
-
-Follow Up:
-{{structured.followUp}}
-
 Treatment Supervised by:
 
 
@@ -349,6 +351,13 @@ Physician Signature
 
 ______________________
 Date
+
+{{structured.additionalNotesSection}}
+
+Follow Up:
+{{structured.followUp}}
+
+{{structured.mipsSection}}
     `
   ),
   buildTemplate(
@@ -434,6 +443,8 @@ Date
 
 Follow Up:
 {{structured.followUp}}
+
+{{structured.mipsSection}}
     `
   ),
   buildTemplate(
@@ -464,62 +475,38 @@ Time was spent by the physician and radiation therapist assessing and managing t
 
 The patient will undergo radiation therapy treatment for non-melanoma skin cancer. A simulation was medically necessary to measure the lesion and to determine the appropriate flex-shield blocking to assure adequate coverage of the target lesion while sparing normal tissue. On today's visit, following informed consent, the treatment field was demarcated, and depth measurements were performed for the radiation therapy treatment plan. Multiple clinical setup photographs were taken which will be used for the development of the prescription and treatment plan. All relevant information specifically regarding this patient's superficial skin lesion will be reviewed by a Board-Certified Radiation Oncologist, who will provide me with an advisory opinion as to treatment dose, number of fractions/treatments, and treatment depth. I will consider his recommendation, along with all other aspects of this patient's condition, including patient's treatment preference, other comorbidities, and move forward with this patient's care.
 
-Simulation Site 1:
-Treatment Site: {{site1.bodyLocation}}
-Diagnosis: {{site1.diagnosisText}}
-ICD10: {{site1.icd10}}
+1. {{site1.diagnosisText}} ({{site1.icd10}})
+
+The following treatment devices and target prescriptions were utilized pending radiation oncologist and medical physics review:
+
+Plan: Therapeutic Radiation Simulation.
+Number of Treatment Areas: 1
+Number of Radiation Ports: 1
+Port Type: parallel opposed
 Number of Blocks: {{site1.numberOfBlocks}}
 Type of Block: Complex
 {{site1.simulationComplicationsLine}}
 Applicator: {{site1.coneSizeDisplay}}
 Flex Shield (Cutout Used): {{site1.cutoutSizeDisplay}}
-Lesion Size: {{site1.lesionSizeDisplay}}
+Pre-op Size: {{site1.lesionSizeDisplay}}
 Lesion / Treatment Location: {{site1.treatmentLocationText}}
 Treatment Depth: {{site1.treatmentDepthDisplay}}
 Additional Treatment Devices: {{site1.additionalDevices}}
 
-Consultation for Radiotherapy Site 1:
-Treatment Site: {{site1.bodyLocation}}
-Review: {{structured.consultReview}}
+Plan: Consultation for Radiotherapy.
+Location: {{site1.bodyLocation}}
+
+Review:
+{{structured.consultReview}}
 
 Treatment Options:
 {{structured.treatmentOptions}}
 
 Risks and Benefits:
 {{structured.risksAndBenefits}}
-
-After counseling, we decided on the following plan: Schedule Radiotherapy
-
-Simulation Site 2:
-Treatment Site: {{site2.bodyLocation}}
-Diagnosis: {{site2.diagnosisText}}
-ICD10: {{site2.icd10}}
-Number of Blocks: {{site2.numberOfBlocks}}
-Type of Block: Complex
-{{site2.simulationComplicationsLine}}
-Applicator: {{site2.coneSizeDisplay}}
-Flex Shield (Cutout Used): {{site2.cutoutSizeDisplay}}
-Lesion Size: {{site2.lesionSizeDisplay}}
-Lesion / Treatment Location: {{site2.treatmentLocationText}}
-Treatment Depth: {{site2.treatmentDepthDisplay}}
-Additional Treatment Devices: {{site2.additionalDevices}}
-
-Consultation for Radiotherapy Site 2:
-Treatment Site: {{site2.bodyLocation}}
-Review: {{structured.consultReview}}
-
-Treatment Options:
-{{structured.treatmentOptions}}
-
-Risks and Benefits:
-{{structured.risksAndBenefits}}
-
-After counseling, we decided on the following plan: Schedule Radiotherapy
-
-{{structured.additionalNotesSection}}
 
 Follow Up:
-The patient is scheduled to start radiation therapy on {{structured.startRadiationDate}}.
+The patient is scheduled to start Radiation Therapy on {{structured.startRadiationDate}}
 
 Additional Information:
 {{visit.therapistName}} RT(T) was the Radiation Therapist at time of visit.
@@ -527,7 +514,54 @@ Additional Information:
 Other Instructions:
 See attachments within chart for further information. (Radiation Therapy Simulation Document & Radiation Therapy Consent Form)
 
+After counseling, we decided on the following plan: Schedule Radiotherapy
+
+2. {{site2.diagnosisText}} ({{site2.icd10}})
+
+The following treatment devices and target prescriptions were utilized pending radiation oncologist and medical physics review:
+
+Plan: Therapeutic Radiation Simulation.
+Number of Treatment Areas: 1
+Number of Radiation Ports: 1
+Port Type: parallel opposed
+Number of Blocks: {{site2.numberOfBlocks}}
+Type of Block: Complex
+{{site2.simulationComplicationsLine}}
+Applicator: {{site2.coneSizeDisplay}}
+Flex Shield (Cutout Used): {{site2.cutoutSizeDisplay}}
+Pre-op Size: {{site2.lesionSizeDisplay}}
+Lesion / Treatment Location: {{site2.treatmentLocationText}}
+Treatment Depth: {{site2.treatmentDepthDisplay}}
+Additional Treatment Devices: {{site2.additionalDevices}}
+
+Plan: Consultation for Radiotherapy.
+Location: {{site2.bodyLocation}}
+
+Review:
+{{structured.consultReview}}
+
+Treatment Options:
+{{structured.treatmentOptions}}
+
+Risks and Benefits:
+{{structured.risksAndBenefits}}
+
+Follow Up:
+The patient is scheduled to start Radiation Therapy on {{structured.startRadiationDate}}
+
+Additional Information:
+{{visit.therapistName}} RT(T) was the Radiation Therapist at time of visit.
+
+Other Instructions:
+See attachments within chart for further information. (Radiation Therapy Simulation Document & Radiation Therapy Consent Form)
+
+After counseling, we decided on the following plan: Schedule Radiotherapy
+
+{{structured.additionalNotesSection}}
+
 {{structured.ultrasoundPerformed}}
+
+{{structured.mipsSection}}
 
 Supervised by:
 
@@ -560,7 +594,7 @@ Focused Exam Sites 1 & 2:
 {{structured.focusedExam}}
 {{structured.healingDescription}}
 
-Treatment Site 1 Prescription:
+Radiation Therapy Prescription Site 1:
 {{structured.impressionPlanComments}}
 Number of Treatments: {{site1.prescribedFractions}}
 Treatment Depth: {{site1.treatmentDepthDisplay}}
@@ -570,7 +604,7 @@ Flex Shield Cutout Size: {{site1.flexShieldCutoutText}}
 Cone / Applicator: {{site1.coneSizeDisplay}} cone
 Additional Treatment Devices: {{site1.additionalDevices}}
 
-Treatment Site 2 Prescription:
+Radiation Therapy Prescription Site 2:
 {{structured.impressionPlanComments}}
 Number of Treatments: {{site2.prescribedFractions}}
 Treatment Depth: {{site2.treatmentDepthDisplay}}
@@ -580,37 +614,70 @@ Flex Shield Cutout Size: {{site2.flexShieldCutoutText}}
 Cone / Applicator: {{site2.coneSizeDisplay}} cone
 Additional Treatment Devices: {{site2.additionalDevices}}
 
-Plan: Therapeutic Radiation Simulation & Radiation Treatment Site 1
-Body Location 1: {{site1.bodyLocation}}
+The treatment plan developed by the physicist has been reviewed. There is excellent coverage of the skin lesions, and the plan has been approved. Dosimetry calculation has been performed and verified.
+
+Comments: See document named "Radiation Therapy Dose Calcs" attached to patient chart
+
+1. {{site1.diagnosisText}} ({{site1.icd10}})
+{{structured.healingDescription}}
+
+Plan: Therapeutic Radiation Simulation.
+Number of Treatment Areas: 1
+Number of Radiation Ports: 1
+Port Type: parallel opposed
+Number of Blocks: {{site1.numberOfBlocks}}
+Type of Blocks: Simple
 {{site1.simulationComplicationsLine}}
-Therapist Site 1: {{visit.therapistName}}
-Current Treatment Number: {{visit.treatmentNumber}}
-Total Treatments Site 1: {{site1.prescribedFractions}}
-Treatment Interval Site 1: {{site1.treatmentInterval}}
-Cumulative Dose Site 1: {{site1.cumulativeDose}} cGy
-Target Dose Site 1: {{site1.totalDose}} cGy
-Shields Site 1: {{site1.shields}}
-Machine Site 1: {{site1.machine}}
-Energy Site 1: {{site1.energyKv}}
 
-Plan: Therapeutic Radiation Simulation & Radiation Treatment Site 2
-Body Location 2: {{site2.bodyLocation}}
+Plan: Radiation Treatment.
+Location: {{site1.bodyLocation}}
+Name of Supervising Technician: {{visit.therapistName}}
+Current Treatment Number: {{visit.treatmentNumber}}
+Total Treatments: {{site1.prescribedFractions}}
+Treatment Interval: {{site1.treatmentInterval}}
+Current Cumulative Dose to Date: {{site1.cumulativeDose}} cGy
+Total Target Dose: {{site1.totalDose}} cGy
+Treatment Parameters:
+Shields: {{site1.shields}}
+Cutout / Shield Details: {{site1.cutoutSizeDisplay}}
+kV: {{site1.energyKv}}
+Dose: {{site1.dailyDose}} cGy
+Cone Size: {{site1.coneSizeDisplay}}
+Machine: {{site1.machine}}
+
+2. {{site2.diagnosisText}} ({{site2.icd10}})
+{{structured.healingDescription}}
+
+Plan: Therapeutic Radiation Simulation.
+Number of Treatment Areas: 1
+Number of Radiation Ports: 1
+Port Type: parallel opposed
+Number of Blocks: {{site2.numberOfBlocks}}
+Type of Blocks: Simple
 {{site2.simulationComplicationsLine}}
-Therapist Site 2: {{visit.therapistName}}
-Current Treatment Number: {{visit.treatmentNumber}}
-Total Treatments Site 2: {{site2.prescribedFractions}}
-Treatment Interval Site 2: {{site2.treatmentInterval}}
-Cumulative Dose Site 2: {{site2.cumulativeDose}} cGy
-Target Dose Site 2: {{site2.totalDose}} cGy
-Shields Site 2: {{site2.shields}}
-Machine Site 2: {{site2.machine}}
-Energy Site 2: {{site2.energyKv}}
 
-Therapeutic Radiation Simulation & Radiation Treatment Comment Sites 1 & 2:
-{{structured.treatmentComment}}
+Plan: Radiation Treatment.
+Location: {{site2.bodyLocation}}
+Name of Supervising Technician: {{visit.therapistName}}
+Current Treatment Number: {{visit.treatmentNumber}}
+Total Treatments: {{site2.prescribedFractions}}
+Treatment Interval: {{site2.treatmentInterval}}
+Current Cumulative Dose to Date: {{site2.cumulativeDose}} cGy
+Total Target Dose: {{site2.totalDose}} cGy
+Treatment Parameters:
+Shields: {{site2.shields}}
+Cutout / Shield Details: {{site2.cutoutSizeDisplay}}
+kV: {{site2.energyKv}}
+Dose: {{site2.dailyDose}} cGy
+Cone Size: {{site2.coneSizeDisplay}}
+Machine: {{site2.machine}}
+
+Written consent obtained. The risks and benefits of XRT therapy were discussed in detail. Specifically, the risks of infection, scarring, bleeding, radiation dermatitis, prolonged wound healing, incomplete removal, nerve injury, inability to clear the tumor, and recurrence were addressed. The treatment sites were clearly identified and confirmed by the patient. The patient received XRT as outlined above.
 
 Post Care:
 {{structured.postCare}}
+
+{{structured.treatmentComment}}
 
 Treatment Supervised by:
 
@@ -629,6 +696,8 @@ Date
 
 Follow Up:
 {{structured.followUp}}
+
+{{structured.mipsSection}}
     `
   ),
   buildTemplate(
@@ -648,37 +717,66 @@ Focused Exam Sites 1 & 2:
 {{structured.focusedExam}}
 {{structured.healingDescription}}
 
-Plan: Therapeutic Radiation Simulation & Radiation Treatment Site 1
-Body Location 1: {{site1.bodyLocation}}
+1. {{site1.diagnosisText}} ({{site1.icd10}})
+{{structured.healingDescription}}
+
+Plan: Therapeutic Radiation Simulation.
+Number of Treatment Areas: 1
+Number of Radiation Ports: 1
+Port Type: parallel opposed
+Number of Blocks: {{site1.numberOfBlocks}}
+Type of Blocks: Simple
 {{site1.simulationComplicationsLine}}
-Therapist Site 1: {{visit.therapistName}}
-Current Treatment Number: {{visit.treatmentNumber}}
-Total Treatments Site 1: {{site1.prescribedFractions}}
-Treatment Interval Site 1: {{site1.treatmentInterval}}
-Cumulative Dose Site 1: {{site1.cumulativeDose}} cGy
-Target Dose Site 1: {{site1.totalDose}} cGy
-Shields Site 1: {{site1.shields}}
-Machine Site 1: {{site1.machine}}
-Energy Site 1: {{site1.energyKv}}
 
-Plan: Therapeutic Radiation Simulation & Radiation Treatment Site 2
-Body Location 2: {{site2.bodyLocation}}
+Plan: Radiation Treatment.
+Location: {{site1.bodyLocation}}
+Name of Supervising Technician: {{visit.therapistName}}
+Current Treatment Number: {{visit.treatmentNumber}}
+Total Treatments: {{site1.prescribedFractions}}
+Treatment Interval: {{site1.treatmentInterval}}
+Current Cumulative Dose to Date: {{site1.cumulativeDose}} cGy
+Total Target Dose: {{site1.totalDose}} cGy
+Treatment Parameters:
+Shields: {{site1.shields}}
+Cutout / Shield Details: {{site1.cutoutSizeDisplay}}
+kV: {{site1.energyKv}}
+Dose: {{site1.dailyDose}} cGy
+Cone Size: {{site1.coneSizeDisplay}}
+Machine: {{site1.machine}}
+
+2. {{site2.diagnosisText}} ({{site2.icd10}})
+{{structured.healingDescription}}
+
+Plan: Therapeutic Radiation Simulation.
+Number of Treatment Areas: 1
+Number of Radiation Ports: 1
+Port Type: parallel opposed
+Number of Blocks: {{site2.numberOfBlocks}}
+Type of Blocks: Simple
 {{site2.simulationComplicationsLine}}
-Therapist Site 2: {{visit.therapistName}}
-Current Treatment Number: {{visit.treatmentNumber}}
-Total Treatments Site 2: {{site2.prescribedFractions}}
-Treatment Interval Site 2: {{site2.treatmentInterval}}
-Cumulative Dose Site 2: {{site2.cumulativeDose}} cGy
-Target Dose Site 2: {{site2.totalDose}} cGy
-Shields Site 2: {{site2.shields}}
-Machine Site 2: {{site2.machine}}
-Energy Site 2: {{site2.energyKv}}
 
-Therapeutic Radiation Simulation & Radiation Treatment Comment Sites 1 & 2:
-{{structured.treatmentComment}}
+Plan: Radiation Treatment.
+Location: {{site2.bodyLocation}}
+Name of Supervising Technician: {{visit.therapistName}}
+Current Treatment Number: {{visit.treatmentNumber}}
+Total Treatments: {{site2.prescribedFractions}}
+Treatment Interval: {{site2.treatmentInterval}}
+Current Cumulative Dose to Date: {{site2.cumulativeDose}} cGy
+Total Target Dose: {{site2.totalDose}} cGy
+Treatment Parameters:
+Shields: {{site2.shields}}
+Cutout / Shield Details: {{site2.cutoutSizeDisplay}}
+kV: {{site2.energyKv}}
+Dose: {{site2.dailyDose}} cGy
+Cone Size: {{site2.coneSizeDisplay}}
+Machine: {{site2.machine}}
+
+Written consent obtained. The risks and benefits of XRT therapy were discussed in detail. Specifically, the risks of infection, scarring, bleeding, radiation dermatitis, prolonged wound healing, incomplete removal, nerve injury, inability to clear the tumor, and recurrence were addressed. The treatment sites were clearly identified and confirmed by the patient. The patient received XRT as outlined above.
 
 Post Care:
 {{structured.postCare}}
+
+{{structured.treatmentComment}}
 
 Treatment Supervised by:
 
@@ -697,6 +795,8 @@ Date
 
 Follow Up:
 {{structured.followUp}}
+
+{{structured.mipsSection}}
     `
   ),
   buildTemplate(
@@ -725,42 +825,74 @@ Heart Rate: {{vitals.heartRate}}
 Oxygen Saturation: {{vitals.oxygenSaturation}}
 Weight: {{vitals.weight}}
 
-Plan: Therapeutic Radiation Simulation & Radiation Treatment Site 1
-Body Location 1: {{site1.bodyLocation}}
+1. {{site1.diagnosisText}} ({{site1.icd10}})
+{{structured.healingDescription}}
+
+Plan: Therapeutic Radiation Simulation.
+Number of Treatment Areas: 1
+Number of Radiation Ports: 1
+Port Type: parallel opposed
+Number of Blocks: {{site1.numberOfBlocks}}
+Type of Blocks: Simple
 {{site1.simulationComplicationsLine}}
-Therapist Site 1: {{visit.therapistName}}
-Current Treatment Number: {{visit.treatmentNumber}}
-Total Treatments Site 1: {{site1.prescribedFractions}}
-Treatment Interval Site 1: {{site1.treatmentInterval}}
-Cumulative Dose Site 1: {{site1.cumulativeDose}} cGy
-Target Dose Site 1: {{site1.totalDose}} cGy
-Shields Site 1: {{site1.shields}}
-Machine Site 1: {{site1.machine}}
-Energy Site 1: {{site1.energyKv}}
 
-Plan: Therapeutic Radiation Simulation & Radiation Treatment Site 2
-Body Location 2: {{site2.bodyLocation}}
+Plan: Radiation Treatment.
+Location: {{site1.bodyLocation}}
+Name of Supervising Technician: {{visit.therapistName}}
+Current Treatment Number: {{visit.treatmentNumber}}
+Total Treatments: {{site1.prescribedFractions}}
+Treatment Interval: {{site1.treatmentInterval}}
+Current Cumulative Dose to Date: {{site1.cumulativeDose}} cGy
+Total Target Dose: {{site1.totalDose}} cGy
+Treatment Parameters:
+Shields: {{site1.shields}}
+Cutout / Shield Details: {{site1.cutoutSizeDisplay}}
+kV: {{site1.energyKv}}
+Dose: {{site1.dailyDose}} cGy
+Cone Size: {{site1.coneSizeDisplay}}
+Machine: {{site1.machine}}
+
+Plan: Radiation Physics Consultation.
+Physics Consultation: Fraction Number: {{visit.treatmentNumber}} of {{site1.prescribedFractions}}
+{{structured.physicsComment}}
+
+2. {{site2.diagnosisText}} ({{site2.icd10}})
+{{structured.healingDescription}}
+
+Plan: Therapeutic Radiation Simulation.
+Number of Treatment Areas: 1
+Number of Radiation Ports: 1
+Port Type: parallel opposed
+Number of Blocks: {{site2.numberOfBlocks}}
+Type of Blocks: Simple
 {{site2.simulationComplicationsLine}}
-Therapist Site 2: {{visit.therapistName}}
-Current Treatment Number: {{visit.treatmentNumber}}
-Total Treatments Site 2: {{site2.prescribedFractions}}
-Treatment Interval Site 2: {{site2.treatmentInterval}}
-Cumulative Dose Site 2: {{site2.cumulativeDose}} cGy
-Target Dose Site 2: {{site2.totalDose}} cGy
-Shields Site 2: {{site2.shields}}
-Machine Site 2: {{site2.machine}}
-Energy Site 2: {{site2.energyKv}}
 
-Therapeutic Radiation Simulation & Radiation Treatment Comment Sites 1 & 2:
-{{structured.treatmentComment}}
+Plan: Radiation Treatment.
+Location: {{site2.bodyLocation}}
+Name of Supervising Technician: {{visit.therapistName}}
+Current Treatment Number: {{visit.treatmentNumber}}
+Total Treatments: {{site2.prescribedFractions}}
+Treatment Interval: {{site2.treatmentInterval}}
+Current Cumulative Dose to Date: {{site2.cumulativeDose}} cGy
+Total Target Dose: {{site2.totalDose}} cGy
+Treatment Parameters:
+Shields: {{site2.shields}}
+Cutout / Shield Details: {{site2.cutoutSizeDisplay}}
+kV: {{site2.energyKv}}
+Dose: {{site2.dailyDose}} cGy
+Cone Size: {{site2.coneSizeDisplay}}
+Machine: {{site2.machine}}
+
+Plan: Radiation Physics Consultation.
+Physics Consultation: Fraction Number: {{visit.treatmentNumber}} of {{site2.prescribedFractions}}
+{{structured.physicsComment}}
+
+Written consent obtained. The risks and benefits of XRT therapy were discussed in detail. Specifically, the risks of infection, scarring, bleeding, radiation dermatitis, prolonged wound healing, incomplete removal, nerve injury, inability to clear the tumor, and recurrence were addressed. The treatment sites were clearly identified and confirmed by the patient. The patient received XRT as outlined above.
 
 Post Care:
 {{structured.postCare}}
 
-Plan: Radiation Physics Consultation for Body Locations 1 & 2
-Procedure Note:
-Physics Consultation Fraction Number: {{visit.treatmentNumber}}
-{{structured.physicsComment}}
+{{structured.treatmentComment}}
 
 Treatment Supervised by:
 
@@ -779,6 +911,8 @@ Date
 
 Follow Up:
 {{structured.followUp}}
+
+{{structured.mipsSection}}
     `
   )
 ];

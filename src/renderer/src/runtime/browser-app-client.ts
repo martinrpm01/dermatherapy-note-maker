@@ -939,7 +939,7 @@ export class BrowserAppClient implements AppClient {
     const savedVisit = structuredDataStore.saveVisit(normalizedInput, generatedText, editedText);
 
     const existingPhotos = structuredDataStore.fetchVisitPhotos(savedVisit.id);
-    const treatmentLabel = this.buildTreatmentLabel(normalizedInput);
+    const isConsultVisit = normalizedInput.noteType === "consult_sim";
     const seqBySite = new Map<number, number>();
     for (const p of existingPhotos) {
       const sn = p.siteNumber ?? 1;
@@ -951,7 +951,9 @@ export class BrowserAppClient implements AppClient {
       const siteLabel = site?.treatmentLocationText || site?.bodyLocation || `Lesion ${siteNumber}`;
       const seq = (seqBySite.get(siteNumber) ?? 0) + 1;
       seqBySite.set(siteNumber, seq);
-      const caption = `${siteLabel} ${treatmentLabel}_${seq}`;
+      const caption = isConsultVisit
+        ? `${siteLabel} XRT Sim${seq}`
+        : `${siteLabel} Tx${normalizedInput.treatmentNumber ?? ""}_${seq}`;
       const imageLabel = caption.toLowerCase().replace(/\s+/g, "-");
       const filePath = binaryAssetStore.saveUpload(
         upload,
