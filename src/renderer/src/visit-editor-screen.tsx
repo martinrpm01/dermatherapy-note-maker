@@ -141,7 +141,10 @@ export function VisitEditorScreen(props: {
               </label>
             )}
             {otvEligible ? (
-              <label className="checkbox-label">
+              <label
+                className="checkbox-label"
+                title="Uncheck if this should be a normal treatment visit instead of OTV, for example when the doctor is out of office."
+              >
                 <input
                   type="checkbox"
                   checked={editor.note.noteType === "otv"}
@@ -158,7 +161,7 @@ export function VisitEditorScreen(props: {
                     )
                   }
                 />
-                Include OTV + Physics for this 5th-fraction visit
+                OTV?
               </label>
             ) : null}
             {showPrescribedFractionsInput ? (
