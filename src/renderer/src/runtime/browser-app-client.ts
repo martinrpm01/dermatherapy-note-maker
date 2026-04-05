@@ -939,13 +939,20 @@ export class BrowserAppClient implements AppClient {
     const savedVisit = structuredDataStore.saveVisit(normalizedInput, generatedText, editedText);
 
     const existingPhotos = structuredDataStore.fetchVisitPhotos(savedVisit.id);
-    const photoBaseName = this.buildVisitPhotoBaseName(normalizedInput);
+    const treatmentLabel = this.buildTreatmentLabel(normalizedInput);
+    const seqBySite = new Map<number, number>();
+    for (const p of existingPhotos) {
+      const sn = p.siteNumber ?? 1;
+      seqBySite.set(sn, (seqBySite.get(sn) ?? 0) + 1);
+    }
     normalizedInput.newPhotoUploads.forEach((upload, index) => {
-      const imageLabel = existingPhotos.length + index === 0 ? photoBaseName : `${photoBaseName}-${existingPhotos.length + index + 1}`;
-      const photoCaption =
-        upload.caption && upload.caption.trim() && upload.caption.trim() !== upload.name
-          ? upload.caption.trim()
-          : photoBaseName;
+      const siteNumber: 1 | 2 = upload.siteNumber ?? 1;
+      const site = normalizedInput.structuredFields.siteSnapshots.find((s) => s.siteNumber === siteNumber);
+      const siteLabel = site?.treatmentLocationText || site?.bodyLocation || `Lesion ${siteNumber}`;
+      const seq = (seqBySite.get(siteNumber) ?? 0) + 1;
+      seqBySite.set(siteNumber, seq);
+      const caption = `${siteLabel} ${treatmentLabel}_${seq}`;
+      const imageLabel = caption.toLowerCase().replace(/\s+/g, "-");
       const filePath = binaryAssetStore.saveUpload(
         upload,
         binaryAssetStore.getVisitPhotosDir(patient.id, course.id, savedVisit.id),
@@ -955,7 +962,8 @@ export class BrowserAppClient implements AppClient {
         savedVisit.id,
         filePath,
         existingPhotos.length + index + 1,
-        photoCaption
+        caption,
+        siteNumber
       );
     });
 
@@ -1041,7 +1049,8 @@ export class BrowserAppClient implements AppClient {
       photoInputs: await Promise.all(
         photos.map(async (photo) => ({
           image: await this.readStoredAssetInput(photo.imageAsset, `visit photo ${photo.id}`),
-          caption: photo.caption || `Treatment Photo ${photo.sortOrder}`
+          caption: photo.caption || `Treatment Photo ${photo.sortOrder}`,
+          siteNumber: photo.siteNumber
         }))
       ),
       attachmentInputs: await Promise.all(

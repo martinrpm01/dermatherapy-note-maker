@@ -27,7 +27,7 @@ export function VisitEditorScreen(props: {
   onResetNoteText: () => void;
   onRemoveExistingPhoto: (photoId: string) => void;
   onRemoveExistingAttachment: (attachmentId: string) => void;
-  onVisitPhotoAdd: (files: FileList | null) => void;
+  onVisitPhotoAdd: (files: FileList | null, siteNumber: 1 | 2) => void;
   onVisitAttachmentAdd: (files: FileList | null) => void;
   onUpdate: (
     updater: (current: VisitEditorState) => VisitEditorState,
@@ -324,25 +324,31 @@ export function VisitEditorScreen(props: {
               </div>
             ))}
           </div>
-          <label className="file-picker">
-            Attach Daily Treatment Photos
-            <input type="file" accept="image/*" multiple onChange={(event) => props.onVisitPhotoAdd(event.target.files)} />
-          </label>
-          <div className="photo-strip">
-            {editor.existingPhotos.map((photo) => (
-              <ExistingPhotoTile
-                key={photo.id}
-                appClient={props.appClient}
-                photo={photo}
-                onRemove={props.onRemoveExistingPhoto}
-              />
-            ))}
-            {editor.note.newPhotoUploads.map((photo) => (
-              <div className="photo-tile" key={photo.name + photo.dataUrl.slice(0, 12)}>
-                <img src={photo.dataUrl} alt="" />
+          {editor.note.structuredFields.siteSnapshots.map((site) => {
+            const isTwoSite = editor.note.structuredFields.siteSnapshots.length > 1;
+            const sitePhotos = editor.existingPhotos.filter((p) => (p.siteNumber ?? 1) === site.siteNumber);
+            const pendingPhotos = editor.note.newPhotoUploads.filter((u) => (u.siteNumber ?? 1) === site.siteNumber);
+            const locationLabel = site.treatmentLocationText || `Lesion ${site.siteNumber}`;
+            const uploadLabel = isTwoSite ? `${locationLabel} Photos` : "Attach Daily Treatment Photos";
+            return (
+              <div key={site.siteNumber}>
+                <label className="file-picker">
+                  {uploadLabel}
+                  <input type="file" accept="image/*" multiple onChange={(event) => props.onVisitPhotoAdd(event.target.files, site.siteNumber)} />
+                </label>
+                <div className="photo-strip">
+                  {sitePhotos.map((photo) => (
+                    <ExistingPhotoTile key={photo.id} appClient={props.appClient} photo={photo} onRemove={props.onRemoveExistingPhoto} />
+                  ))}
+                  {pendingPhotos.map((photo) => (
+                    <div className="photo-tile" key={photo.name + photo.dataUrl.slice(0, 12)}>
+                      <img src={photo.dataUrl} alt="" />
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
-          </div>
+            );
+          })}
           <label className="file-picker">
             Additional Attachments
             <input

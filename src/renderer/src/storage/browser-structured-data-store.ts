@@ -478,7 +478,7 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
     return visit;
   }
 
-  addVisitPhoto(visitId: string, imagePath: string, sortOrder: number, caption: string) {
+  addVisitPhoto(visitId: string, imagePath: string, sortOrder: number, caption: string, siteNumber?: 1 | 2) {
     this.ensureInitialized();
     const record: VisitPhotoRecord = {
       id: makeId("photo"),
@@ -486,6 +486,7 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
       imageAsset: createAssetReferenceForPath("visit_photo", imagePath),
       sortOrder,
       caption,
+      ...(siteNumber !== undefined ? { siteNumber } : {}),
       createdAt: nowIso()
     };
     this.visitPhotos.set(record.id, record);

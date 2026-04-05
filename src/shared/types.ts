@@ -120,6 +120,7 @@ export interface VisitPhotoRecord {
   imageAsset: AssetReference;
   sortOrder: number;
   caption: string;
+  siteNumber?: 1 | 2;
   createdAt: string;
 }
 
@@ -280,6 +281,7 @@ export interface StoredAssetUpload {
   mimeType: string;
   dataUrl: string;
   caption?: string;
+  siteNumber?: 1 | 2;
 }
 
 export interface VisitInput {

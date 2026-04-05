@@ -858,12 +858,13 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
               await appClient.removeVisitAttachment(attachmentId);
               await loadVisit(visitEditor.course.id, "next_treatment", visitEditor.note.id);
             })()}
-            onVisitPhotoAdd={(files) => {
+            onVisitPhotoAdd={(files, siteNumber) => {
               void (async () => {
                 if (!files || !visitEditor) return;
                 const uploads = [];
                 for (const file of Array.from(files)) {
-                  uploads.push(await fileToCompressedUpload(file, 1600));
+                  const upload = await fileToCompressedUpload(file, 1600);
+                  uploads.push({ ...upload, siteNumber });
                 }
                 setVisitEditor({ ...visitEditor, note: { ...visitEditor.note, newPhotoUploads: [...visitEditor.note.newPhotoUploads, ...uploads] } });
               })();
