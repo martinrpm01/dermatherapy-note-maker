@@ -18,9 +18,11 @@ import type {
 } from "../../../shared/archive";
 import {
   getCurrentFraction,
+  getAutoNumberOfBlocks,
   getNextTreatmentNumber,
   getSuggestedNoteType,
-  getTemplateKey
+  getTemplateKey,
+  normalizeCutoutSizeLabel
 } from "../../../shared/note-rules";
 import type { AppClient, ArchiveSnapshot, DashboardSnapshot, SettingsPayload } from "../../../shared/types";
 import {
@@ -75,6 +77,14 @@ export class BrowserAppClient implements AppClient {
 
   private makeId(prefix: string) {
     return `${prefix}_${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}_${Math.random().toString(16).slice(2)}`}`;
+  }
+
+  private getDefaultMachine(value: string) {
+    return value.trim() || "Xoft Elekta 1200 SPX";
+  }
+
+  private getDefaultTreatmentDepth(value: string) {
+    return value.trim() || "3";
   }
 
   private createArchiveHandle(fileName: string, blob: Blob): PatientArchiveIoHandle {
@@ -507,8 +517,22 @@ export class BrowserAppClient implements AppClient {
 
   // fully-portable: creates or updates a treatment course.
   // Browser implementation will persist the same course/site data locally.
-  saveCourse(_input: Parameters<AppClient["saveCourse"]>[0]) {
-    return this.notImplemented("saveCourse");
+  async saveCourse(input: Parameters<AppClient["saveCourse"]>[0]) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const normalizedInput = {
+      ...input,
+      sites: input.sites.map((site) => ({
+        ...site,
+        cutoutSize: normalizeCutoutSizeLabel(site.cutoutSize),
+        machine: this.getDefaultMachine(site.machine),
+        treatmentDepth: this.getDefaultTreatmentDepth(site.treatmentDepth),
+        numberOfBlocks: getAutoNumberOfBlocks("standard_treatment", site.cutoutSize)
+      }))
+    };
+    const course = structuredDataStore.saveCourse(normalizedInput);
+    await structuredDataStore.flush();
+    return course;
   }
 
   // fully-portable: marks a course completed.
