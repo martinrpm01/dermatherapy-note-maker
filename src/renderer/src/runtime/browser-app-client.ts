@@ -28,15 +28,17 @@ import {
   getTemplateKey,
   normalizeCutoutSizeLabel
 } from "../../../shared/note-rules";
-import type { AppClient, ArchiveSnapshot, DashboardSnapshot, SettingsPayload, VisitEditorState, VisitInput } from "../../../shared/types";
+import type { AppClient, ArchiveSnapshot, AssetReference, DashboardSnapshot, PatientRecord, SettingsPayload, VisitEditorState, VisitInput, VisitNoteRecord } from "../../../shared/types";
 import {
   exportPatientArchiveFromBrowserStores,
   type BrowserArchiveExportPayload
 } from "./browser-archive-export";
 import { preflightBrowserArchiveRestore, restoreBrowserArchive } from "./browser-archive-restore";
 import { buildVisitPreviewText } from "../helpers";
+import { buildVisitPdf, type PdfBinaryAssetInput } from "../../../main/pdf";
 import { BrowserBinaryAssetStore } from "../storage/browser-binary-asset-store";
 import { BrowserStructuredDataStore } from "../storage/browser-structured-data-store";
+import brandLogo from "../assets/dermatherapy-note-logo.jpg";
 
 export interface BrowserArchiveClientDependencies {
   exportPatientArchive?: (patientId: string) => Promise<BrowserArchiveExportPayload>;
@@ -44,6 +46,15 @@ export interface BrowserArchiveClientDependencies {
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function sanitizeNamePart(value: string) {
+  return value
+    .trim()
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase();
 }
 
 /**
@@ -114,6 +125,66 @@ export class BrowserAppClient implements AppClient {
     }
 
     return `tx ${note.treatmentNumber}`;
+  }
+
+  private buildPdfBaseName(patient: PatientRecord, visit: VisitNoteRecord) {
+    const patientName = `${patient.firstName} ${patient.lastName}`.trim() || patient.id;
+    const treatmentLabel = visit.treatmentNumber === null ? "consult" : `tx${visit.treatmentNumber}`;
+    return sanitizeNamePart(`${patientName} ${treatmentLabel} note`) || `visit-${visit.id}`;
+  }
+
+  private async readBlobInput(blob: Blob, fileName?: string): Promise<PdfBinaryAssetInput> {
+    return {
+      bytes: new Uint8Array(await blob.arrayBuffer()),
+      fileName,
+      mimeType: blob.type || undefined
+    };
+  }
+
+  private async readStoredAssetInput(asset: AssetReference | null, assetLabel: string, fileName?: string) {
+    if (!asset) {
+      throw new Error(`Could not resolve ${assetLabel}.`);
+    }
+
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    const blob = binaryAssetStore.getStoredBlob(asset.assetId);
+    if (!blob) {
+      throw new Error(`Could not resolve ${assetLabel}.`);
+    }
+
+    return this.readBlobInput(blob, fileName);
+  }
+
+  private async readPdfLogoInput() {
+    const structuredDataStore = await this.getStructuredDataStore();
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    const settingsRecord = structuredDataStore.getSettingsRecord();
+    if (settingsRecord.dermatologyOfficeLogoPath) {
+      const asset = binaryAssetStore.createAssetReference(settingsRecord.dermatologyOfficeLogoPath, "settings_logo");
+      if (asset) {
+        const logoBlob = binaryAssetStore.getStoredBlob(asset.assetId);
+        if (logoBlob) {
+          return this.readBlobInput(logoBlob);
+        }
+      }
+    }
+
+    const response = await fetch(brandLogo);
+    if (!response.ok) {
+      throw new Error("Could not resolve note logo.");
+    }
+
+    return this.readBlobInput(await response.blob(), "dermatherapy-note-logo.jpg");
+  }
+
+  private async bytesToDataUrl(bytes: Uint8Array, mimeType: string) {
+    const blob = new Blob([Uint8Array.from(bytes)], { type: mimeType });
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(reader.error ?? new Error("Could not encode generated PDF."));
+      reader.readAsDataURL(blob);
+    });
   }
 
   private async loadExistingVisit(visitId: string): Promise<VisitEditorState> {
@@ -823,8 +894,73 @@ export class BrowserAppClient implements AppClient {
 
   // browser-alternative-needed: desktop generates a PDF and stores it as a local file asset.
   // Browser implementation will generate the same PDF bytes and store/download them with browser-safe asset handling.
-  generatePdf(_visitId: string) {
-    return this.notImplemented("generatePdf");
+  async generatePdf(visitId: string) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    const visit = structuredDataStore.fetchVisit(visitId);
+    if (!visit) {
+      throw new Error("Visit not found.");
+    }
+
+    const patient = structuredDataStore.fetchPatient(visit.patientId);
+    const course = structuredDataStore.fetchCourse(visit.courseId);
+    if (!patient || !course) {
+      throw new Error("Visit context is incomplete.");
+    }
+
+    const photos = structuredDataStore.fetchVisitPhotos(visitId);
+    const attachments = structuredDataStore.fetchVisitAttachments(visitId);
+    const existingPdfs = structuredDataStore.fetchGeneratedPdfs(visitId);
+    const versionNumber = existingPdfs.length + 1;
+    const pdfBaseName = this.buildPdfBaseName(patient, visit);
+    const pdfFileName = `${pdfBaseName}-v${versionNumber}.pdf`;
+
+    const pdfBytes = await buildVisitPdf({
+      noteText: visit.editedText || visit.generatedText,
+      photoInputs: await Promise.all(
+        photos.map(async (photo) => ({
+          image: await this.readStoredAssetInput(photo.imageAsset, `visit photo ${photo.id}`),
+          caption: photo.caption || `Treatment Photo ${photo.sortOrder}`
+        }))
+      ),
+      attachmentInputs: await Promise.all(
+        attachments.map(async (attachment) => ({
+          file: await this.readStoredAssetInput(attachment.fileAsset, `visit attachment ${attachment.id}`, attachment.originalName),
+          caption: attachment.caption || attachment.originalName,
+          mimeType: attachment.mimeType,
+          originalName: attachment.originalName
+        }))
+      ),
+      logoInput: await this.readPdfLogoInput()
+    });
+
+    const pdfUpload = {
+      name: pdfFileName,
+      mimeType: "application/pdf",
+      dataUrl: await this.bytesToDataUrl(pdfBytes, "application/pdf")
+    };
+    const filePath = binaryAssetStore.saveUpload(
+      pdfUpload,
+      `${binaryAssetStore.getVisitWorkspaceDir(patient.id, course.id, visit.id)}/pdfs`,
+      `${pdfBaseName}-v${versionNumber}`
+    );
+    structuredDataStore.insertGeneratedPdf(visitId, filePath, versionNumber);
+
+    const downloadBlob = new Blob([Uint8Array.from(pdfBytes)], { type: "application/pdf" });
+    this.triggerDownload(pdfFileName, downloadBlob);
+
+    await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
+    const persistedPdf = structuredDataStore.fetchGeneratedPdfs(visitId).find((pdf) => pdf.versionNumber === versionNumber);
+    if (!persistedPdf) {
+      throw new Error("Generated PDF record could not be reloaded after save.");
+    }
+
+    return {
+      visitId,
+      pdfAsset: persistedPdf.fileAsset,
+      versionNumber
+    };
   }
 
   // desktop-only-no-op: desktop returns a real local workspace folder path.
@@ -897,14 +1033,19 @@ export class BrowserAppClient implements AppClient {
 
   // desktop-only-no-op: desktop reveals an asset in the native shell.
   // Browser implementation should no-op or offer a browser-safe alternative such as download/share.
-  revealAsset(_asset: Parameters<AppClient["revealAsset"]>[0]) {
-    return this.notImplemented("revealAsset");
+  async revealAsset(_asset: Parameters<AppClient["revealAsset"]>[0]) {
+    // Browser generatePdf already triggers a download, so reveal becomes a no-op.
   }
 
   // browser-alternative-needed: desktop opens an asset with the OS shell.
   // Browser implementation should open an object URL, download, or render inline when safe.
-  openAsset(_asset: Parameters<AppClient["openAsset"]>[0]) {
-    return this.notImplemented("openAsset");
+  async openAsset(asset: Parameters<AppClient["openAsset"]>[0]) {
+    const assetUrl = await this.resolveAssetUrl(asset);
+    if (!assetUrl) {
+      throw new Error("Could not resolve asset.");
+    }
+
+    window.open(assetUrl, "_blank", "noopener,noreferrer");
   }
 
   // desktop-only-no-op: desktop reveals an arbitrary local path in the OS shell.

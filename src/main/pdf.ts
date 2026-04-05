@@ -1,4 +1,3 @@
-import path from "node:path";
 import { PDFDocument, PDFImage, StandardFonts, rgb } from "pdf-lib";
 
 export interface PdfBinaryAssetInput {
@@ -65,7 +64,8 @@ function scaleToFit(width: number, height: number, maxWidth: number, maxHeight: 
 function getAssetExtension(input?: PdfBinaryAssetInput | null) {
   const fileName = input?.fileName ?? "";
   if (fileName) {
-    return path.extname(fileName).toLowerCase();
+    const lastDot = fileName.lastIndexOf(".");
+    return lastDot >= 0 ? fileName.slice(lastDot).toLowerCase() : "";
   }
 
   const mimeType = input?.mimeType?.toLowerCase() ?? "";
