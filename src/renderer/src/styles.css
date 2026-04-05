@@ -52,6 +52,8 @@ input,
 textarea,
 select {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 0.8rem 0.9rem;
@@ -426,6 +428,10 @@ label select {
   display: grid;
   gap: 0.8rem;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.form-grid > * {
+  min-width: 0;
 }
 
 .editor-layout {
