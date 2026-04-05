@@ -1,0 +1,79 @@
+{
+  "name": "dermatherapy-note-maker",
+  "version": "0.1.0",
+  "description": "Dermatherapy Note Maker is a local-first desktop application for radiation treatment notes.",
+  "author": "Codex",
+  "private": true,
+  "type": "module",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "build:browser": "vite build --config vite.browser.config.ts",
+    "preview:browser": "vite preview --config vite.browser.config.ts",
+    "package": "npm run build && electron-builder",
+    "verify:shortcut": "powershell -ExecutionPolicy Bypass -File scripts/verify-start-shortcut.ps1",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "extract:templates": "node scripts/extract-source-templates.mjs \"C:\\Users\\cobra\\Downloads\\2026 EBRT Sim & Tx notes\\2026 EBRT Sim & Tx notes\""
+  },
+  "build": {
+    "appId": "local.dermatherapy.note.maker",
+    "productName": "Dermatherapy Note Maker",
+    "icon": "assets/branding/dermatherapy-icon.ico",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/sql.js/dist/sql-wasm.wasm"
+    ],
+    "extraMetadata": {
+      "main": "out/main/index.js"
+    },
+    "win": {
+      "signAndEditExecutable": false,
+      "icon": "assets/branding/dermatherapy-icon.ico",
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "installerIcon": "assets/branding/dermatherapy-icon.ico",
+      "uninstallerIcon": "assets/branding/dermatherapy-icon.ico",
+      "installerHeaderIcon": "assets/branding/dermatherapy-icon.ico"
+    }
+  },
+  "dependencies": {
+    "jszip": "3.10.1",
+    "pdf-lib": "1.17.1",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "scrypt-js": "^3.0.1",
+    "sql.js": "1.14.1"
+  },
+  "devDependencies": {
+    "@types/node": "25.5.0",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@types/sql.js": "1.4.11",
+    "@vitejs/plugin-react": "5.1.4",
+    "electron": "41.1.0",
+    "electron-builder": "26.8.1",
+    "electron-vite": "5.0.0",
+    "typescript": "6.0.2",
+    "vite": "7.3.1",
+    "vitest": "4.1.2"
+  },
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "keywords": [],
+  "license": "ISC"
+}

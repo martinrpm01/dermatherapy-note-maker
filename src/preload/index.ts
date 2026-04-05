@@ -1,0 +1,60 @@
+import { contextBridge, ipcRenderer } from "electron";
+
+import type { ElectronApi } from "../shared/types";
+
+const api: ElectronApi = {
+  bootstrap: () => ipcRenderer.invoke("app:bootstrap"),
+  reportReady: (screen) => ipcRenderer.invoke("app:reportReady", screen),
+  unlock: (pin) => ipcRenderer.invoke("app:unlock", pin),
+  lock: () => ipcRenderer.invoke("app:lock"),
+  setInitialPin: (pin) => ipcRenderer.invoke("app:setInitialPin", pin),
+  changePin: (currentPin, nextPin) => ipcRenderer.invoke("app:changePin", currentPin, nextPin),
+  resetPinWithRecoveryCode: (recoveryCode, nextPin) =>
+    ipcRenderer.invoke("app:resetPinWithRecoveryCode", recoveryCode, nextPin),
+  wipeAllLocalData: () => ipcRenderer.invoke("app:wipeAllLocalData"),
+
+  getDashboardSnapshot: () => ipcRenderer.invoke("dashboard:getSnapshot"),
+  getPatientDetail: (patientId) => ipcRenderer.invoke("patient:getDetail", patientId),
+  listCompleted: () => ipcRenderer.invoke("completed:list"),
+  listArchive: () => ipcRenderer.invoke("archive:list"),
+  savePatient: (input) => ipcRenderer.invoke("patient:save", input),
+  archivePatient: (patientId) => ipcRenderer.invoke("patient:archive", patientId),
+  restorePatient: (patientId) => ipcRenderer.invoke("patient:restore", patientId),
+  deletePatient: (patientId) => ipcRenderer.invoke("patient:delete", patientId),
+  permanentlyDeletePatient: (patientId) => ipcRenderer.invoke("patient:permanentDelete", patientId),
+  pickPatientArchive: () => ipcRenderer.invoke("patient:pickArchive"),
+  exportPatientArchive: (patientId) => ipcRenderer.invoke("patient:exportArchive", patientId),
+  preflightPatientArchive: (archive) => ipcRenderer.invoke("patient:preflightArchive", archive),
+  readPatientArchive: (archive) => ipcRenderer.invoke("patient:readArchive", archive),
+  restorePatientArchive: (archive) => ipcRenderer.invoke("patient:restoreArchive", archive),
+
+  saveCourse: (input) => ipcRenderer.invoke("course:save", input),
+  completeCourse: (courseId) => ipcRenderer.invoke("course:complete", courseId),
+  restoreCourse: (courseId) => ipcRenderer.invoke("course:restore", courseId),
+  deleteCourse: (courseId) => ipcRenderer.invoke("course:delete", courseId),
+
+  buildVisitDraft: (courseId, mode, existingVisitId) =>
+    ipcRenderer.invoke("visit:buildDraft", courseId, mode, existingVisitId),
+  saveVisit: (input) => ipcRenderer.invoke("visit:save", input),
+  deleteVisit: (visitId) => ipcRenderer.invoke("visit:delete", visitId),
+  generatePdf: (visitId) => ipcRenderer.invoke("visit:generatePdf", visitId),
+  getVisitFolder: (visitId) => ipcRenderer.invoke("visit:getFolder", visitId),
+  removeVisitPhoto: (photoId) => ipcRenderer.invoke("visit:removePhoto", photoId),
+  removeVisitAttachment: (attachmentId) => ipcRenderer.invoke("visit:removeAttachment", attachmentId),
+
+  getSettingsPayload: () => ipcRenderer.invoke("settings:getPayload"),
+  saveSettings: (input) => ipcRenderer.invoke("settings:save", input),
+  deleteSavedOption: (optionId) => ipcRenderer.invoke("settings:deleteSavedOption", optionId),
+
+  getTemplates: () => ipcRenderer.invoke("templates:list"),
+  saveTemplate: (templateId, templateText) => ipcRenderer.invoke("templates:save", templateId, templateText),
+  resetTemplate: (templateId) => ipcRenderer.invoke("templates:reset", templateId),
+
+  resolveAssetUrl: (asset) => Promise.resolve(asset ? `asset://local/${asset.assetId}` : null),
+  revealPath: (targetPath) => ipcRenderer.invoke("files:reveal", targetPath),
+  openPath: (targetPath) => ipcRenderer.invoke("files:open", targetPath),
+  revealAsset: (asset) => ipcRenderer.invoke("files:revealAsset", asset),
+  openAsset: (asset) => ipcRenderer.invoke("files:openAsset", asset)
+};
+
+contextBridge.exposeInMainWorld("rtNoteApi", api);

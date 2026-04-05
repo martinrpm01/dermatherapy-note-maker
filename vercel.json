@@ -1,0 +1,10 @@
+{
+  "buildCommand": "npm run build:browser",
+  "outputDirectory": "out-browser",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.browser.html"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+node_modules
+out
+dist
+out-browser
+.DS_Store
+coverage
+*.log
+*.sqlite
+*.sqlite-journal
+AppData/
+test-results/
