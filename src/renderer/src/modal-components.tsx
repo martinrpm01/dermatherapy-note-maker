@@ -24,7 +24,7 @@ export function PatientModal(props: {
     <div className="modal-backdrop">
       <div className="modal-card">
         <h3>{props.patientForm.id ? "Edit Patient" : "Add Patient"}</h3>
-        <div className="form-grid">
+        <div className="form-grid patient-form-grid">
           <label>
             First Name
             <input value={props.patientForm.firstName} onChange={(event) => props.onChange({ ...props.patientForm, firstName: event.target.value })} />

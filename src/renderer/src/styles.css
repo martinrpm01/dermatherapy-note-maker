@@ -434,6 +434,10 @@ label select {
   min-width: 0;
 }
 
+.patient-form-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .editor-layout {
   display: grid;
   grid-template-columns: minmax(360px, 480px) 1fr;
@@ -694,6 +698,10 @@ input.search {
     grid-template-columns: 1fr;
   }
 
+  .patient-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .editor-layout {
     grid-template-columns: 1fr;
   }
@@ -701,5 +709,11 @@ input.search {
   .install-helper-actions {
     flex-direction: column;
     align-items: stretch;
+  }
+}
+
+@media (max-width: 640px) {
+  .patient-form-grid {
+    grid-template-columns: 1fr;
   }
 }
