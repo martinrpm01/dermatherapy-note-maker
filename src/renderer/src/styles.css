@@ -454,6 +454,7 @@ label select {
 .form-panel {
   align-content: start;
   grid-auto-rows: max-content;
+  gap: 0.65rem;
 }
 
 .form-panel h3,
@@ -464,21 +465,21 @@ label select {
 
 .form-panel .form-grid,
 .form-panel .site-grid {
-  gap: 0.7rem;
+  gap: 0.5rem;
 }
 
 .form-panel .form-grid {
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }
 
 .form-panel input,
 .form-panel select,
 .form-panel textarea {
-  padding: 0.72rem 0.85rem;
+  padding: 0.5rem 0.75rem;
 }
 
 .form-panel textarea:not(.note-textarea):not(.template-textarea) {
-  min-height: 84px;
+  min-height: 64px;
 }
 
 .note-panel {
@@ -713,10 +714,24 @@ input.search {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 24px;
-  padding: 1.5rem;
+  padding: 1.1rem 1.25rem;
   display: grid;
-  gap: 1rem;
+  gap: 0.7rem;
   margin: auto;
+}
+
+.modal-card input,
+.modal-card select,
+.modal-card textarea {
+  padding: 0.5rem 0.8rem;
+}
+
+.modal-card .form-grid {
+  gap: 0.5rem;
+}
+
+.modal-card .subpanel {
+  padding: 0.75rem;
 }
 
 .modal-card.wide {
