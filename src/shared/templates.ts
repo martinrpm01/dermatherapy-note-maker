@@ -302,7 +302,7 @@ Exam:
 
 Impression / Plan:
 1. {{site1.diagnosisText}} ({{site1.icd10}})
-{{structured.healingDescription}}
+Appropriately healing biopsy site distributed on the {{site1.bodyLocation}}.
 
 Plan: Therapeutic Radiation Simulation.
 Number of Treatment Areas: 1
