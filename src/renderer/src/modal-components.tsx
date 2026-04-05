@@ -215,7 +215,7 @@ export function CourseModal(props: {
                 }}
               />
             ) : null}
-          </label> : <div />}
+          </label> : null}
           <label>
             Start Date
             <input type="date" value={courseForm.startDate} onChange={(event) => props.onChange({ ...courseForm, startDate: event.target.value })} />
