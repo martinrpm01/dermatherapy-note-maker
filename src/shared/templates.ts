@@ -138,7 +138,7 @@ Impression / Plan:
 The following treatment devices and target prescriptions were utilized pending radiation oncologist and medical physics review.
 
 1. {{site1.diagnosisText}} ({{site1.icd10}})
-{{structured.healingDescription}}
+Appropriately healing biopsy site distributed on the {{site1.bodyLocation}}.
 
 Plan: Therapeutic Radiation Simulation.
 Number of Treatment Areas: 1
@@ -478,6 +478,7 @@ The patient will undergo radiation therapy treatment for non-melanoma skin cance
 The following treatment devices and target prescriptions were utilized pending radiation oncologist and medical physics review.
 
 1. {{site1.diagnosisText}} ({{site1.icd10}})
+Appropriately healing biopsy site distributed on the {{site1.bodyLocation}}.
 
 Plan: Therapeutic Radiation Simulation.
 Number of Treatment Areas: 1
@@ -517,6 +518,7 @@ See attachments within chart for further information. (Radiation Therapy Simulat
 After counseling, we decided on the following plan: Schedule Radiotherapy
 
 2. {{site2.diagnosisText}} ({{site2.icd10}})
+Appropriately healing biopsy site distributed on the {{site2.bodyLocation}}.
 
 Plan: Therapeutic Radiation Simulation.
 Number of Treatment Areas: 1

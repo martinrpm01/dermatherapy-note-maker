@@ -140,6 +140,10 @@ function splitLabelValue(line: string) {
   };
 }
 
+function shouldBoldBodyLabel(label: string) {
+  return label.trim() === "Plan:";
+}
+
 function parseMetadataFields(metadataLines: string[]) {
   const fields = new Map<string, string>();
 
@@ -281,7 +285,7 @@ function drawWrappedParagraph(
   color: ReturnType<typeof rgb>
 ) {
   const parsed = splitLabelValue(line.trim());
-  if (!parsed || !parsed.value) {
+  if (!parsed || !parsed.value || !shouldBoldBodyLabel(parsed.label)) {
     const wrappedLines = wrapLine(line, page.getWidth() - margin * 2, regularFont, size);
     let nextY = y;
     for (const wrappedLine of wrappedLines) {
