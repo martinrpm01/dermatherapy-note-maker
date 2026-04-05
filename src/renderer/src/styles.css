@@ -716,7 +716,7 @@ input.search {
 .modal-card {
   width: min(720px, calc(100vw - 2rem));
   max-width: calc(100vw - 2rem);
-  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
   overflow: auto;
   background: var(--panel);
   border: 1px solid var(--line);
