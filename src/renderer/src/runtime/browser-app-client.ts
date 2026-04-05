@@ -133,6 +133,35 @@ export class BrowserAppClient implements AppClient {
     return sanitizeNamePart(`${patientName} ${treatmentLabel} note`) || `visit-${visit.id}`;
   }
 
+  private getParentDir(filePath: string) {
+    const lastSlash = filePath.lastIndexOf("/");
+    return lastSlash > 0 ? filePath.slice(0, lastSlash) : null;
+  }
+
+  private getStoredAssetPath(binaryAssetStore: BrowserBinaryAssetStore, asset: AssetReference | null) {
+    return asset ? binaryAssetStore.getStoredPath(asset.assetId) : null;
+  }
+
+  private deleteStoredFiles(binaryAssetStore: BrowserBinaryAssetStore, filePaths: Array<string | null | undefined>) {
+    const uniquePaths = [...new Set(filePaths.filter((filePath): filePath is string => Boolean(filePath)))];
+    if (uniquePaths.length === 0) {
+      return;
+    }
+
+    binaryAssetStore.deleteFiles(uniquePaths);
+    for (const filePath of uniquePaths) {
+      const parentDir = this.getParentDir(filePath);
+      if (parentDir) {
+        binaryAssetStore.cleanupEmptyDirectoryChain(parentDir, binaryAssetStore.rootDir);
+      }
+    }
+  }
+
+  private removeDirectory(binaryAssetStore: BrowserBinaryAssetStore, dirPath: string) {
+    binaryAssetStore.removeDirectory(dirPath);
+    binaryAssetStore.cleanupEmptyDirectoryChain(dirPath, binaryAssetStore.rootDir);
+  }
+
   private async readBlobInput(blob: Blob, fileName?: string): Promise<PdfBinaryAssetInput> {
     return {
       bytes: new Uint8Array(await blob.arrayBuffer()),
@@ -578,26 +607,62 @@ export class BrowserAppClient implements AppClient {
 
   // fully-portable: marks a patient as archived in local state.
   // Browser implementation will update the local patient status.
-  archivePatient(_patientId: string) {
-    return this.notImplemented("archivePatient");
+  async archivePatient(patientId: string) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    structuredDataStore.setPatientStatus(patientId, "archived");
+    await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
   }
 
   // fully-portable: restores an archived patient to active/completed state.
   // Browser implementation will update the local patient status.
-  restorePatient(_patientId: string) {
-    return this.notImplemented("restorePatient");
+  async restorePatient(patientId: string) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    structuredDataStore.setPatientStatus(patientId, "active");
+    await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
   }
 
   // fully-portable: removes a patient from active history while preserving current behavior rules.
   // Browser implementation will perform the same local delete/archive cleanup logic.
-  deletePatient(_patientId: string) {
-    return this.notImplemented("deletePatient");
+  async deletePatient(patientId: string) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    structuredDataStore.setPatientStatus(patientId, "deleted");
+    await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
   }
 
   // fully-portable: permanently deletes a patient and related local records/assets.
   // Browser implementation will execute the same destructive local cleanup against browser storage.
-  permanentlyDeletePatient(_patientId: string) {
-    return this.notImplemented("permanentlyDeletePatient");
+  async permanentlyDeletePatient(patientId: string) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    const assetSet = structuredDataStore.getPatientAssetRecordSet(patientId);
+    const facePhotoPath = this.getStoredAssetPath(binaryAssetStore, assetSet.patient?.facePhoto ?? null);
+    const pdfPaths = assetSet.courses.flatMap((courseSet) =>
+      courseSet.visits.flatMap((visitSet) =>
+        visitSet.pdfs.map((pdf) => this.getStoredAssetPath(binaryAssetStore, pdf.fileAsset))
+      )
+    );
+    const attachmentPaths = assetSet.courses.flatMap((courseSet) =>
+      courseSet.visits.flatMap((visitSet) =>
+        visitSet.attachments.map((attachment) => this.getStoredAssetPath(binaryAssetStore, attachment.fileAsset))
+      )
+    );
+    const photoPaths = assetSet.courses.flatMap((courseSet) =>
+      courseSet.visits.flatMap((visitSet) =>
+        visitSet.photos.map((photo) => this.getStoredAssetPath(binaryAssetStore, photo.imageAsset))
+      )
+    );
+
+    structuredDataStore.hardDeletePatientRecords(patientId);
+    this.deleteStoredFiles(binaryAssetStore, [...pdfPaths, ...attachmentPaths, ...photoPaths, facePhotoPath]);
+    this.removeDirectory(binaryAssetStore, `${binaryAssetStore.rootDir}/patients/${encodeURIComponent(patientId)}`);
+    await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
   }
 
   // browser-alternative-needed: desktop uses a native file picker for archive ZIP selection.
@@ -686,20 +751,53 @@ export class BrowserAppClient implements AppClient {
 
   // fully-portable: marks a course completed.
   // Browser implementation will update local course status.
-  completeCourse(_courseId: string) {
-    return this.notImplemented("completeCourse");
+  async completeCourse(courseId: string) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    structuredDataStore.setCourseStatus(courseId, "completed", todayIso());
+    await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
   }
 
   // fully-portable: restores a completed course.
   // Browser implementation will update local course status.
-  restoreCourse(_courseId: string) {
-    return this.notImplemented("restoreCourse");
+  async restoreCourse(courseId: string) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    structuredDataStore.setCourseStatus(courseId, "active", null);
+    await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
   }
 
   // fully-portable: deletes a course and related visit data under current product rules.
   // Browser implementation will perform equivalent local structured/asset cleanup.
-  deleteCourse(_courseId: string) {
-    return this.notImplemented("deleteCourse");
+  async deleteCourse(courseId: string) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    const assetSet = structuredDataStore.getCourseAssetRecordSet(courseId);
+    if (!assetSet) {
+      return;
+    }
+
+    const patientId = assetSet.course.patientId;
+    const pdfPaths = assetSet.visits.flatMap((visitSet) =>
+      visitSet.pdfs.map((pdf) => this.getStoredAssetPath(binaryAssetStore, pdf.fileAsset))
+    );
+    const attachmentPaths = assetSet.visits.flatMap((visitSet) =>
+      visitSet.attachments.map((attachment) => this.getStoredAssetPath(binaryAssetStore, attachment.fileAsset))
+    );
+    const photoPaths = assetSet.visits.flatMap((visitSet) =>
+      visitSet.photos.map((photo) => this.getStoredAssetPath(binaryAssetStore, photo.imageAsset))
+    );
+
+    structuredDataStore.deleteCourseRecords(courseId);
+    this.deleteStoredFiles(binaryAssetStore, [...pdfPaths, ...attachmentPaths, ...photoPaths]);
+    this.removeDirectory(
+      binaryAssetStore,
+      `${binaryAssetStore.rootDir}/patients/${encodeURIComponent(patientId)}/courses/${encodeURIComponent(courseId)}`
+    );
+    await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
   }
 
   // fully-portable: builds a visit draft/editor state from local business rules and history.
@@ -888,8 +986,29 @@ export class BrowserAppClient implements AppClient {
 
   // fully-portable: deletes a visit and related local assets under current rules.
   // Browser implementation will perform equivalent local cleanup.
-  deleteVisit(_visitId: string) {
-    return this.notImplemented("deleteVisit");
+  async deleteVisit(visitId: string) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    const assetSet = structuredDataStore.getVisitAssetRecordSet(visitId);
+    if (!assetSet) {
+      return;
+    }
+
+    const { note } = assetSet;
+    const pdfPaths = assetSet.pdfs.map((pdf) => this.getStoredAssetPath(binaryAssetStore, pdf.fileAsset));
+    const attachmentPaths = assetSet.attachments.map((attachment) =>
+      this.getStoredAssetPath(binaryAssetStore, attachment.fileAsset)
+    );
+    const photoPaths = assetSet.photos.map((photo) => this.getStoredAssetPath(binaryAssetStore, photo.imageAsset));
+
+    structuredDataStore.deleteVisitRecords(visitId);
+    this.deleteStoredFiles(binaryAssetStore, [...pdfPaths, ...attachmentPaths, ...photoPaths]);
+    this.removeDirectory(
+      binaryAssetStore,
+      binaryAssetStore.getVisitWorkspaceDir(note.patientId, note.courseId, note.id)
+    );
+    await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
   }
 
   // browser-alternative-needed: desktop generates a PDF and stores it as a local file asset.
@@ -971,14 +1090,36 @@ export class BrowserAppClient implements AppClient {
 
   // fully-portable: removes a visit photo record and its local asset.
   // Browser implementation will remove the same photo from browser-local storage.
-  removeVisitPhoto(_photoId: string) {
-    return this.notImplemented("removeVisitPhoto");
+  async removeVisitPhoto(photoId: string) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    const photo = structuredDataStore.fetchVisitPhoto(photoId);
+    if (!photo) {
+      return;
+    }
+
+    const photoPath = this.getStoredAssetPath(binaryAssetStore, photo.imageAsset);
+    structuredDataStore.deleteVisitPhotoRecord(photoId);
+    this.deleteStoredFiles(binaryAssetStore, [photoPath]);
+    await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
   }
 
   // fully-portable: removes a visit attachment record and its local asset.
   // Browser implementation will remove the same attachment from browser-local storage.
-  removeVisitAttachment(_attachmentId: string) {
-    return this.notImplemented("removeVisitAttachment");
+  async removeVisitAttachment(attachmentId: string) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    const attachment = structuredDataStore.fetchVisitAttachment(attachmentId);
+    if (!attachment) {
+      return;
+    }
+
+    const attachmentPath = this.getStoredAssetPath(binaryAssetStore, attachment.fileAsset);
+    structuredDataStore.deleteVisitAttachmentRecord(attachmentId);
+    this.deleteStoredFiles(binaryAssetStore, [attachmentPath]);
+    await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
   }
 
   // fully-portable: loads settings plus saved-option metadata.
