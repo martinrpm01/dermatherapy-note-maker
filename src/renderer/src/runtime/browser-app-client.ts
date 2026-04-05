@@ -36,6 +36,7 @@ import {
 import { preflightBrowserArchiveRestore, restoreBrowserArchive } from "./browser-archive-restore";
 import { buildVisitPreviewText } from "../helpers";
 import { buildVisitPdf, type PdfBinaryAssetInput } from "../../../main/pdf";
+import { validateTemplate } from "../../../shared/template-engine";
 import { BrowserBinaryAssetStore } from "../storage/browser-binary-asset-store";
 import { BrowserStructuredDataStore } from "../storage/browser-structured-data-store";
 import brandLogo from "../assets/dermatherapy-note-logo.jpg";
@@ -1135,14 +1136,49 @@ export class BrowserAppClient implements AppClient {
 
   // fully-portable: saves settings including branding/logo metadata.
   // Browser implementation will persist settings and logo asset data locally in browser storage.
-  saveSettings(_input: Parameters<AppClient["saveSettings"]>[0]) {
-    return this.notImplemented("saveSettings");
+  async saveSettings(input: Parameters<AppClient["saveSettings"]>[0]) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    const currentSettings = structuredDataStore.toSettingsView(structuredDataStore.getSettingsRecord());
+    let logoPath = this.getStoredAssetPath(binaryAssetStore, currentSettings.dermatologyOfficeLogoAsset);
+
+    if (input.removeDermatologyOfficeLogo) {
+      this.deleteStoredFiles(binaryAssetStore, [logoPath]);
+      logoPath = null;
+    }
+
+    if (input.dermatologyOfficeLogoUpload) {
+      const nextLogoPath = binaryAssetStore.saveUpload(
+        input.dermatologyOfficeLogoUpload,
+        binaryAssetStore.getSettingsBrandingDir(),
+        "dermatology-office-logo"
+      );
+      if (logoPath && logoPath !== nextLogoPath) {
+        this.deleteStoredFiles(binaryAssetStore, [logoPath]);
+      }
+      logoPath = nextLogoPath;
+    }
+
+    structuredDataStore.updateSettings({
+      ...input,
+      dermatologyOfficeLogoAsset: binaryAssetStore.createAssetReference(logoPath, "settings_logo"),
+      dermatologyOfficeLogoPath: logoPath,
+      dermatologyOfficeLogoUpload: undefined,
+      removeDermatologyOfficeLogo: undefined
+    });
+
+    await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
+    return structuredDataStore.toSettingsView(structuredDataStore.getSettingsRecord());
   }
 
   // fully-portable: removes a remembered option from local settings state.
   // Browser implementation will delete the same saved option from browser-local storage.
-  deleteSavedOption(_optionId: string) {
-    return this.notImplemented("deleteSavedOption");
+  async deleteSavedOption(optionId: string) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    structuredDataStore.deleteSavedOption(optionId);
+    await structuredDataStore.flush();
   }
 
   // fully-portable: lists editable note templates.
@@ -1155,14 +1191,27 @@ export class BrowserAppClient implements AppClient {
 
   // fully-portable: persists a template override.
   // Browser implementation will save the same template text locally.
-  saveTemplate(_templateId: string, _templateText: string) {
-    return this.notImplemented("saveTemplate");
+  async saveTemplate(templateId: string, templateText: string) {
+    this.assertUnlocked();
+    const validation = validateTemplate(templateText);
+    if (!validation.isValid) {
+      throw new Error(`Unknown placeholders: ${validation.unknownTokens.join(", ")}`);
+    }
+
+    const structuredDataStore = await this.getStructuredDataStore();
+    const template = structuredDataStore.saveTemplate(templateId, templateText);
+    await structuredDataStore.flush();
+    return template;
   }
 
   // fully-portable: resets a template back to its seeded default.
   // Browser implementation will restore the local default template text.
-  resetTemplate(_templateId: string) {
-    return this.notImplemented("resetTemplate");
+  async resetTemplate(templateId: string) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const template = structuredDataStore.resetTemplate(templateId);
+    await structuredDataStore.flush();
+    return template;
   }
 
   // fully-portable: resolves an AssetReference to a displayable URL for the current runtime.

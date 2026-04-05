@@ -80,7 +80,7 @@ function parseBrowserAssetId(filePath: string | null | undefined) {
 }
 
 function createAssetReferenceForPath(
-  kind: "patient_face_photo" | "visit_photo" | "visit_attachment" | "generated_pdf",
+  kind: "patient_face_photo" | "visit_photo" | "visit_attachment" | "generated_pdf" | "settings_logo",
   seed?: string
 ) {
   const existingAssetId = parseBrowserAssetId(seed);
@@ -192,7 +192,9 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
       defaultTherapist: record.defaultTherapist,
       supervisingPhysician: record.supervisingPhysician,
       dermatologyOfficeName: record.dermatologyOfficeName,
-      dermatologyOfficeLogoAsset: null,
+      dermatologyOfficeLogoAsset: record.dermatologyOfficeLogoPath
+        ? createAssetReferenceForPath("settings_logo", record.dermatologyOfficeLogoPath)
+        : null,
       inactivityTimeoutMinutes: record.inactivityTimeoutMinutes
     };
   }
