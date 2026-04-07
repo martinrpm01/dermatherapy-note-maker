@@ -79,6 +79,7 @@ export function CourseModal(props: {
   const showFractionsField = Boolean(courseForm.id);
   const [doseModes, setDoseModes] = useState<Record<number, { dailyDose: "preset" | "other"; totalDose: "preset" | "other" }>>({});
   const [siteFractionModes, setSiteFractionModes] = useState<Record<number, { mode: "preset" | "other"; custom: string }>>({});
+  const [customInputs, setCustomInputs] = useState<Record<number, string>>({});
 
   useEffect(() => {
     if (FRACTION_PRESETS.includes(courseForm.prescribedFractions)) {
@@ -379,8 +380,13 @@ export function CourseModal(props: {
                           Custom Shield
                           <input
                             placeholder="Enter custom shield/device"
-                            value={deviceState.customValue}
-                            onChange={(event) => updateAdditionalDevices(index, deviceState.selected, event.target.value)}
+                            value={customInputs[index] ?? deviceState.customValue}
+                            onChange={(event) => setCustomInputs((prev) => ({ ...prev, [index]: event.target.value }))}
+                            onBlur={(event) => {
+                              const val = event.target.value;
+                              setCustomInputs((prev) => { const next = { ...prev }; delete next[index]; return next; });
+                              updateAdditionalDevices(index, deviceState.selected, val);
+                            }}
                           />
                         </label>
                         {!deviceState.selected.size && !deviceState.customValue.trim() ? (
