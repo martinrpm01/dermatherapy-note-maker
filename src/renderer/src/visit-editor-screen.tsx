@@ -78,6 +78,7 @@ export function VisitEditorScreen(props: {
           </button>
         </div>
       </div>
+      <div className={activePanel === "preview" ? "editor-layout preview-mode" : "editor-layout"}>
       {activePanel === "details" && <>
         <div className="panel form-panel">
           <h3>Visit Details</h3>
@@ -475,13 +476,13 @@ export function VisitEditorScreen(props: {
           </div>
         </div>
       </>}
-        {activePanel === "preview" && <div className="panel note-panel">
-          <h3>Note Text</h3>
-          <textarea className="note-textarea" value={editor.note.editedText} onChange={(event) => props.onEditedTextChange(event.target.value)} />
-          <div className="button-row">
-            {editor.generatedPdfs[0] ? <button onClick={() => props.onOpenLatestPdf(editor.generatedPdfs[0].fileAsset)}>Open Latest PDF</button> : null}
-          </div>
-        </div>}
+      {activePanel === "preview" && <div className="panel note-panel">
+        <h3>Note Text</h3>
+        <textarea className="note-textarea" value={editor.note.editedText} onChange={(event) => props.onEditedTextChange(event.target.value)} />
+        <div className="button-row">
+          {editor.generatedPdfs[0] ? <button onClick={() => props.onOpenLatestPdf(editor.generatedPdfs[0].fileAsset)}>Open Latest PDF</button> : null}
+        </div>
+      </div>}
       </div>
       {props.settingsPayload ? (
         <datalist id="therapists">
