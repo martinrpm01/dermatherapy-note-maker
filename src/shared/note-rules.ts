@@ -295,10 +295,6 @@ export function buildSimulationComplicationText(additionalDevices: string): stri
   const normalizedDevices = devices.map((device) => normalizeOptionValue(device));
   const hasEye = normalizedDevices.includes("eye shield");
   const hasEar = normalizedDevices.includes("ear shield");
-  const customDevices = devices.filter((device) => {
-    const normalized = normalizeOptionValue(device);
-    return normalized !== "eye shield" && normalized !== "ear shield";
-  });
 
   const parts: string[] = [];
   if (hasEye && hasEar) {
@@ -307,10 +303,6 @@ export function buildSimulationComplicationText(additionalDevices: string): stri
     parts.push("Proximity to eye (shielding vital organ)");
   } else if (hasEar) {
     parts.push("Proximity to ear (shielding vital organ)");
-  }
-
-  if (customDevices.length) {
-    parts.push(customDevices.join(", "));
   }
 
   return parts.join(", ");
