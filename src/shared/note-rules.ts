@@ -130,12 +130,7 @@ export function buildShieldSummary(shields: string, additionalDevices: string): 
     .filter(Boolean)
     .forEach(pushShield);
 
-  parseAdditionalDevices(additionalDevices)
-    .filter((device) => {
-      const normalized = normalizeOptionValue(device);
-      return normalized === "eye shield" || normalized === "ear shield" || normalized.includes("shield");
-    })
-    .forEach(pushShield);
+  parseAdditionalDevices(additionalDevices).forEach(pushShield);
 
   return ordered.length ? ordered.join(", ") : "none";
 }

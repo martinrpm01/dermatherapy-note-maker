@@ -581,7 +581,7 @@ describe("RadiationNoteService workflow", () => {
 
     expect(preview).toContain("Current Treatment Number: 2");
     expect(preview).toContain("Current Cumulative Dose to Date: 1000 cGy");
-    expect(preview).toContain("Other Shield Details: 18mm");
+    expect(preview).toContain("Flex Shield (Cutout Used): 18mm");
     expect(preview).toContain("Cone Size: 30mm");
     expect(preview).not.toContain("Cone Size: cone");
   });
