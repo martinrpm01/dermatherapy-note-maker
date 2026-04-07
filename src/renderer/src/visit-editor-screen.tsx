@@ -78,8 +78,8 @@ export function VisitEditorScreen(props: {
           </button>
         </div>
       </div>
-      <div className={activePanel === "preview" ? "editor-layout preview-mode" : "editor-layout"}>
-        {activePanel === "details" && <div className="panel form-panel">
+      {activePanel === "details" && <>
+        <div className="panel form-panel">
           <h3>Visit Details</h3>
           <div className="form-grid">
             <label>
@@ -336,44 +336,48 @@ export function VisitEditorScreen(props: {
               </label>
             </div>
           )}
-          {editor.note.noteType === "consult_sim" && (
+        </div>
+        <div className="panel summary-panel">
+          <div className="summary-checkboxes">
+            {editor.note.noteType === "consult_sim" && (
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={!!editor.note.structuredFields.ultrasoundPerformed}
+                  onChange={(event) => props.onUpdate((current) => ({
+                    ...current,
+                    note: {
+                      ...current.note,
+                      structuredFields: {
+                        ...current.note.structuredFields,
+                        ultrasoundPerformed: event.target.checked
+                          ? "Ultrasound Performed:\nAn ultrasound of the lesion was completed to determine tumor extent in order to select the best course of treatment for the lesion. The image was reviewed, and radiation therapy was selected as the treatment plan."
+                          : ""
+                      }
+                    }
+                  }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                />
+                Ultrasound Performed
+              </label>
+            )}
             <label className="checkbox-label">
               <input
                 type="checkbox"
-                checked={!!editor.note.structuredFields.ultrasoundPerformed}
+                checked={!!editor.note.structuredFields.addMips}
                 onChange={(event) => props.onUpdate((current) => ({
                   ...current,
                   note: {
                     ...current.note,
                     structuredFields: {
                       ...current.note.structuredFields,
-                      ultrasoundPerformed: event.target.checked
-                        ? "Ultrasound Performed:\nAn ultrasound of the lesion was completed to determine tumor extent in order to select the best course of treatment for the lesion. The image was reviewed, and radiation therapy was selected as the treatment plan."
-                        : ""
+                      addMips: event.target.checked
                     }
                   }
                 }), { regenerate: true, overwriteEdited: !props.textDirty })}
               />
-              Ultrasound Performed
+              Add MIPS
             </label>
-          )}
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={!!editor.note.structuredFields.addMips}
-              onChange={(event) => props.onUpdate((current) => ({
-                ...current,
-                note: {
-                  ...current.note,
-                  structuredFields: {
-                    ...current.note.structuredFields,
-                    addMips: event.target.checked
-                  }
-                }
-              }), { regenerate: true, overwriteEdited: !props.textDirty })}
-            />
-            Add MIPS
-          </label>
+          </div>
           {(editor.note.noteType === "consult_sim" || editor.note.noteType === "otv") && (
             <div>
               <h4 style={{ margin: "0 0 0.4rem" }}>Exam Vitals</h4>
@@ -469,7 +473,8 @@ export function VisitEditorScreen(props: {
               </div>
             ))}
           </div>
-        </div>}
+        </div>
+      </>}
         {activePanel === "preview" && <div className="panel note-panel">
           <h3>Note Text</h3>
           <textarea className="note-textarea" value={editor.note.editedText} onChange={(event) => props.onEditedTextChange(event.target.value)} />
