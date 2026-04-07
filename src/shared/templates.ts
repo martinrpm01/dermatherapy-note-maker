@@ -141,8 +141,6 @@ Appropriately healing biopsy site distributed on the {{site1.bodyLocation}}.
 
 Plan: Therapeutic Radiation Simulation.
 Number of Treatment Areas: 1
-Number of Radiation Ports: 1
-Port Type: parallel opposed
 Number of Blocks: {{site1.numberOfBlocks}}
 Type of Blocks: Complex
 {{site1.simulationComplicationsLine}}
@@ -233,8 +231,6 @@ Appropriately healing biopsy site distributed on the {{site1.bodyLocation}}.
 Plan:
 Therapeutic Radiation Simulation.
 Number of Treatment Areas: 1
-Number of Radiation Ports: 1
-Port Type: parallel opposed
 Number of Blocks: {{site1.numberOfBlocks}}
 Type of Blocks: Simple
 {{site1.simulationComplicationsLine}}
@@ -306,8 +302,6 @@ Appropriately healing biopsy site distributed on the {{site1.bodyLocation}}.
 
 Plan: Therapeutic Radiation Simulation.
 Number of Treatment Areas: 1
-Number of Radiation Ports: 1
-Port Type: parallel opposed
 Number of Blocks: {{site1.numberOfBlocks}}
 Type of Blocks: Simple
 {{site1.simulationComplicationsLine}}
@@ -388,8 +382,6 @@ Impression / Plan:
 
 Plan: Therapeutic Radiation Simulation.
 Number of Treatment Areas: 1
-Number of Radiation Ports: 1
-Port Type: parallel opposed
 Number of Blocks: {{site1.numberOfBlocks}}
 Type of Blocks: Simple
 {{site1.simulationComplicationsLine}}
@@ -477,8 +469,6 @@ Appropriately healing biopsy site distributed on the {{site1.bodyLocation}}.
 
 Plan: Therapeutic Radiation Simulation.
 Number of Treatment Areas: 1
-Number of Radiation Ports: 1
-Port Type: parallel opposed
 Number of Blocks: {{site1.numberOfBlocks}}
 Type of Block: Complex
 {{site1.simulationComplicationsLine}}
@@ -517,8 +507,6 @@ Appropriately healing biopsy site distributed on the {{site2.bodyLocation}}.
 
 Plan: Therapeutic Radiation Simulation.
 Number of Treatment Areas: 1
-Number of Radiation Ports: 1
-Port Type: parallel opposed
 Number of Blocks: {{site2.numberOfBlocks}}
 Type of Block: Complex
 {{site2.simulationComplicationsLine}}
@@ -617,8 +605,6 @@ Comments: See document named "Radiation Therapy Dose Calcs" attached to patient 
 
 Plan: Therapeutic Radiation Simulation.
 Number of Treatment Areas: 1
-Number of Radiation Ports: 1
-Port Type: parallel opposed
 Number of Blocks: {{site1.numberOfBlocks}}
 Type of Blocks: Simple
 {{site1.simulationComplicationsLine}}
@@ -645,8 +631,6 @@ Appropriately healing biopsy site distributed on the {{site2.bodyLocation}}.
 
 Plan: Therapeutic Radiation Simulation.
 Number of Treatment Areas: 1
-Number of Radiation Ports: 1
-Port Type: parallel opposed
 Number of Blocks: {{site2.numberOfBlocks}}
 Type of Blocks: Simple
 {{site2.simulationComplicationsLine}}
@@ -717,8 +701,6 @@ Appropriately healing biopsy site distributed on the {{site1.bodyLocation}}.
 
 Plan: Therapeutic Radiation Simulation.
 Number of Treatment Areas: 1
-Number of Radiation Ports: 1
-Port Type: parallel opposed
 Number of Blocks: {{site1.numberOfBlocks}}
 Type of Blocks: Simple
 {{site1.simulationComplicationsLine}}
@@ -745,8 +727,6 @@ Appropriately healing biopsy site distributed on the {{site2.bodyLocation}}.
 
 Plan: Therapeutic Radiation Simulation.
 Number of Treatment Areas: 1
-Number of Radiation Ports: 1
-Port Type: parallel opposed
 Number of Blocks: {{site2.numberOfBlocks}}
 Type of Blocks: Simple
 {{site2.simulationComplicationsLine}}
@@ -826,8 +806,6 @@ Appropriately healing biopsy site distributed on the {{site1.bodyLocation}}.
 
 Plan: Therapeutic Radiation Simulation.
 Number of Treatment Areas: 1
-Number of Radiation Ports: 1
-Port Type: parallel opposed
 Number of Blocks: {{site1.numberOfBlocks}}
 Type of Blocks: Simple
 {{site1.simulationComplicationsLine}}
@@ -858,8 +836,6 @@ Appropriately healing biopsy site distributed on the {{site2.bodyLocation}}.
 
 Plan: Therapeutic Radiation Simulation.
 Number of Treatment Areas: 1
-Number of Radiation Ports: 1
-Port Type: parallel opposed
 Number of Blocks: {{site2.numberOfBlocks}}
 Type of Blocks: Simple
 {{site2.simulationComplicationsLine}}
