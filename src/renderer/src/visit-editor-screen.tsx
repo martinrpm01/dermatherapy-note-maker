@@ -113,7 +113,7 @@ export function VisitEditorScreen(props: {
                         }
                       }
                     };
-                  }, { regenerate: true, overwriteEdited: !props.textDirty });
+                  }, { regenerate: true, overwriteEdited: true });
                 }}
               >
                 <option value="consult_sim">Sim / Consult</option>
@@ -201,6 +201,33 @@ export function VisitEditorScreen(props: {
               Therapist
               <input value={editor.note.therapistName} list="therapists" onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, therapistName: event.target.value } }), { regenerate: true, overwriteEdited: !props.textDirty })} />
             </label>
+            {editor.note.noteType !== "consult_sim" && (() => {
+              const POST_CARE_OPTIONS = [
+                { label: "Aquaphor", value: "Aquaphor was applied to the treated area." },
+                { label: "Vaseline", value: "Vaseline was applied to the treated area." },
+                { label: "No ointment applied", value: "No ointment was applied to the treated area." }
+              ];
+              const current = editor.note.structuredFields.postCare ?? "";
+              const isPreset = POST_CARE_OPTIONS.some((o) => o.value === current);
+              return (
+                <label>
+                  Post-Care Ointment
+                  <select
+                    value={isPreset ? current : "custom"}
+                    onChange={(event) => {
+                      if (event.target.value === "custom") return;
+                      props.onUpdate((s) => ({
+                        ...s,
+                        note: { ...s.note, structuredFields: { ...s.note.structuredFields, postCare: event.target.value } }
+                      }), { regenerate: true, overwriteEdited: !props.textDirty });
+                    }}
+                  >
+                    {POST_CARE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    {!isPreset && <option value="custom">Custom</option>}
+                  </select>
+                </label>
+              );
+            })()}
           </div>
           <label>
             Additional Notes
