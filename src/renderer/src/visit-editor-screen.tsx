@@ -71,7 +71,6 @@ export function VisitEditorScreen(props: {
           >
             Note Preview
           </button>
-          <button onClick={props.onResetNoteText}>Reset Note Text</button>
           <button onClick={props.onSaveDraft}>Save Draft</button>
           <button className="primary" onClick={props.onSaveAndGeneratePdf}>
             Save + Generate PDF
