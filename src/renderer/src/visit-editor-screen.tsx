@@ -337,6 +337,61 @@ export function VisitEditorScreen(props: {
               </label>
             </div>
           )}
+          {(editor.note.noteType === "consult_sim" || editor.note.noteType === "otv") && (
+            <div>
+              <h4 style={{ margin: "0 0 0.4rem" }}>Exam Vitals</h4>
+              <div className="form-grid">
+                <label>
+                  Blood Pressure
+                  <input placeholder="e.g. 120/80" value={editor.note.vitals.bloodPressure} onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, bloodPressure: event.target.value } } }), { regenerate: true, overwriteEdited: !props.textDirty })} />
+                </label>
+                <label>
+                  Heart Rate
+                  <input placeholder="e.g. 72" value={editor.note.vitals.heartRate} onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, heartRate: event.target.value } } }), { regenerate: true, overwriteEdited: !props.textDirty })} />
+                </label>
+                <label>
+                  O2 Saturation
+                  <input placeholder="e.g. 98%" value={editor.note.vitals.oxygenSaturation} onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, oxygenSaturation: event.target.value } } }), { regenerate: true, overwriteEdited: !props.textDirty })} />
+                </label>
+                <label>
+                  Weight
+                  <input placeholder="e.g. 165 lbs" value={editor.note.vitals.weight} onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, weight: event.target.value } } }), { regenerate: true, overwriteEdited: !props.textDirty })} />
+                </label>
+              </div>
+            </div>
+          )}
+          <label className="file-picker">
+            Additional Attachments
+            <input
+              type="file"
+              accept="image/*,.pdf,application/pdf"
+              multiple
+              onChange={(event) => props.onVisitAttachmentAdd(event.target.files)}
+            />
+          </label>
+          <div className="attachment-list">
+            {editor.existingAttachments.map((attachment) => (
+              <div className="attachment-row" key={attachment.id}>
+                <div>
+                  <div className="attachment-name">{attachment.originalName || attachment.caption || "Attachment"}</div>
+                  <div className="muted">
+                    {attachment.mimeType.toLowerCase().includes("pdf") ? "PDF attachment" : "Image attachment"}
+                  </div>
+                </div>
+                <button onClick={() => props.onRemoveExistingAttachment(attachment.id)}>Remove</button>
+              </div>
+            ))}
+            {editor.note.newAttachmentUploads.map((attachment) => (
+              <div className="attachment-row" key={attachment.name + attachment.dataUrl.slice(0, 12)}>
+                <div>
+                  <div className="attachment-name">{attachment.name}</div>
+                  <div className="muted">
+                    {attachment.mimeType.toLowerCase().includes("pdf") ? "PDF attachment" : "Image attachment"}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
         <div className="panel summary-panel">
           <div className="summary-checkboxes">
@@ -379,29 +434,6 @@ export function VisitEditorScreen(props: {
               Add MIPS
             </label>
           </div>
-          {(editor.note.noteType === "consult_sim" || editor.note.noteType === "otv") && (
-            <div>
-              <h4 style={{ margin: "0 0 0.4rem" }}>Exam Vitals</h4>
-              <div className="form-grid">
-                <label>
-                  Blood Pressure
-                  <input placeholder="e.g. 120/80" value={editor.note.vitals.bloodPressure} onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, bloodPressure: event.target.value } } }), { regenerate: true, overwriteEdited: !props.textDirty })} />
-                </label>
-                <label>
-                  Heart Rate
-                  <input placeholder="e.g. 72" value={editor.note.vitals.heartRate} onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, heartRate: event.target.value } } }), { regenerate: true, overwriteEdited: !props.textDirty })} />
-                </label>
-                <label>
-                  O2 Saturation
-                  <input placeholder="e.g. 98%" value={editor.note.vitals.oxygenSaturation} onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, oxygenSaturation: event.target.value } } }), { regenerate: true, overwriteEdited: !props.textDirty })} />
-                </label>
-                <label>
-                  Weight
-                  <input placeholder="e.g. 165 lbs" value={editor.note.vitals.weight} onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, weight: event.target.value } } }), { regenerate: true, overwriteEdited: !props.textDirty })} />
-                </label>
-              </div>
-            </div>
-          )}
           <div className="site-grid">
             {editor.note.structuredFields.siteSnapshots.map((site) => (
               <div className="subpanel" key={site.siteNumber}>
@@ -442,38 +474,6 @@ export function VisitEditorScreen(props: {
               </div>
             );
           })}
-          <label className="file-picker">
-            Additional Attachments
-            <input
-              type="file"
-              accept="image/*,.pdf,application/pdf"
-              multiple
-              onChange={(event) => props.onVisitAttachmentAdd(event.target.files)}
-            />
-          </label>
-          <div className="attachment-list">
-            {editor.existingAttachments.map((attachment) => (
-              <div className="attachment-row" key={attachment.id}>
-                <div>
-                  <div className="attachment-name">{attachment.originalName || attachment.caption || "Attachment"}</div>
-                  <div className="muted">
-                    {attachment.mimeType.toLowerCase().includes("pdf") ? "PDF attachment" : "Image attachment"}
-                  </div>
-                </div>
-                <button onClick={() => props.onRemoveExistingAttachment(attachment.id)}>Remove</button>
-              </div>
-            ))}
-            {editor.note.newAttachmentUploads.map((attachment) => (
-              <div className="attachment-row" key={attachment.name + attachment.dataUrl.slice(0, 12)}>
-                <div>
-                  <div className="attachment-name">{attachment.name}</div>
-                  <div className="muted">
-                    {attachment.mimeType.toLowerCase().includes("pdf") ? "PDF attachment" : "Image attachment"}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       </>}
       {activePanel === "preview" && <div className="panel note-panel">
