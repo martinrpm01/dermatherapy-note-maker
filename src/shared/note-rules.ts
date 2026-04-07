@@ -338,8 +338,7 @@ export function buildDefaultStructuredFields(
     prescribedFractionsInput: null,
     biopsyDate: defaults.biopsyDate ?? "",
     lastTreatmentDate: defaults.lastTreatmentDate ?? "",
-    focusedExam:
-      "An examination was performed.\nGeneral Appearance of the patient is well developed and well nourished.\nOrientation: alert and oriented x3.\nMood and affect: pleasant.",
+    focusedExam: `An exam was performed including the ${combinedSiteLabel}.`,
     healingDescription: `Appropriately healing biopsy site distributed on the ${combinedSiteLabel}.`,
     examComment:
       noteType === "otv"
