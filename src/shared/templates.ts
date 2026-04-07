@@ -169,7 +169,7 @@ Follow Up:
 The patient is scheduled to start Radiation Therapy on {{structured.startRadiationDate}}
 
 Additional Information:
-{{visit.therapistName}} RT(T) was the Radiation Therapist at time of visit.
+{{visit.therapistName}} was the Radiation Therapist at time of visit.
 
 Other Instructions:
 See attachments within chart for further information. (Radiation Therapy Simulation Document & Radiation Therapy Consent Form)
@@ -495,7 +495,7 @@ Follow Up:
 The patient is scheduled to start Radiation Therapy on {{structured.startRadiationDate}}
 
 Additional Information:
-{{visit.therapistName}} RT(T) was the Radiation Therapist at time of visit.
+{{visit.therapistName}} was the Radiation Therapist at time of visit.
 
 Other Instructions:
 See attachments within chart for further information. (Radiation Therapy Simulation Document & Radiation Therapy Consent Form)
@@ -533,7 +533,7 @@ Follow Up:
 The patient is scheduled to start Radiation Therapy on {{structured.startRadiationDate}}
 
 Additional Information:
-{{visit.therapistName}} RT(T) was the Radiation Therapist at time of visit.
+{{visit.therapistName}} was the Radiation Therapist at time of visit.
 
 Other Instructions:
 See attachments within chart for further information. (Radiation Therapy Simulation Document & Radiation Therapy Consent Form)
