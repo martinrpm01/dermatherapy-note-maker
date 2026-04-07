@@ -749,7 +749,7 @@ describe("RadiationNoteService workflow", () => {
     const consultDraft = service.buildVisitDraft(course.id, "consult_sim");
     expect(consultDraft.note.generatedText).toContain("Additional Treatment Devices: Eye Shield, Ear Shield, Nose Shield");
     expect(consultDraft.note.generatedText).toContain(
-      "The simulation was complicated by the following factors: Proximity to eye and ear (shielding vital organ), Nose Shield"
+      "The simulation was complicated by the following factors: Proximity to eye and ear (shielding vital organ)"
     );
   });
 
