@@ -522,7 +522,7 @@ describe("RadiationNoteService workflow", () => {
     expect(consultDraft.note.generatedText).toContain("This is a");
     expect(consultDraft.note.generatedText).toContain("Biopsy date: 03/30/2026.");
     expect(consultDraft.note.generatedText).toContain(
-      "The following treatment devices and target prescriptions were utilized pending radiation oncologist and medical physics review."
+      "The following treatment devices and target prescriptions were utilized pending radiation oncologist and medical physics review:"
     );
     expect(consultDraft.note.generatedText).not.toContain("mm mm");
   });
