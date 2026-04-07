@@ -470,13 +470,13 @@ export function VisitEditorScreen(props: {
             ))}
           </div>
         </div>}
-        <div className="panel note-panel">
+        {activePanel === "preview" && <div className="panel note-panel">
           <h3>Note Text</h3>
           <textarea className="note-textarea" value={editor.note.editedText} onChange={(event) => props.onEditedTextChange(event.target.value)} />
           <div className="button-row">
             {editor.generatedPdfs[0] ? <button onClick={() => props.onOpenLatestPdf(editor.generatedPdfs[0].fileAsset)}>Open Latest PDF</button> : null}
           </div>
-        </div>
+        </div>}
       </div>
       {props.settingsPayload ? (
         <datalist id="therapists">
