@@ -176,7 +176,7 @@ export function buildVisitPreviewText(
       date: formatDisplayDate(note.visitDate),
       noteTypeLabel: note.noteType,
       treatmentNumber: note.treatmentNumber ?? "",
-      therapistName: note.therapistName
+      therapistName: note.therapistName ? `${note.therapistName} RT(T)` : ""
     },
     course: {
       prescribedFractions: course.prescribedFractions
