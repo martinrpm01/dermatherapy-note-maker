@@ -573,6 +573,25 @@ label select {
   align-items: start;
 }
 
+.editor-layout.preview-mode {
+  grid-template-columns: 1fr;
+}
+
+.editor-layout.preview-mode .note-panel {
+  grid-template-rows: auto 1fr auto;
+}
+
+.editor-layout.preview-mode .note-textarea {
+  min-height: calc(100dvh - 260px);
+  font-size: 1rem;
+}
+
+button.tab-active {
+  background: var(--accent, #2563eb);
+  color: #fff;
+  border-color: var(--accent, #2563eb);
+}
+
 .note-panel,
 .form-panel {
   display: grid;

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { AppClient, SettingsPayload, VisitEditorState } from "../../shared/types";
 import { NOTE_TYPE_LABELS, getSuggestedNoteType, isOtvTreatmentNumber } from "../../shared/note-rules";
 import { useResolvedAssetUrl } from "./asset-url";
@@ -36,6 +37,7 @@ export function VisitEditorScreen(props: {
   onEditedTextChange: (value: string) => void;
   onOpenLatestPdf: (asset: VisitEditorState["generatedPdfs"][number]["fileAsset"]) => void;
 }) {
+  const [activePanel, setActivePanel] = useState<"details" | "preview">("details");
   const editor = props.visitEditor;
   const showPrescribedFractionsInput =
     editor.note.noteType !== "consult_sim" &&
@@ -57,6 +59,18 @@ export function VisitEditorScreen(props: {
           ) : null}
         </div>
         <div className="button-row">
+          <button
+            className={activePanel === "details" ? "tab-active" : ""}
+            onClick={() => setActivePanel("details")}
+          >
+            Visit Details
+          </button>
+          <button
+            className={activePanel === "preview" ? "tab-active" : ""}
+            onClick={() => setActivePanel("preview")}
+          >
+            Note Preview
+          </button>
           <button onClick={props.onResetNoteText}>Reset Note Text</button>
           <button onClick={props.onSaveDraft}>Save Draft</button>
           <button className="primary" onClick={props.onSaveAndGeneratePdf}>
@@ -64,8 +78,8 @@ export function VisitEditorScreen(props: {
           </button>
         </div>
       </div>
-      <div className="editor-layout">
-        <div className="panel form-panel">
+      <div className={activePanel === "preview" ? "editor-layout preview-mode" : "editor-layout"}>
+        {activePanel === "details" && <div className="panel form-panel">
           <h3>Visit Details</h3>
           <div className="form-grid">
             <label>
@@ -455,7 +469,7 @@ export function VisitEditorScreen(props: {
               </div>
             ))}
           </div>
-        </div>
+        </div>}
         <div className="panel note-panel">
           <h3>Note Text</h3>
           <textarea className="note-textarea" value={editor.note.editedText} onChange={(event) => props.onEditedTextChange(event.target.value)} />
