@@ -360,38 +360,6 @@ export function VisitEditorScreen(props: {
               </div>
             </div>
           )}
-          <label className="file-picker">
-            Additional Attachments
-            <input
-              type="file"
-              accept="image/*,.pdf,application/pdf"
-              multiple
-              onChange={(event) => props.onVisitAttachmentAdd(event.target.files)}
-            />
-          </label>
-          <div className="attachment-list">
-            {editor.existingAttachments.map((attachment) => (
-              <div className="attachment-row" key={attachment.id}>
-                <div>
-                  <div className="attachment-name">{attachment.originalName || attachment.caption || "Attachment"}</div>
-                  <div className="muted">
-                    {attachment.mimeType.toLowerCase().includes("pdf") ? "PDF attachment" : "Image attachment"}
-                  </div>
-                </div>
-                <button onClick={() => props.onRemoveExistingAttachment(attachment.id)}>Remove</button>
-              </div>
-            ))}
-            {editor.note.newAttachmentUploads.map((attachment) => (
-              <div className="attachment-row" key={attachment.name + attachment.dataUrl.slice(0, 12)}>
-                <div>
-                  <div className="attachment-name">{attachment.name}</div>
-                  <div className="muted">
-                    {attachment.mimeType.toLowerCase().includes("pdf") ? "PDF attachment" : "Image attachment"}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
         <div className="panel summary-panel">
           <div className="summary-checkboxes">
@@ -474,6 +442,38 @@ export function VisitEditorScreen(props: {
               </div>
             );
           })}
+          <label className="file-picker">
+            Additional Attachments
+            <input
+              type="file"
+              accept="image/*,.pdf,application/pdf"
+              multiple
+              onChange={(event) => props.onVisitAttachmentAdd(event.target.files)}
+            />
+          </label>
+          <div className="attachment-list">
+            {editor.existingAttachments.map((attachment) => (
+              <div className="attachment-row" key={attachment.id}>
+                <div>
+                  <div className="attachment-name">{attachment.originalName || attachment.caption || "Attachment"}</div>
+                  <div className="muted">
+                    {attachment.mimeType.toLowerCase().includes("pdf") ? "PDF attachment" : "Image attachment"}
+                  </div>
+                </div>
+                <button onClick={() => props.onRemoveExistingAttachment(attachment.id)}>Remove</button>
+              </div>
+            ))}
+            {editor.note.newAttachmentUploads.map((attachment) => (
+              <div className="attachment-row" key={attachment.name + attachment.dataUrl.slice(0, 12)}>
+                <div>
+                  <div className="attachment-name">{attachment.name}</div>
+                  <div className="muted">
+                    {attachment.mimeType.toLowerCase().includes("pdf") ? "PDF attachment" : "Image attachment"}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </>}
       {activePanel === "preview" && <div className="panel note-panel">
