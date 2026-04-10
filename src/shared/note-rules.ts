@@ -262,6 +262,7 @@ export function buildSiteSnapshots(
 ): SiteSnapshot[] {
   return sites.map((site) => ({
     ...site,
+    biopsyDate: "",
     cumulativeDose: calculateCumulativeDose(site.dailyDose, treatmentNumber)
   }));
 }
@@ -308,12 +309,22 @@ export function buildSimulationComplicationLine(additionalDevices: string): stri
   return text ? `The simulation was complicated by the following factors: ${text}` : "";
 }
 
+export function getDefaultPhysicsComment(noteType: NoteType): string {
+  return noteType === "otv"
+    ? 'In accordance with the standard of care for radiotherapy treatment, a review of care following every 5th fraction was performed by a medical physicist for the patient. The medical physicist reviewed the treatment documentation and parameters, clinical photos of the treatment set-up, the treatment prescription, any prescription changes, that the dose calculation was correct, that the fractional dose was charted correctly, that elapsed days and treatment days were charted correctly, that the cumulative dose is correct, and that the radiation dose administered to the patient was accurate. The medical physicist also ensured that the radiation therapy equipment was properly calibrated and is functioning effectively to ensure treatment efficacy and continued safe delivery of radiotherapy.\n\nContinued medical physics review following every 5th fraction of therapy is requested by the provider for appropriate radiotherapy management and is deemed medically necessary and a standard of care to meet state and regulatory standards.\n\nSee attached Documents within patient chart "Weekly Physics Check".'
+    : "";
+}
+
 export function buildDefaultStructuredFields(
   noteType: NoteType,
   siteSnapshots: SiteSnapshot[],
   supervisingPhysician = "",
   defaults: { biopsyDate?: string; lastTreatmentDate?: string } = {}
 ): VisitStructuredFields {
+  const normalizedSnapshots = siteSnapshots.map((site) => ({
+    ...site,
+    biopsyDate: site.biopsyDate || defaults.biopsyDate || ""
+  }));
   const firstSiteLocation = siteSnapshots[0]?.bodyLocation || "treatment site";
   const secondSiteLocation = siteSnapshots[1]?.bodyLocation || "second treatment site";
   const combinedSiteLabel =
@@ -322,6 +333,7 @@ export function buildDefaultStructuredFields(
   return {
     chiefComplaint: "",
     additionalNotes: "",
+    finalTreatment: false,
     prescribedFractionsInput: null,
     biopsyDate: defaults.biopsyDate ?? "",
     lastTreatmentDate: defaults.lastTreatmentDate ?? "",
@@ -345,10 +357,7 @@ export function buildDefaultStructuredFields(
     simulationComplications: buildSimulationComplicationText(siteSnapshots[0]?.additionalDevices || ""),
     treatmentComment:
       "Treatment was initiated today per the approved prescription, reflecting the final clinical decision. The patient was treated with radiation therapy for biopsy-proven non-melanoma skin cancer.\n\nA simple simulation was performed prior to treatment to verify lesion location, applicator placement, patient positioning, and appropriate beam-modifying devices. Clinical and lesion photographs were obtained during the simulation for verification. Dosimetry calculations were completed prior to treatment to confirm appropriate dwell time for the radiation therapy source. Treatment was delivered under my supervision, treatment start and stop times have been documented.",
-    physicsComment:
-      noteType === "otv"
-        ? "In accordance with the standard of care for radiotherapy treatment, a review of care following every 5th fraction was performed by a medical physicist for the patient. The medical physicist reviewed the treatment documentation and parameters, clinical photos of the treatment set-up, the treatment prescription, any prescription changes, that the dose calculation was correct, that the fractional dose was charted correctly, that elapsed days and treatment days were charted correctly, that the cumulative dose is correct, and that the radiation dose administered to the patient was accurate. The medical physicist also ensured that the radiation therapy equipment was properly calibrated and is functioning effectively to ensure treatment efficacy and continued safe delivery of radiotherapy.\n\nContinued medical physics review following every 5th fraction of therapy is requested by the provider for appropriate radiotherapy management and is deemed medically necessary and a standard of care to meet state and regulatory standards.\n\nSee attached Documents within patient chart \"Weekly Physics Check\"."
-        : "",
+    physicsComment: getDefaultPhysicsComment(noteType),
     consultReview:
       "An extensive history and exam was performed with attention to the tumor size, anatomic location, duration and histologic growth pattern and the patient's overall medical status and co-morbidities.",
     treatmentOptions:
@@ -362,6 +371,6 @@ export function buildDefaultStructuredFields(
     startRadiationDate: "",
     ultrasoundPerformed: "",
     addMips: false,
-    siteSnapshots
+    siteSnapshots: normalizedSnapshots
   };
 }

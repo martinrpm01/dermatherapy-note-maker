@@ -16,6 +16,7 @@ export const TEMPLATE_PLACEHOLDERS: TemplatePlaceholderDefinition[] = [
   { token: "site1.bodyLocation", description: "Body location text for site 1." },
   { token: "site1.treatmentLocationText", description: "Treatment location text for site 1." },
   { token: "site1.diagnosisText", description: "Diagnosis text for site 1." },
+  { token: "site1.biopsyDate", description: "Biopsy date for site 1." },
   { token: "site1.icd10", description: "ICD10 for site 1." },
   { token: "site1.numberOfBlocks", description: "Number of blocks for site 1." },
   { token: "site1.lesionSize", description: "Lesion size (mm) for site 1." },
@@ -40,6 +41,7 @@ export const TEMPLATE_PLACEHOLDERS: TemplatePlaceholderDefinition[] = [
   { token: "site2.bodyLocation", description: "Body location text for site 2." },
   { token: "site2.treatmentLocationText", description: "Treatment location text for site 2." },
   { token: "site2.diagnosisText", description: "Diagnosis text for site 2." },
+  { token: "site2.biopsyDate", description: "Biopsy date for site 2." },
   { token: "site2.icd10", description: "ICD10 for site 2." },
   { token: "site2.numberOfBlocks", description: "Number of blocks for site 2." },
   { token: "site2.lesionSize", description: "Lesion size (mm) for site 2." },
@@ -75,6 +77,7 @@ export const TEMPLATE_PLACEHOLDERS: TemplatePlaceholderDefinition[] = [
   { token: "structured.examComment", description: "Exam comment wording." },
   { token: "structured.impressionPlanComments", description: "Impression/plan comments wording." },
   { token: "structured.postCare", description: "Post-care wording." },
+  { token: "structured.finalTreatmentSection", description: "Final treatment completion wording." },
   { token: "structured.followUp", description: "Follow-up wording." },
   { token: "structured.simulationComplications", description: "Simulation complications wording." },
   { token: "structured.treatmentComment", description: "Treatment comment wording." },
@@ -119,7 +122,7 @@ Sex: {{patient.sex}}    DOB: {{patient.dob}}    MRN: {{patient.mrn}}    Date: {{
 
 HPI:
 This is a {{patient.age}} year old {{patient.sexLower}} who:
-1. is following up for {{site1.diagnosisText}} on the {{site1.bodyLocation}}. Biopsy date: {{structured.biopsyDate}}.
+1. is following up for {{site1.diagnosisText}} on the {{site1.bodyLocation}}. Biopsy date: {{site1.biopsyDate}}.
 The patient presents for further evaluation and management and consultation and simulation for XRT treatment.
 
 Exam:
@@ -265,6 +268,13 @@ Post Care:
 
 {{structured.mipsSection}}
 
+{{structured.additionalNotesSection}}
+
+{{structured.finalTreatmentSection}}
+
+Follow Up:
+{{structured.followUp}}
+
 Treatment Supervised by:
 
 
@@ -278,10 +288,6 @@ Physician Signature
 ______________________
 Date
 
-{{structured.additionalNotesSection}}
-
-Follow Up:
-{{structured.followUp}}
     `
   ),
   buildTemplate(
@@ -336,6 +342,13 @@ Post Care:
 
 {{structured.mipsSection}}
 
+{{structured.additionalNotesSection}}
+
+{{structured.finalTreatmentSection}}
+
+Follow Up:
+{{structured.followUp}}
+
 Treatment Supervised by:
 
 
@@ -349,10 +362,6 @@ Physician Signature
 ______________________
 Date
 
-{{structured.additionalNotesSection}}
-
-Follow Up:
-{{structured.followUp}}
     `
   ),
   buildTemplate(
@@ -415,10 +424,18 @@ Post Care:
 {{structured.treatmentComment}}
 
 Plan: Radiation Physics Consultation.
+Location: {{site1.bodyLocation}}
 Physics Consultation: Fraction Number: {{visit.treatmentNumber}} of {{course.prescribedFractions}}
 {{structured.physicsComment}}
 
 {{structured.mipsSection}}
+
+{{structured.additionalNotesSection}}
+
+{{structured.finalTreatmentSection}}
+
+Follow Up:
+{{structured.followUp}}
 
 Treatment Supervised by:
 
@@ -433,10 +450,6 @@ Physician Signature
 ______________________
 Date
 
-{{structured.additionalNotesSection}}
-
-Follow Up:
-{{structured.followUp}}
     `
   ),
   buildTemplate(
@@ -448,7 +461,8 @@ Sex: {{patient.sex}}    DOB: {{patient.dob}}    MRN: {{patient.mrn}}    Date: {{
 
 HPI:
 This is a {{patient.age}} year old {{patient.sexLower}} who:
-1. is following up for {{site1.diagnosisText}} on the {{site1.bodyLocation}} and {{site2.diagnosisText}} on the {{site2.bodyLocation}}. Biopsy date: {{structured.biopsyDate}}.
+1. is following up for {{site1.diagnosisText}} on the {{site1.bodyLocation}}. Biopsy date: {{site1.biopsyDate}}.
+2. is following up for {{site2.diagnosisText}} on the {{site2.bodyLocation}}. Biopsy date: {{site2.biopsyDate}}.
 The patient presents for further evaluation and management and consultation and simulation for XRT treatment.
 
 Focused Exam:
@@ -665,6 +679,13 @@ Post Care:
 
 {{structured.mipsSection}}
 
+{{structured.additionalNotesSection}}
+
+{{structured.finalTreatmentSection}}
+
+Follow Up:
+{{structured.followUp}}
+
 Treatment Supervised by:
 
 
@@ -678,10 +699,6 @@ Physician Signature
 ______________________
 Date
 
-{{structured.additionalNotesSection}}
-
-Follow Up:
-{{structured.followUp}}
     `
   ),
   buildTemplate(
@@ -761,6 +778,13 @@ Post Care:
 
 {{structured.mipsSection}}
 
+{{structured.additionalNotesSection}}
+
+{{structured.finalTreatmentSection}}
+
+Follow Up:
+{{structured.followUp}}
+
 Treatment Supervised by:
 
 
@@ -774,10 +798,6 @@ Physician Signature
 ______________________
 Date
 
-{{structured.additionalNotesSection}}
-
-Follow Up:
-{{structured.followUp}}
     `
   ),
   buildTemplate(
@@ -832,6 +852,7 @@ Machine: {{site1.machine}}
 Treatment Depth: {{site1.treatmentDepthDisplay}}
 
 Plan: Radiation Physics Consultation.
+Location: {{site1.bodyLocation}}
 Physics Consultation: Fraction Number: {{visit.treatmentNumber}} of {{site1.prescribedFractions}}
 {{structured.physicsComment}}
 
@@ -862,6 +883,7 @@ Machine: {{site2.machine}}
 Treatment Depth: {{site2.treatmentDepthDisplay}}
 
 Plan: Radiation Physics Consultation.
+Location: {{site2.bodyLocation}}
 Physics Consultation: Fraction Number: {{visit.treatmentNumber}} of {{site2.prescribedFractions}}
 {{structured.physicsComment}}
 
@@ -873,6 +895,13 @@ Post Care:
 {{structured.treatmentComment}}
 
 {{structured.mipsSection}}
+
+{{structured.additionalNotesSection}}
+
+{{structured.finalTreatmentSection}}
+
+Follow Up:
+{{structured.followUp}}
 
 Treatment Supervised by:
 
@@ -887,10 +916,6 @@ Physician Signature
 ______________________
 Date
 
-{{structured.additionalNotesSection}}
-
-Follow Up:
-{{structured.followUp}}
     `
   )
 ];

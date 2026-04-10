@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { AppClient, SettingsPayload, VisitEditorState } from "../../shared/types";
-import { NOTE_TYPE_LABELS, getSuggestedNoteType, isOtvTreatmentNumber } from "../../shared/note-rules";
+import { NOTE_TYPE_LABELS, getDefaultPhysicsComment, getSuggestedNoteType, isOtvTreatmentNumber } from "../../shared/note-rules";
 import { useResolvedAssetUrl } from "./asset-url";
 
 function ExistingPhotoTile(props: {
@@ -154,35 +154,6 @@ export function VisitEditorScreen(props: {
                 }} />
               </label>
             )}
-            {otvEligible ? (
-              <div className="checkbox-with-help">
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={editor.note.noteType === "otv"}
-                    onChange={(event) =>
-                      props.onUpdate(
-                        (current) => ({
-                          ...current,
-                          note: {
-                            ...current.note,
-                            noteType: event.target.checked ? "otv" : "standard_treatment"
-                          }
-                        }),
-                        { regenerate: true, overwriteEdited: !props.textDirty }
-                      )
-                    }
-                  />
-                  OTV?
-                </label>
-                <span className="help-chip" tabIndex={0} aria-label="OTV help">
-                  ?
-                  <span className="help-popover">
-                    Uncheck if this should be a normal treatment visit instead of OTV, for example when the doctor is out of office.
-                  </span>
-                </span>
-              </div>
-            ) : null}
             {showPrescribedFractionsInput ? (
               <label>
                 Prescribed Fractions
@@ -266,28 +237,41 @@ export function VisitEditorScreen(props: {
           </label>
           {editor.note.noteType === "consult_sim" ? (
             <div className="form-grid">
-              <label>
-                Biopsy Date
-                <input
-                  type="date"
-                  value={editor.note.structuredFields.biopsyDate ?? ""}
-                  onChange={(event) =>
-                    props.onUpdate(
-                      (current) => ({
-                        ...current,
-                        note: {
-                          ...current.note,
-                          structuredFields: {
-                            ...current.note.structuredFields,
-                            biopsyDate: event.target.value
-                          }
-                        }
-                      }),
-                      { regenerate: true, overwriteEdited: !props.textDirty }
-                    )
-                  }
-                />
-              </label>
+              {editor.note.structuredFields.siteSnapshots.map((site, index) => (
+                <label key={`biopsy-date-${site.siteNumber}`}>
+                  {editor.note.structuredFields.siteSnapshots.length === 1
+                    ? "Biopsy Date"
+                    : `Biopsy Date Lesion ${index + 1}${site.bodyLocation ? ` (${site.bodyLocation})` : ""}`}
+                  <input
+                    type="date"
+                    value={site.biopsyDate || editor.note.structuredFields.biopsyDate || ""}
+                    onChange={(event) =>
+                      props.onUpdate(
+                        (current) => {
+                          const nextSiteSnapshots = current.note.structuredFields.siteSnapshots.map((snapshot) =>
+                            snapshot.siteNumber === site.siteNumber
+                              ? { ...snapshot, biopsyDate: event.target.value }
+                              : snapshot
+                          );
+                          return {
+                            ...current,
+                            note: {
+                              ...current.note,
+                              structuredFields: {
+                                ...current.note.structuredFields,
+                                biopsyDate:
+                                  nextSiteSnapshots[0]?.biopsyDate ?? current.note.structuredFields.biopsyDate,
+                                siteSnapshots: nextSiteSnapshots
+                              }
+                            }
+                          };
+                        },
+                        { regenerate: true, overwriteEdited: !props.textDirty }
+                      )
+                    }
+                  />
+                </label>
+              ))}
               <label>
                 Treatment Start Date
                 <input
@@ -378,9 +362,63 @@ export function VisitEditorScreen(props: {
                           : ""
                       }
                     }
-                  }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                  }), { regenerate: true, overwriteEdited: true })}
                 />
                 Ultrasound Performed
+              </label>
+            )}
+            {otvEligible ? (
+              <div className="checkbox-with-help">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={editor.note.noteType === "otv"}
+                    onChange={(event) =>
+                      props.onUpdate(
+                        (current) => ({
+                          ...current,
+                          note: {
+                            ...current.note,
+                            noteType: event.target.checked ? "otv" : "standard_treatment",
+                            structuredFields: {
+                              ...current.note.structuredFields,
+                              physicsComment: event.target.checked
+                                ? current.note.structuredFields.physicsComment?.trim() || getDefaultPhysicsComment("otv")
+                                : current.note.structuredFields.physicsComment
+                            }
+                          }
+                        }),
+                        { regenerate: true, overwriteEdited: true }
+                      )
+                    }
+                  />
+                  OTV?
+                </label>
+                <span className="help-chip" tabIndex={0} aria-label="OTV help">
+                  ?
+                  <span className="help-popover">
+                    Uncheck if this should be a normal treatment visit instead of OTV, for example when the doctor is out of office.
+                  </span>
+                </span>
+              </div>
+            ) : null}
+            {editor.note.noteType !== "consult_sim" && (
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={!!editor.note.structuredFields.finalTreatment}
+                  onChange={(event) => props.onUpdate((current) => ({
+                    ...current,
+                    note: {
+                      ...current.note,
+                      structuredFields: {
+                        ...current.note.structuredFields,
+                        finalTreatment: event.target.checked
+                      }
+                    }
+                  }), { regenerate: true, overwriteEdited: true })}
+                />
+                Final Treatment
               </label>
             )}
             <label className="checkbox-label">
@@ -396,7 +434,7 @@ export function VisitEditorScreen(props: {
                       addMips: event.target.checked
                     }
                   }
-                }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                }), { regenerate: true, overwriteEdited: true })}
               />
               Add MIPS
             </label>

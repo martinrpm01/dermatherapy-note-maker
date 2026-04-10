@@ -156,6 +156,7 @@ export interface SiteSnapshot {
   bodyLocation: string;
   treatmentLocationText: string;
   diagnosisText: string;
+  biopsyDate?: string;
   icd10: string;
   numberOfBlocks: number;
   lesionSize: string;
@@ -176,6 +177,7 @@ export interface SiteSnapshot {
 export interface VisitStructuredFields {
   chiefComplaint: string;
   additionalNotes: string;
+  finalTreatment: boolean;
   prescribedFractionsInput: number | null;
   biopsyDate: string;
   lastTreatmentDate: string;

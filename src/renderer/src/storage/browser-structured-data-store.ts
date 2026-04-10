@@ -94,6 +94,35 @@ function normalizeIdentityPart(value: string) {
   return value.trim().toLowerCase();
 }
 
+function formatMeasurement(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const normalized = trimmed.replace(/\s+/g, " ");
+  const mmMatch = normalized.match(/^(\d+(?:\.\d+)?)\s*mm$/i);
+  if (mmMatch) {
+    return `${mmMatch[1]}mm`;
+  }
+
+  const numericMatch = normalized.match(/^(\d+(?:\.\d+)?)$/);
+  if (numericMatch) {
+    return `${numericMatch[1]}mm`;
+  }
+
+  return normalized;
+}
+
+function normalizeIcd10(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  return `${trimmed.charAt(0).toUpperCase()}${trimmed.slice(1)}`;
+}
+
 function applyWhereClause<T extends object>(rows: T[], whereClause?: string, params: SqlValue[] = []) {
   if (!whereClause || whereClause.trim() === "" || whereClause.trim() === "1 = 1") {
     return rows;
@@ -351,9 +380,9 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
         bodyLocation: siteInput.bodyLocation,
         treatmentLocationText: siteInput.treatmentLocationText,
         diagnosisText: siteInput.diagnosisText,
-        icd10: siteInput.icd10,
+        icd10: normalizeIcd10(siteInput.icd10),
         numberOfBlocks: siteInput.numberOfBlocks,
-        lesionSize: siteInput.lesionSize,
+        lesionSize: formatMeasurement(siteInput.lesionSize),
         treatmentDepth: siteInput.treatmentDepth,
         coneSize: siteInput.coneSize,
         cutoutSize: siteInput.cutoutSize,

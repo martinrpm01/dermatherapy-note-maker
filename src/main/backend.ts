@@ -28,6 +28,7 @@ import {
   formatDisplayDate,
   getAutoNumberOfBlocks,
   getCurrentFraction,
+  getDefaultPhysicsComment,
   getNextTreatmentNumber,
   getSuggestedNoteType,
   getTemplateKey,
@@ -123,6 +124,15 @@ function formatMeasurement(value: string) {
   return normalized;
 }
 
+function normalizeIcd10(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  return `${trimmed.charAt(0).toUpperCase()}${trimmed.slice(1)}`;
+}
+
 function sanitizeNamePart(value: string) {
   return value
     .trim()
@@ -152,6 +162,101 @@ function getDefaultTreatmentDepth(value: string) {
 function buildAdditionalNotesSection(value: string) {
   const trimmed = value.trim();
   return trimmed ? `Additional Notes:\n${trimmed}\n` : "";
+}
+
+function buildFinalTreatmentSection(enabled: boolean) {
+  if (!enabled) {
+    return "";
+  }
+
+  return "Patient successfully completed the prescribed course of XRT. The planned total dose and number of fractions were delivered as prescribed. The patient tolerated treatment well. Post-treatment instructions were reviewed with and provided to the patient. Follow-up is planned in 6–8 weeks.\n";
+}
+
+function buildMipsSection(enabled: boolean) {
+  if (!enabled) {
+    return "";
+  }
+
+  return "MIPS:\nQuality measures have been documented for this encounter in accordance with Merit-based Incentive Payment System (MIPS) requirements.\n";
+}
+
+function injectFinalTreatmentSection(renderedText: string, finalTreatmentSection: string) {
+  const trimmedSection = finalTreatmentSection.trim();
+  if (!trimmedSection) {
+    return renderedText;
+  }
+
+  if (renderedText.includes(trimmedSection)) {
+    return renderedText;
+  }
+
+  if (!renderedText.includes("Follow Up:")) {
+    return renderedText;
+  }
+
+  return renderedText.replace("Follow Up:", `${trimmedSection}\n\nFollow Up:`);
+}
+
+function injectMipsSection(renderedText: string, mipsSection: string) {
+  const trimmedSection = mipsSection.trim();
+  if (!trimmedSection) {
+    return renderedText;
+  }
+
+  if (renderedText.includes(trimmedSection)) {
+    return renderedText;
+  }
+
+  for (const marker of ["Additional Notes:", "Patient successfully completed the prescribed course of XRT.", "Follow Up:", "Treatment Supervised by:"]) {
+    if (renderedText.includes(marker)) {
+      return renderedText.replace(marker, `${trimmedSection}\n\n${marker}`);
+    }
+  }
+
+  return `${renderedText}\n\n${trimmedSection}`;
+}
+
+function injectPhysicsConsultationDetails(renderedText: string, physicsComment: string, bodyLocations: string[]) {
+  const trimmedComment = physicsComment.trim();
+  if (!trimmedComment && bodyLocations.every((location) => !location.trim())) {
+    return renderedText;
+  }
+
+  const commentFirstLine = trimmedComment.split("\n")[0]?.trim() ?? "";
+  const lines = renderedText.split("\n");
+  let consultationIndex = 0;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!line.startsWith("Physics Consultation:")) {
+      continue;
+    }
+
+    const bodyLocation = bodyLocations[consultationIndex]?.trim() ?? "";
+    lines[index] = line.replace(/ for .+$/, "");
+    if (bodyLocation) {
+      const locationLine = `Location: ${bodyLocation}`;
+      const previousLine = (lines[index - 1] ?? "").trim();
+      if (previousLine.startsWith("Location:")) {
+        lines[index - 1] = locationLine;
+      } else {
+        lines.splice(index, 0, locationLine);
+        index += 1;
+      }
+    }
+
+    if (trimmedComment && commentFirstLine) {
+      const nextLine = (lines[index + 1] ?? "").trim();
+      if (nextLine !== commentFirstLine) {
+        lines.splice(index + 1, 0, trimmedComment);
+        index += trimmedComment.split("\n").length;
+      }
+    }
+
+    consultationIndex += 1;
+  }
+
+  return lines.join("\n");
 }
 
 function buildFlexShieldCutoutText(cutoutSize: string, coneSize: string) {
@@ -482,6 +587,8 @@ export class RadiationNoteService {
       ...input,
       sites: input.sites.map((site) => ({
         ...site,
+        icd10: normalizeIcd10(site.icd10),
+        lesionSize: formatMeasurement(site.lesionSize),
         cutoutSize: normalizeCutoutSizeLabel(site.cutoutSize),
         machine: getDefaultMachine(site.machine),
         treatmentDepth: getDefaultTreatmentDepth(site.treatmentDepth),
@@ -574,6 +681,10 @@ export class RadiationNoteService {
       biopsyDate: course.startDate,
       lastTreatmentDate: mostRecentVisitDate
     });
+    structuredFields.siteSnapshots = structuredFields.siteSnapshots.map((site) => ({
+      ...site,
+      biopsyDate: site.biopsyDate || course.startDate || ""
+    }));
     if (noteType !== "consult_sim" && course.prescribedFractions <= 0) {
       structuredFields.prescribedFractionsInput = course.prescribedFractions > 0 ? course.prescribedFractions : null;
     }
@@ -630,14 +741,19 @@ export class RadiationNoteService {
     const structuredFields = {
       ...input.structuredFields,
       additionalNotes: input.structuredFields.additionalNotes ?? "",
+      finalTreatment: Boolean(input.structuredFields.finalTreatment),
       prescribedFractionsInput: input.structuredFields.prescribedFractionsInput ?? null,
-      biopsyDate: input.structuredFields.biopsyDate ?? "",
+      biopsyDate: input.structuredFields.siteSnapshots[0]?.biopsyDate || input.structuredFields.biopsyDate || "",
       lastTreatmentDate: input.structuredFields.lastTreatmentDate ?? "",
+      physicsComment:
+        input.structuredFields.physicsComment?.trim() ||
+        getDefaultPhysicsComment(input.noteType),
       siteSnapshots: applyAutoNumberOfBlocks(
         input.noteType,
         input.structuredFields.siteSnapshots.map((snapshot) => ({
           ...snapshot,
-            cumulativeDose: snapshot.dailyDose * (input.treatmentNumber ?? 0)
+          biopsyDate: snapshot.biopsyDate || input.structuredFields.biopsyDate || "",
+          cumulativeDose: snapshot.dailyDose * (input.treatmentNumber ?? 0)
         })).map((snapshot) => ({ ...snapshot, cutoutSize: normalizeCutoutSizeLabel(snapshot.cutoutSize) }))
       )
     };
@@ -948,12 +1064,22 @@ export class RadiationNoteService {
         structuredFields: {
           ...visit.structuredFields,
           additionalNotes: visit.structuredFields.additionalNotes ?? "",
+          finalTreatment: Boolean(visit.structuredFields.finalTreatment),
           prescribedFractionsInput:
             visit.structuredFields.prescribedFractionsInput ??
             (visit.noteType !== "consult_sim" && course.prescribedFractions > 0 ? course.prescribedFractions : null),
           biopsyDate: visit.structuredFields.biopsyDate ?? course.startDate ?? "",
           lastTreatmentDate: visit.structuredFields.lastTreatmentDate ?? course.startDate ?? "",
-          siteSnapshots: applyAutoNumberOfBlocks(visit.noteType, visit.structuredFields.siteSnapshots)
+          physicsComment:
+            visit.structuredFields.physicsComment?.trim() ||
+            getDefaultPhysicsComment(visit.noteType),
+          siteSnapshots: applyAutoNumberOfBlocks(
+            visit.noteType,
+            visit.structuredFields.siteSnapshots.map((site) => ({
+              ...site,
+              biopsyDate: site.biopsyDate || visit.structuredFields.biopsyDate || course.startDate || ""
+            }))
+          )
         },
         generatedText: visit.generatedText,
         editedText: visit.editedText,
@@ -1004,6 +1130,7 @@ export class RadiationNoteService {
     const site2 = normalizedSites.find((site) => site.siteNumber === 2) || emptySite(2);
     const site1Render = {
       ...site1,
+      biopsyDate: formatDisplayDate(site1.biopsyDate || note.structuredFields.biopsyDate),
       cutoutSize: normalizeCutoutSizeLabel(site1.cutoutSize),
       shields: buildShieldSummary(site1.shields, site1.additionalDevices),
       machine: getDefaultMachine(site1.machine),
@@ -1019,6 +1146,7 @@ export class RadiationNoteService {
     };
     const site2Render = {
       ...site2,
+      biopsyDate: formatDisplayDate(site2.biopsyDate || note.structuredFields.biopsyDate),
       cutoutSize: normalizeCutoutSizeLabel(site2.cutoutSize),
       shields: buildShieldSummary(site2.shields, site2.additionalDevices),
       machine: getDefaultMachine(site2.machine),
@@ -1033,7 +1161,10 @@ export class RadiationNoteService {
       additionalDevices: formatAdditionalDevices(site2.additionalDevices)
     };
 
-    return renderTemplate(template.templateText, {
+    const finalTreatmentSection = buildFinalTreatmentSection(note.structuredFields.finalTreatment);
+    const mipsSection = buildMipsSection(note.structuredFields.addMips);
+
+    const renderedText = renderTemplate(template.templateText, {
       patient: {
         fullName: `${patient.firstName} ${patient.lastName}`.trim(),
         mrn: patient.mrn,
@@ -1061,11 +1192,24 @@ export class RadiationNoteService {
       structured: {
         ...note.structuredFields,
         additionalNotesSection: buildAdditionalNotesSection(note.structuredFields.additionalNotes),
+        finalTreatmentSection,
+        mipsSection,
         startRadiationDate: formatDisplayDate(note.structuredFields.startRadiationDate),
         biopsyDate: formatDisplayDate(note.structuredFields.biopsyDate),
         lastTreatmentDate: formatDisplayDate(note.structuredFields.lastTreatmentDate)
       }
     });
+
+    return injectFinalTreatmentSection(
+      injectMipsSection(
+        injectPhysicsConsultationDetails(renderedText, note.structuredFields.physicsComment, [
+          site1Render.bodyLocation,
+          site2Render.bodyLocation
+        ]),
+        mipsSection
+      ),
+      finalTreatmentSection
+    );
   }
 
   private buildVisitPhotoBaseName(note: VisitInput) {

@@ -7,6 +7,7 @@ import {
   formatAdditionalDevices,
   formatDisplayDate,
   getAutoNumberOfBlocks,
+  getDefaultPhysicsComment,
   normalizeCutoutSizeLabel
 } from "../../shared/note-rules";
 import { renderTemplate } from "../../shared/template-engine";
@@ -55,6 +56,101 @@ function getDefaultMachine(value: string) {
 
 function getDefaultTreatmentDepth(value: string) {
   return value.trim() || DEFAULT_TREATMENT_DEPTH;
+}
+
+function buildFinalTreatmentSection(enabled: boolean) {
+  if (!enabled) {
+    return "";
+  }
+
+  return "Patient successfully completed the prescribed course of XRT. The planned total dose and number of fractions were delivered as prescribed. The patient tolerated treatment well. Post-treatment instructions were reviewed with and provided to the patient. Follow-up is planned in 6–8 weeks.\n";
+}
+
+function buildMipsSection(enabled: boolean) {
+  if (!enabled) {
+    return "";
+  }
+
+  return "MIPS:\nQuality measures have been documented for this encounter in accordance with Merit-based Incentive Payment System (MIPS) requirements.\n";
+}
+
+function injectFinalTreatmentSection(renderedText: string, finalTreatmentSection: string) {
+  const trimmedSection = finalTreatmentSection.trim();
+  if (!trimmedSection) {
+    return renderedText;
+  }
+
+  if (renderedText.includes(trimmedSection)) {
+    return renderedText;
+  }
+
+  if (!renderedText.includes("Follow Up:")) {
+    return renderedText;
+  }
+
+  return renderedText.replace("Follow Up:", `${trimmedSection}\n\nFollow Up:`);
+}
+
+function injectMipsSection(renderedText: string, mipsSection: string) {
+  const trimmedSection = mipsSection.trim();
+  if (!trimmedSection) {
+    return renderedText;
+  }
+
+  if (renderedText.includes(trimmedSection)) {
+    return renderedText;
+  }
+
+  for (const marker of ["Additional Notes:", "Patient successfully completed the prescribed course of XRT.", "Follow Up:", "Treatment Supervised by:"]) {
+    if (renderedText.includes(marker)) {
+      return renderedText.replace(marker, `${trimmedSection}\n\n${marker}`);
+    }
+  }
+
+  return `${renderedText}\n\n${trimmedSection}`;
+}
+
+function injectPhysicsConsultationDetails(renderedText: string, physicsComment: string, bodyLocations: string[]) {
+  const trimmedComment = physicsComment.trim();
+  if (!trimmedComment && bodyLocations.every((location) => !location.trim())) {
+    return renderedText;
+  }
+
+  const commentFirstLine = trimmedComment.split("\n")[0]?.trim() ?? "";
+  const lines = renderedText.split("\n");
+  let consultationIndex = 0;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!line.startsWith("Physics Consultation:")) {
+      continue;
+    }
+
+    const bodyLocation = bodyLocations[consultationIndex]?.trim() ?? "";
+    lines[index] = line.replace(/ for .+$/, "");
+    if (bodyLocation) {
+      const locationLine = `Location: ${bodyLocation}`;
+      const previousLine = (lines[index - 1] ?? "").trim();
+      if (previousLine.startsWith("Location:")) {
+        lines[index - 1] = locationLine;
+      } else {
+        lines.splice(index, 0, locationLine);
+        index += 1;
+      }
+    }
+
+    if (trimmedComment && commentFirstLine) {
+      const nextLine = (lines[index + 1] ?? "").trim();
+      if (nextLine !== commentFirstLine) {
+        lines.splice(index + 1, 0, trimmedComment);
+        index += trimmedComment.split("\n").length;
+      }
+    }
+
+    consultationIndex += 1;
+  }
+
+  return lines.join("\n");
 }
 
 function buildFlexShieldCutoutText(cutoutSize: string, coneSize: string) {
@@ -132,6 +228,7 @@ export function buildVisitPreviewText(
   const site2Base = normalizedSites.find((site) => site.siteNumber === 2) || emptySite(2);
   const site1 = {
     ...site1Base,
+    biopsyDate: formatDisplayDate(site1Base.biopsyDate || note.structuredFields.biopsyDate),
     prescribedFractions: site1Base.prescribedFractions ?? course.prescribedFractions,
     cutoutSize: normalizeCutoutSizeLabel(site1Base.cutoutSize),
     shields: buildShieldSummary(site1Base.shields, site1Base.additionalDevices),
@@ -148,6 +245,7 @@ export function buildVisitPreviewText(
     };
   const site2 = {
     ...site2Base,
+    biopsyDate: formatDisplayDate(site2Base.biopsyDate || note.structuredFields.biopsyDate),
     prescribedFractions: site2Base.prescribedFractions ?? course.prescribedFractions,
     cutoutSize: normalizeCutoutSizeLabel(site2Base.cutoutSize),
     shields: buildShieldSummary(site2Base.shields, site2Base.additionalDevices),
@@ -163,7 +261,10 @@ export function buildVisitPreviewText(
       additionalDevices: formatAdditionalDevices(site2Base.additionalDevices)
     };
 
-  return renderTemplate(template.templateText, {
+  const finalTreatmentSection = buildFinalTreatmentSection(!!note.structuredFields.finalTreatment);
+  const mipsSection = buildMipsSection(!!note.structuredFields.addMips);
+
+  const renderedText = renderTemplate(template.templateText, {
     patient: {
       fullName: `${patient.firstName} ${patient.lastName}`.trim(),
       mrn: patient.mrn,
@@ -192,14 +293,24 @@ export function buildVisitPreviewText(
       additionalNotesSection: note.structuredFields.additionalNotes.trim()
         ? `Additional Notes:\n${note.structuredFields.additionalNotes.trim()}\n`
         : "",
+      finalTreatmentSection,
+      mipsSection,
       startRadiationDate: formatDisplayDate(note.structuredFields.startRadiationDate),
       biopsyDate: formatDisplayDate(note.structuredFields.biopsyDate),
       lastTreatmentDate: formatDisplayDate(note.structuredFields.lastTreatmentDate),
-      mipsSection: note.structuredFields.addMips
-        ? "MIPS:\nQuality measures have been documented for this encounter in accordance with Merit-based Incentive Payment System (MIPS) requirements."
-        : ""
     }
   });
+
+  return injectFinalTreatmentSection(
+    injectMipsSection(
+      injectPhysicsConsultationDetails(renderedText, note.structuredFields.physicsComment?.trim() || getDefaultPhysicsComment(note.noteType), [
+        site1.bodyLocation,
+        site2.bodyLocation
+      ]),
+      mipsSection
+    ),
+    finalTreatmentSection
+  );
 }
 
 export function createEmptyPatientForm(): PatientInput {

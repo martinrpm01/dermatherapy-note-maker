@@ -823,20 +823,18 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
             onSearchChange={setDashboardSearch}
             onAddPatient={() => setPatientForm(createEmptyPatientForm())}
             onOpenPatient={(patientId) => setScreen({ name: "patient", patientId })}
+            onArchivePatient={(patientId) => void (async () => {
+              if (!appClient) return;
+              await appClient.archivePatient(patientId);
+              await refreshWorkflowSnapshots();
+              showToast("Patient moved to Archive.");
+            })()}
             onOpenVisit={(courseId, mode) => setScreen({ name: "visit", courseId, mode })}
             onRestoreArchivedPatient={(patientId) => void (async () => {
               if (!appClient) return;
               await appClient.restorePatient(patientId);
               await refreshWorkflowSnapshots();
               showToast("Patient restored to active workflow.");
-            })()}
-            onCompletePatient={(patientId) => void (async () => {
-              if (!appClient) return;
-              const detail = await appClient.getPatientDetail(patientId);
-              const activeCourses = detail.courses.filter((cd) => cd.course.status === "active");
-              await Promise.all(activeCourses.map((cd) => appClient.completeCourse(cd.course.id)));
-              await refreshWorkflowSnapshots();
-              showToast("Patient moved to Completed.");
             })()}
           />
         ) : null}
@@ -854,15 +852,6 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
               }
               setCourseForm(createCourseFormFromDetail(targetCourse));
             }}
-            onCompletePatient={() => void (async () => {
-              if (!appClient) return;
-              const activeCourses = patientDetail.courses.filter((cd) => cd.course.status === "active");
-              await Promise.all(activeCourses.map((cd) => appClient.completeCourse(cd.course.id)));
-              await loadDashboard();
-              await loadCompleted();
-              setScreen({ name: "completed" });
-              showToast("Patient moved to Completed.");
-            })()}
             onArchivePatient={() => void (async () => {
               if (!appClient) return;
               await appClient.archivePatient(patientDetail.patient.id);

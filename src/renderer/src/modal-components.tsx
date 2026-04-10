@@ -8,6 +8,35 @@ const TOTAL_DOSE_PRESETS = [4000, 4200];
 const DEPTH_OPTIONS = ["3", "4", "5"];
 const DEVICE_OPTIONS = ["Eye Shield", "Ear Shield"];
 
+function normalizeIcd10Input(value: string) {
+  const trimmedStart = value.replace(/^\s+/, "");
+  if (!trimmedStart) {
+    return "";
+  }
+
+  return `${trimmedStart.charAt(0).toUpperCase()}${trimmedStart.slice(1)}`;
+}
+
+function normalizeMeasurementInput(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const normalized = trimmed.replace(/\s+/g, " ");
+  const mmMatch = normalized.match(/^(\d+(?:\.\d+)?)\s*mm$/i);
+  if (mmMatch) {
+    return `${mmMatch[1]}mm`;
+  }
+
+  const numericMatch = normalized.match(/^(\d+(?:\.\d+)?)$/);
+  if (numericMatch) {
+    return `${numericMatch[1]}mm`;
+  }
+
+  return normalized;
+}
+
 function selectValue(value: number, presets: number[]): string {
   return presets.includes(value) ? String(value) : "other";
 }
@@ -308,7 +337,11 @@ export function CourseModal(props: {
                 </label>
                 <label>
                   ICD10
-                  <input placeholder="ICD10" value={site.icd10} onChange={(event) => updateSite(index, { icd10: event.target.value })} />
+                  <input
+                    placeholder="ICD10"
+                    value={site.icd10}
+                    onChange={(event) => updateSite(index, { icd10: normalizeIcd10Input(event.target.value) })}
+                  />
                 </label>
               </div>
               <div className="form-grid">
@@ -342,7 +375,12 @@ export function CourseModal(props: {
                 </label>
                 <label>
                   Lesion Size (mm)
-                  <input placeholder="e.g. 10mm" value={site.lesionSize} onChange={(event) => updateSite(index, { lesionSize: event.target.value })} />
+                  <input
+                    placeholder="e.g. 10mm"
+                    value={site.lesionSize}
+                    onChange={(event) => updateSite(index, { lesionSize: event.target.value })}
+                    onBlur={(event) => updateSite(index, { lesionSize: normalizeMeasurementInput(event.target.value) })}
+                  />
                 </label>
                 <label>
                   Treatment Depth
@@ -476,4 +514,3 @@ export function CourseModal(props: {
     </div>
   );
 }
-

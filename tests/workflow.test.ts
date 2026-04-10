@@ -75,6 +75,66 @@ async function createPatientAndCourse() {
   return { patient, course };
 }
 
+async function createTwoSitePatientAndCourse() {
+  const patient = service.savePatient({
+    firstName: "Nora",
+    lastName: "Dual",
+    mrn: "MRN-2002",
+    dob: "1968-11-09",
+    notes: "Two lesion consult."
+  });
+
+  const course = service.saveCourse({
+    patientId: patient.id,
+    courseName: "Dual Lesion Course",
+    courseType: "two_site",
+    prescribedFractions: 0,
+    startDate: "2026-04-01",
+    sites: [
+      {
+        siteNumber: 1,
+        bodyLocation: "Left cheek",
+        treatmentLocationText: "Left medial malar cheek",
+        diagnosisText: "Basal cell carcinoma",
+        icd10: "C44.319",
+        numberOfBlocks: 1,
+        lesionSize: "8mm",
+        treatmentDepth: "3",
+        coneSize: "20",
+        cutoutSize: "10",
+        shields: "",
+        machine: "Xoft Elekta 1200 SPX",
+        energyKv: "50kV",
+        treatmentInterval: "bi-weekly",
+        additionalDevices: "",
+        dailyDose: 400,
+        totalDose: 4000
+      },
+      {
+        siteNumber: 2,
+        bodyLocation: "Right ear",
+        treatmentLocationText: "Right post auricular skin",
+        diagnosisText: "Squamous cell carcinoma",
+        icd10: "C44.222",
+        numberOfBlocks: 1,
+        lesionSize: "10mm",
+        treatmentDepth: "3",
+        coneSize: "20",
+        cutoutSize: "12",
+        shields: "",
+        machine: "Xoft Elekta 1200 SPX",
+        energyKv: "50kV",
+        treatmentInterval: "bi-weekly",
+        additionalDevices: "",
+        dailyDose: 400,
+        totalDose: 4000
+      }
+    ]
+  });
+
+  return { patient, course };
+}
+
 describe("RadiationNoteService workflow", () => {
   it("generates a desktop recovery code during initial PIN setup and reissues one after recovery reset", async () => {
     const recoveryCode = await service.setInitialPin("1234");
@@ -550,7 +610,7 @@ describe("RadiationNoteService workflow", () => {
 
     const otvDraft = service.buildVisitDraft(course.id, "next_treatment");
     expect(otvDraft.note.noteType).toBe("otv");
-    expect(otvDraft.note.generatedText).toContain("Physics Consultation: Fraction Number: 5 of 15");
+    expect(otvDraft.note.generatedText).toContain("Plan: Radiation Physics Consultation.\nLocation: Nasal bridge\nPhysics Consultation: Fraction Number: 5 of 15");
     expect(otvDraft.note.generatedText).toContain(
       "In accordance with the standard of care for radiotherapy treatment"
     );
@@ -591,6 +651,7 @@ describe("RadiationNoteService workflow", () => {
 
     const consultDraft = service.buildVisitDraft(course.id, "consult_sim");
     consultDraft.note.structuredFields.biopsyDate = "2026-03-15";
+    consultDraft.note.structuredFields.siteSnapshots[0].biopsyDate = "2026-03-15";
     consultDraft.note.generatedText = "";
     consultDraft.note.editedText = "";
     const savedConsult = service.saveVisit(consultDraft.note);
@@ -609,6 +670,28 @@ describe("RadiationNoteService workflow", () => {
     nextTreatmentDraft.note.editedText = "";
     const savedNextTreatment = service.saveVisit(nextTreatmentDraft.note);
     expect(savedNextTreatment.generatedText).toContain("Patient was last seen on 04/08/2026 for XRT treatment.");
+  });
+
+  it("renders separate biopsy dates for two-site consult notes", async () => {
+    const { course } = await createTwoSitePatientAndCourse();
+
+    const consultDraft = service.buildVisitDraft(course.id, "consult_sim");
+    consultDraft.note.structuredFields.siteSnapshots = consultDraft.note.structuredFields.siteSnapshots.map((site) =>
+      site.siteNumber === 1
+        ? { ...site, biopsyDate: "2026-04-01" }
+        : { ...site, biopsyDate: "2026-04-05" }
+    );
+    consultDraft.note.structuredFields.biopsyDate = "2026-04-01";
+    consultDraft.note.generatedText = "";
+    consultDraft.note.editedText = "";
+
+    const savedConsult = service.saveVisit(consultDraft.note);
+    expect(savedConsult.generatedText).toContain(
+      "1. is following up for Basal cell carcinoma on the Left cheek. Biopsy date: 04/01/2026."
+    );
+    expect(savedConsult.generatedText).toContain(
+      "2. is following up for Squamous cell carcinoma on the Right ear. Biopsy date: 04/05/2026."
+    );
   });
 
   it("only includes additional notes when provided and places them above follow up", async () => {

@@ -250,9 +250,15 @@ export class BrowserAppClient implements AppClient {
           prescribedFractionsInput:
             visit.structuredFields.prescribedFractionsInput ??
             (visit.noteType !== "consult_sim" && course.prescribedFractions > 0 ? course.prescribedFractions : null),
-          biopsyDate: visit.structuredFields.biopsyDate ?? course.startDate ?? "",
+          biopsyDate: visit.structuredFields.biopsyDate || course.startDate || "",
           lastTreatmentDate: visit.structuredFields.lastTreatmentDate ?? course.startDate ?? "",
-          siteSnapshots: applyAutoNumberOfBlocks(visit.noteType, visit.structuredFields.siteSnapshots)
+          siteSnapshots: applyAutoNumberOfBlocks(
+            visit.noteType,
+            visit.structuredFields.siteSnapshots.map((site) => ({
+              ...site,
+              biopsyDate: site.biopsyDate || visit.structuredFields.biopsyDate || course.startDate || ""
+            }))
+          )
         },
         generatedText: visit.generatedText,
         editedText: visit.editedText,
@@ -849,6 +855,10 @@ export class BrowserAppClient implements AppClient {
       biopsyDate: course.startDate,
       lastTreatmentDate: mostRecentVisitDate
     });
+    structuredFields.siteSnapshots = structuredFields.siteSnapshots.map((site) => ({
+      ...site,
+      biopsyDate: site.biopsyDate || course.startDate || ""
+    }));
     if (noteType !== "consult_sim" && course.prescribedFractions <= 0) {
       structuredFields.prescribedFractionsInput = course.prescribedFractions > 0 ? course.prescribedFractions : null;
     }
@@ -911,13 +921,14 @@ export class BrowserAppClient implements AppClient {
       ...input.structuredFields,
       additionalNotes: input.structuredFields.additionalNotes ?? "",
       prescribedFractionsInput: input.structuredFields.prescribedFractionsInput ?? null,
-      biopsyDate: input.structuredFields.biopsyDate ?? "",
+      biopsyDate: input.structuredFields.siteSnapshots[0]?.biopsyDate || input.structuredFields.biopsyDate || "",
       lastTreatmentDate: input.structuredFields.lastTreatmentDate ?? "",
       siteSnapshots: applyAutoNumberOfBlocks(
         input.noteType,
         input.structuredFields.siteSnapshots
           .map((snapshot) => ({
             ...snapshot,
+            biopsyDate: snapshot.biopsyDate || input.structuredFields.biopsyDate || "",
             cumulativeDose: snapshot.dailyDose * (input.treatmentNumber ?? 0)
           }))
           .map((snapshot) => ({ ...snapshot, cutoutSize: normalizeCutoutSizeLabel(snapshot.cutoutSize) }))
