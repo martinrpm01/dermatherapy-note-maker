@@ -141,6 +141,8 @@ Time was spent by the physician and radiation therapist assessing and managing t
 
 The patient will undergo radiation therapy treatment for non-melanoma skin cancer. A simulation was medically necessary to measure the lesion and to determine the appropriate flex-shield blocking to assure adequate coverage of the target lesion while sparing normal tissue. On today's visit, following informed consent, the treatment field was demarcated, and depth measurements were performed for the radiation therapy treatment plan. Multiple clinical setup photographs were taken which will be used for the development of the prescription and treatment plan. All relevant information specifically regarding this patient's superficial skin lesion will be reviewed by a Board-Certified Radiation Oncologist, who will provide me with an advisory opinion as to treatment dose, number of fractions/ treatments, and treatment depth. I will consider his recommendation, along with all other aspects of this patient's condition, including patient's treatment preference, other comorbidities, and move forward with this patient's care.
 
+This plan will be the initial intent for treatment. The final approved plan will be determined based on what is clinically acceptable and technically feasible and reflected in the approved prescription.
+
 The following treatment devices and target prescriptions were utilized pending radiation oncologist and medical physics review:
 
 1. {{site1.diagnosisText}} ({{site1.icd10}})
@@ -474,11 +476,14 @@ Heart Rate: {{vitals.heartRate}}
 Oxygen Saturation: {{vitals.oxygenSaturation}}
 Weight: {{vitals.weight}}
 
+Impression / Plan:
 The patient has decided to proceed with radiation treatment instead of surgery due to concerns with scarring, healing, and closure.
 
 Time was spent by the physician and radiation therapist assessing and managing the patient on the date of the encounter doing the following: preparing to see the patient (eg: review of tests), obtaining and/or reviewing separately obtained history, performing a medically appropriate examination and/or evaluation, counseling and educating the patient/family/caregiver, ordering medications, tests, or procedures, referring and communicating with other health care professionals, documenting clinical information in the electronic or other health record, and care coordination.
 
 The patient will undergo radiation therapy treatment for non-melanoma skin cancer. A simulation was medically necessary to measure the lesion and to determine the appropriate flex-shield blocking to assure adequate coverage of the target lesion while sparing normal tissue. On today's visit, following informed consent, the treatment field was demarcated, and depth measurements were performed for the radiation therapy treatment plan. Multiple clinical setup photographs were taken which will be used for the development of the prescription and treatment plan. All relevant information specifically regarding this patient's superficial skin lesion will be reviewed by a Board-Certified Radiation Oncologist, who will provide me with an advisory opinion as to treatment dose, number of fractions/ treatments, and treatment depth. I will consider his recommendation, along with all other aspects of this patient's condition, including patient's treatment preference, other comorbidities, and move forward with this patient's care.
+
+This plan will be the initial intent for treatment. The final approved plan will be determined based on what is clinically acceptable and technically feasible and reflected in the approved prescription.
 
 The following treatment devices and target prescriptions were utilized pending radiation oncologist and medical physics review:
 
@@ -488,7 +493,7 @@ Appropriately healing biopsy site distributed on the {{site1.bodyLocation}}.
 Plan: Therapeutic Radiation Simulation.
 Number of Treatment Areas: 1
 Number of Blocks: {{site1.numberOfBlocks}}
-Type of Block: Complex
+Type of Blocks: Complex
 {{site1.simulationComplicationsLine}}
 Applicator: {{site1.coneSizeDisplay}}
 Flex Shield (Cutout Used): {{site1.cutoutSizeDisplay}}
@@ -526,7 +531,7 @@ Appropriately healing biopsy site distributed on the {{site2.bodyLocation}}.
 Plan: Therapeutic Radiation Simulation.
 Number of Treatment Areas: 1
 Number of Blocks: {{site2.numberOfBlocks}}
-Type of Block: Complex
+Type of Blocks: Complex
 {{site2.simulationComplicationsLine}}
 Applicator: {{site2.coneSizeDisplay}}
 Flex Shield (Cutout Used): {{site2.cutoutSizeDisplay}}

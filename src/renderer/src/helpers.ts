@@ -63,7 +63,7 @@ function buildFinalTreatmentSection(enabled: boolean) {
     return "";
   }
 
-  return "Patient successfully completed the prescribed course of XRT. The planned total dose and number of fractions were delivered as prescribed. The patient tolerated treatment well. Post-treatment instructions were reviewed with and provided to the patient. Follow-up is planned in 6–8 weeks.\n";
+  return "Patient successfully completed the prescribed course of radiation therapy. The total dose and number of fractions were delivered as planned. The patient tolerated treatment well. Post treatment instructions were provided to the patient, with follow up to occur in 4-8 weeks.\n";
 }
 
 function buildMipsSection(enabled: boolean) {
@@ -101,7 +101,7 @@ function injectMipsSection(renderedText: string, mipsSection: string) {
     return renderedText;
   }
 
-  for (const marker of ["Additional Notes:", "Patient successfully completed the prescribed course of XRT.", "Follow Up:", "Treatment Supervised by:"]) {
+  for (const marker of ["Additional Notes:", "Patient successfully completed the prescribed course of radiation therapy.", "Follow Up:", "Treatment Supervised by:"]) {
     if (renderedText.includes(marker)) {
       return renderedText.replace(marker, `${trimmedSection}\n\n${marker}`);
     }
