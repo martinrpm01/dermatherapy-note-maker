@@ -1184,6 +1184,56 @@ describe("RadiationNoteService workflow", () => {
     expect(path.basename(consultPdfPath)).toContain("ava-derm-consult-note");
   });
 
+  it("refreshes reopened draft notes after course edits so regenerated text stays current", async () => {
+    const { patient, course } = await createPatientAndCourse();
+    const originalSite = repository.fetchSites([course.id])[0];
+
+    service.saveCourse({
+      id: course.id,
+      patientId: patient.id,
+      courseName: course.courseName,
+      courseType: course.courseType,
+      prescribedFractions: course.prescribedFractions,
+      startDate: course.startDate,
+      endDate: course.endDate,
+      status: course.status,
+      sites: [
+        {
+          ...originalSite,
+          additionalDevices: ""
+        }
+      ]
+    });
+
+    const consultDraft = service.buildVisitDraft(course.id, "consult_sim");
+    const savedConsult = service.saveVisit(consultDraft.note);
+    expect(savedConsult.generatedText).not.toContain("Additional Treatment Devices: Eye Shield");
+
+    service.saveCourse({
+      id: course.id,
+      patientId: patient.id,
+      courseName: course.courseName,
+      courseType: course.courseType,
+      prescribedFractions: course.prescribedFractions,
+      startDate: course.startDate,
+      endDate: course.endDate,
+      status: course.status,
+      sites: [
+        {
+          ...originalSite,
+          additionalDevices: "Eye Shield"
+        }
+      ]
+    });
+
+    const reopened = service.buildVisitDraft(course.id, "consult_sim", savedConsult.id);
+    expect(reopened.note.generatedText).toContain("Additional Treatment Devices: Eye Shield");
+    expect(reopened.note.editedText).toContain("Additional Treatment Devices: Eye Shield");
+
+    const resaved = service.saveVisit(reopened.note);
+    expect(resaved.generatedText).toContain("Additional Treatment Devices: Eye Shield");
+  });
+
   it("keeps remembered options hidden and allows a dermatology logo override with default fallback", async () => {
     const initialSettings = service.getSettingsPayload();
     expect(initialSettings.savedOptions).toHaveLength(0);

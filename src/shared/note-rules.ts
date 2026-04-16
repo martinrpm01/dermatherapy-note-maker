@@ -45,10 +45,10 @@ export const WORKSHEET_POSITION_OPTIONS = [
   "Hunched Over Tx Couch"
 ] as const;
 export const WORKSHEET_SIDE_OPTIONS = ["Left", "Right", "Medial"] as const;
-export const VAC_LOK_AREA_OPTIONS = ["Head", "Leg", "Arm", "Hand", "Foot", "Ear", "Chest", "Back", "NA"] as const;
-export const EYE_SHIELD_TYPE_OPTIONS = ["None", "External", "Internal"] as const;
-export const GUM_SHIELD_POSITION_OPTIONS = ["None", "Upper", "Lower"] as const;
-export const LIP_SHIELD_POSITION_OPTIONS = ["None", "Upper", "Lower"] as const;
+export const VAC_LOK_AREA_OPTIONS = ["Head", "Leg", "Arm", "Hand", "Foot", "Ear", "Chest", "Back"] as const;
+export const EYE_SHIELD_TYPE_OPTIONS = ["External", "Internal"] as const;
+export const GUM_SHIELD_POSITION_OPTIONS = ["Upper", "Lower"] as const;
+export const LIP_SHIELD_POSITION_OPTIONS = ["Upper", "Lower"] as const;
 
 export function clampTreatmentNumber(value: number | null): number | null {
   if (value === null || Number.isNaN(value)) {
@@ -156,6 +156,38 @@ export function normalizeVacLokPlacement(additionalDevices: string, worksheetPos
   };
 }
 
+export function normalizeWorksheetDetailValue(value: string | null | undefined): string {
+  const trimmed = (value ?? "").trim();
+  return normalizeOptionValue(trimmed) === "none" ? "" : trimmed;
+}
+
+export function normalizeVacLokAreaValue(value: string | null | undefined): string {
+  const trimmed = (value ?? "").trim();
+  const normalized = normalizeOptionValue(trimmed);
+  return normalized === "na" || normalized === "n/a" || normalized === "none" ? "" : trimmed;
+}
+
+export function normalizeWorksheetDeviceDetailsForSite<
+  T extends Pick<
+    SiteSnapshot,
+    "additionalDevices" | "worksheetEyeShieldType" | "worksheetGumShieldPosition" | "worksheetLipShieldPosition"
+  >
+>(site: T) {
+  const devices = parseAdditionalDevices(site.additionalDevices);
+  const hasDevice = (device: string) =>
+    devices.some((value) => normalizeOptionValue(value) === normalizeOptionValue(device));
+
+  return {
+    worksheetEyeShieldType: hasDevice("Eye Shield") ? normalizeWorksheetDetailValue(site.worksheetEyeShieldType) : "",
+    worksheetGumShieldPosition: hasDevice("Gum Shield")
+      ? normalizeWorksheetDetailValue(site.worksheetGumShieldPosition)
+      : "",
+    worksheetLipShieldPosition: hasDevice("Lip Shield")
+      ? normalizeWorksheetDetailValue(site.worksheetLipShieldPosition)
+      : ""
+  };
+}
+
 export function siteHasVacLok(site: Pick<SiteSnapshot, "additionalDevices" | "worksheetPositioning">): boolean {
   return (
     hasNormalizedSelection(parseWorksheetSelection(site.worksheetPositioning), "Vac-Lok") ||
@@ -178,17 +210,21 @@ export function formatAdditionalDevicesForSite(site: Pick<
     return "None";
   }
 
+  const eyeShieldType = normalizeWorksheetDetailValue(site.worksheetEyeShieldType);
+  const gumShieldPosition = normalizeWorksheetDetailValue(site.worksheetGumShieldPosition);
+  const lipShieldPosition = normalizeWorksheetDetailValue(site.worksheetLipShieldPosition);
+
   return devices
     .map((device) => {
       const normalized = normalizeOptionValue(device);
-      if (normalized === "eye shield" && site.worksheetEyeShieldType && site.worksheetEyeShieldType !== "None") {
-        return `Eye Shield - ${site.worksheetEyeShieldType}`;
+      if (normalized === "eye shield" && eyeShieldType) {
+        return `Eye Shield - ${eyeShieldType}`;
       }
-      if (normalized === "gum shield" && site.worksheetGumShieldPosition && site.worksheetGumShieldPosition !== "None") {
-        return `Gum Shield - ${site.worksheetGumShieldPosition}`;
+      if (normalized === "gum shield" && gumShieldPosition) {
+        return `Gum Shield - ${gumShieldPosition}`;
       }
-      if (normalized === "lip shield" && site.worksheetLipShieldPosition && site.worksheetLipShieldPosition !== "None") {
-        return `Lip Shield - ${site.worksheetLipShieldPosition}`;
+      if (normalized === "lip shield" && lipShieldPosition) {
+        return `Lip Shield - ${lipShieldPosition}`;
       }
       if (!DEVICE_OPTIONS.some((option) => normalizeOptionValue(option) === normalized)) {
         return `Custom Shield - ${device}`;
@@ -437,12 +473,57 @@ export function buildSiteSnapshots(
     prescribedFractions?: number;
   }>,
   treatmentNumber: number | null
-): SiteSnapshot[] {
+  ): SiteSnapshot[] {
   return sites.map((site) => ({
     ...site,
     biopsyDate: "",
     cumulativeDose: calculateCumulativeDose(site.dailyDose, treatmentNumber)
   }));
+}
+
+export function refreshVisitSiteSnapshots(
+  noteType: NoteType,
+  sites: Array<{
+    siteNumber: 1 | 2;
+    bodyLocation: string;
+    treatmentLocationText: string;
+    diagnosisText: string;
+    icd10: string;
+    numberOfBlocks: number;
+    lesionSize: string;
+    treatmentDepth: string;
+    coneSize: string;
+    cutoutSize: string;
+    shields: string;
+    machine: string;
+    energyKv: string;
+    treatmentInterval: string;
+    additionalDevices: string;
+    worksheetSide: string;
+    worksheetPositioning: string;
+    worksheetVacLokArea: string;
+    worksheetEyeShieldType: string;
+    worksheetGumShieldPosition: string;
+    worksheetLipShieldPosition: string;
+    dailyDose: number;
+    totalDose: number;
+    prescribedFractions?: number;
+  }>,
+  treatmentNumber: number | null,
+  existingSiteSnapshots: SiteSnapshot[],
+  fallbackBiopsyDate = ""
+): SiteSnapshot[] {
+  const latestSnapshots = buildSiteSnapshots(sites, treatmentNumber);
+  return applyAutoNumberOfBlocks(
+    noteType,
+    latestSnapshots.map((site) => {
+      const existingSnapshot = existingSiteSnapshots.find((snapshot) => snapshot.siteNumber === site.siteNumber);
+      return {
+        ...site,
+        biopsyDate: existingSnapshot?.biopsyDate || fallbackBiopsyDate || ""
+      };
+    })
+  );
 }
 
 export function buildSuggestedChiefComplaint(

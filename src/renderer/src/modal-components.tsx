@@ -11,7 +11,10 @@ import {
   formatAdditionalDevices,
   formatWorksheetSelection,
   getAutoNumberOfBlocks,
+  normalizeVacLokAreaValue,
+  normalizeWorksheetDetailValue,
   normalizeCutoutSizeLabel,
+  normalizeWorksheetDeviceDetailsForSite,
   parseAdditionalDevices,
   parseWorksheetSelection
 } from "../../shared/note-rules";
@@ -210,11 +213,16 @@ export function CourseModal(props: {
     ];
 
     const site = courseForm.sites[index];
+    const normalizedCurrentDetails = normalizeWorksheetDeviceDetailsForSite(site);
     updateSite(index, {
       additionalDevices: nextValues.length ? formatAdditionalDevices(nextValues.join(", ")) : "None",
-      worksheetEyeShieldType: nextSelected.has("Eye Shield") ? (site.worksheetEyeShieldType || "None") : "None",
-      worksheetGumShieldPosition: nextSelected.has("Gum Shield") ? (site.worksheetGumShieldPosition || "None") : "None",
-      worksheetLipShieldPosition: nextSelected.has("Lip Shield") ? (site.worksheetLipShieldPosition || "None") : "None"
+      worksheetEyeShieldType: nextSelected.has("Eye Shield") ? normalizedCurrentDetails.worksheetEyeShieldType : "",
+      worksheetGumShieldPosition: nextSelected.has("Gum Shield")
+        ? normalizedCurrentDetails.worksheetGumShieldPosition
+        : "",
+      worksheetLipShieldPosition: nextSelected.has("Lip Shield")
+        ? normalizedCurrentDetails.worksheetLipShieldPosition
+        : ""
     });
   }
 
@@ -233,12 +241,12 @@ export function CourseModal(props: {
       }
       const orderedValues = WORKSHEET_POSITION_OPTIONS.filter((option) => nextSelected.has(option));
       const site = courseForm.sites[index];
-      updateSite(index, {
-        [field]: formatWorksheetSelection(orderedValues),
-        worksheetVacLokArea: nextSelected.has("Vac-Lok") ? (site.worksheetVacLokArea || "NA") : "NA"
-      });
-      return;
-    }
+        updateSite(index, {
+          [field]: formatWorksheetSelection(orderedValues),
+        worksheetVacLokArea: nextSelected.has("Vac-Lok") ? normalizeVacLokAreaValue(site.worksheetVacLokArea) : ""
+        });
+        return;
+      }
 
     updateSite(index, { [field]: formatWorksheetSelection(values) });
   }
@@ -515,30 +523,42 @@ export function CourseModal(props: {
                     );
                   })()}
                   <div className="form-grid compact-grid">
-                    {getSelectedDevices(site.additionalDevices).selected.has("Eye Shield") ? (
-                      <label>
-                        Eye Shield Type
-                        <select value={site.worksheetEyeShieldType || "None"} onChange={(event) => updateSite(index, { worksheetEyeShieldType: event.target.value })}>
-                          {EYE_SHIELD_TYPE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-                        </select>
-                      </label>
-                    ) : null}
-                    {getSelectedDevices(site.additionalDevices).selected.has("Gum Shield") ? (
-                      <label>
-                        Gum Shield Position
-                        <select value={site.worksheetGumShieldPosition || "None"} onChange={(event) => updateSite(index, { worksheetGumShieldPosition: event.target.value })}>
-                          {GUM_SHIELD_POSITION_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-                        </select>
-                      </label>
-                    ) : null}
-                    {getSelectedDevices(site.additionalDevices).selected.has("Lip Shield") ? (
-                      <label>
-                        Lip Shield Position
-                        <select value={site.worksheetLipShieldPosition || "None"} onChange={(event) => updateSite(index, { worksheetLipShieldPosition: event.target.value })}>
-                          {LIP_SHIELD_POSITION_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-                        </select>
-                      </label>
-                    ) : null}
+                      {getSelectedDevices(site.additionalDevices).selected.has("Eye Shield") ? (
+                        <label>
+                          Eye Shield Type
+                          <select
+                            value={normalizeWorksheetDetailValue(site.worksheetEyeShieldType)}
+                            onChange={(event) => updateSite(index, { worksheetEyeShieldType: event.target.value })}
+                          >
+                            <option value="">Select type</option>
+                            {EYE_SHIELD_TYPE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                          </select>
+                        </label>
+                      ) : null}
+                      {getSelectedDevices(site.additionalDevices).selected.has("Gum Shield") ? (
+                        <label>
+                          Gum Shield Position
+                          <select
+                            value={normalizeWorksheetDetailValue(site.worksheetGumShieldPosition)}
+                            onChange={(event) => updateSite(index, { worksheetGumShieldPosition: event.target.value })}
+                          >
+                            <option value="">Select position</option>
+                            {GUM_SHIELD_POSITION_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                          </select>
+                        </label>
+                      ) : null}
+                      {getSelectedDevices(site.additionalDevices).selected.has("Lip Shield") ? (
+                        <label>
+                          Lip Shield Position
+                          <select
+                            value={normalizeWorksheetDetailValue(site.worksheetLipShieldPosition)}
+                            onChange={(event) => updateSite(index, { worksheetLipShieldPosition: event.target.value })}
+                          >
+                            <option value="">Select position</option>
+                            {LIP_SHIELD_POSITION_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                          </select>
+                        </label>
+                      ) : null}
                   </div>
                 </div>
                   <div className="worksheet-section positioning-section">
@@ -575,11 +595,15 @@ export function CourseModal(props: {
                       });
                     })()}
                   </div>
-                  {getWorksheetSelection(site.worksheetPositioning).has("Vac-Lok") ? (
+                    {getWorksheetSelection(site.worksheetPositioning).has("Vac-Lok") ? (
                     <div className="form-grid compact-grid" style={{ marginTop: "0.5rem" }}>
                       <label>
                         Vac-Lok Area
-                        <select value={site.worksheetVacLokArea || "NA"} onChange={(event) => updateSite(index, { worksheetVacLokArea: event.target.value })}>
+                        <select
+                          value={normalizeVacLokAreaValue(site.worksheetVacLokArea)}
+                          onChange={(event) => updateSite(index, { worksheetVacLokArea: event.target.value })}
+                        >
+                          <option value="">Select area</option>
                           {VAC_LOK_AREA_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
                         </select>
                       </label>

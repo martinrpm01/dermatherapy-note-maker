@@ -34,6 +34,9 @@ import {
   getNextTreatmentNumber,
   getSuggestedNoteType,
   getTemplateKey,
+  normalizeVacLokAreaValue,
+  refreshVisitSiteSnapshots,
+  normalizeWorksheetDeviceDetailsForSite,
   normalizeVacLokPlacement,
   normalizeCutoutSizeLabel,
   normalizeOptionValue
@@ -591,14 +594,21 @@ export class RadiationNoteService {
 
   saveCourse(input: CourseInput) {
     this.assertUnlocked();
-      const normalizedInput: CourseInput = {
-        ...input,
-        sites: input.sites.map((site) => ({
-          ...site,
-          ...normalizeVacLokPlacement(site.additionalDevices, site.worksheetPositioning),
-          icd10: normalizeIcd10(site.icd10),
-          lesionSize: formatMeasurement(site.lesionSize),
-        cutoutSize: normalizeCutoutSizeLabel(site.cutoutSize),
+        const normalizedInput: CourseInput = {
+          ...input,
+          sites: input.sites.map((site) => ({
+            ...site,
+            ...normalizeVacLokPlacement(site.additionalDevices, site.worksheetPositioning),
+            ...normalizeWorksheetDeviceDetailsForSite({
+              additionalDevices: site.additionalDevices,
+              worksheetEyeShieldType: site.worksheetEyeShieldType,
+              worksheetGumShieldPosition: site.worksheetGumShieldPosition,
+              worksheetLipShieldPosition: site.worksheetLipShieldPosition
+            }),
+            worksheetVacLokArea: normalizeVacLokAreaValue(site.worksheetVacLokArea),
+            icd10: normalizeIcd10(site.icd10),
+            lesionSize: formatMeasurement(site.lesionSize),
+          cutoutSize: normalizeCutoutSizeLabel(site.cutoutSize),
         machine: getDefaultMachine(site.machine),
         treatmentDepth: getDefaultTreatmentDepth(site.treatmentDepth),
         numberOfBlocks: getAutoNumberOfBlocks("standard_treatment", site.cutoutSize)
@@ -755,26 +765,31 @@ export class RadiationNoteService {
       }
     }
 
-    const structuredFields = {
-      ...input.structuredFields,
-        additionalNotes: input.structuredFields.additionalNotes ?? "",
-        finalTreatment: Boolean(input.structuredFields.finalTreatment),
-        prescribedFractionsInput: input.structuredFields.prescribedFractionsInput ?? null,
-        projectedFractionsInput: input.structuredFields.projectedFractionsInput ?? null,
-        biopsyDate: input.structuredFields.siteSnapshots[0]?.biopsyDate || input.structuredFields.biopsyDate || "",
-      lastTreatmentDate: input.structuredFields.lastTreatmentDate ?? "",
-      physicsComment:
-        input.structuredFields.physicsComment?.trim() ||
-        getDefaultPhysicsComment(input.noteType),
-      siteSnapshots: applyAutoNumberOfBlocks(
-        input.noteType,
-        input.structuredFields.siteSnapshots.map((snapshot) => ({
-          ...snapshot,
-          biopsyDate: snapshot.biopsyDate || input.structuredFields.biopsyDate || "",
-          cumulativeDose: snapshot.dailyDose * (input.treatmentNumber ?? 0)
-        })).map((snapshot) => ({ ...snapshot, cutoutSize: normalizeCutoutSizeLabel(snapshot.cutoutSize) }))
-      )
-    };
+      const structuredFields = {
+        ...input.structuredFields,
+          additionalNotes: input.structuredFields.additionalNotes ?? "",
+          finalTreatment: Boolean(input.structuredFields.finalTreatment),
+          prescribedFractionsInput: input.structuredFields.prescribedFractionsInput ?? null,
+          projectedFractionsInput: input.structuredFields.projectedFractionsInput ?? null,
+          biopsyDate: input.structuredFields.siteSnapshots[0]?.biopsyDate || input.structuredFields.biopsyDate || "",
+        lastTreatmentDate: input.structuredFields.lastTreatmentDate ?? "",
+        physicsComment:
+          input.structuredFields.physicsComment?.trim() ||
+          getDefaultPhysicsComment(input.noteType),
+        siteSnapshots: refreshVisitSiteSnapshots(
+          input.noteType,
+          this.repository.fetchSites([course.id]).map((site) => ({
+            ...site,
+            cutoutSize: normalizeCutoutSizeLabel(site.cutoutSize)
+          })),
+          input.treatmentNumber,
+          input.structuredFields.siteSnapshots.map((snapshot) => ({
+            ...snapshot,
+            cutoutSize: normalizeCutoutSizeLabel(snapshot.cutoutSize)
+          })),
+          input.structuredFields.biopsyDate || ""
+        )
+      };
 
     const normalizedInput: VisitInput = {
       ...input,
@@ -1131,22 +1146,26 @@ export class RadiationNoteService {
   }
 
   private loadExistingVisit(visitId: string): VisitEditorState {
-    const visit = this.repository.fetchVisit(visitId);
-    if (!visit) {
-      throw new Error("Visit not found.");
-    }
+      const visit = this.repository.fetchVisit(visitId);
+      if (!visit) {
+        throw new Error("Visit not found.");
+      }
 
     const patient = this.repository.fetchPatient(visit.patientId);
     const course = this.repository.fetchCourse(visit.courseId);
-    if (!patient || !course) {
-      throw new Error("Visit context is incomplete.");
-    }
+      if (!patient || !course) {
+        throw new Error("Visit context is incomplete.");
+      }
 
-    return {
-      patient,
-      course,
-      sites: this.repository.fetchSites([course.id]),
-      note: {
+      const sites = this.repository.fetchSites([course.id]);
+      const refreshedSiteSnapshots = refreshVisitSiteSnapshots(
+        visit.noteType,
+        sites,
+        visit.treatmentNumber,
+        visit.structuredFields.siteSnapshots,
+        visit.structuredFields.biopsyDate || course.startDate || ""
+      );
+      const refreshedNote: VisitInput = {
         id: visit.id,
         patientId: visit.patientId,
         courseId: visit.courseId,
@@ -1156,35 +1175,41 @@ export class RadiationNoteService {
         status: visit.status,
         therapistName: visit.therapistName,
         vitals: visit.vitals,
-          structuredFields: {
-            ...visit.structuredFields,
-            additionalNotes: visit.structuredFields.additionalNotes ?? "",
-            finalTreatment: Boolean(visit.structuredFields.finalTreatment),
-            prescribedFractionsInput:
-              visit.structuredFields.prescribedFractionsInput ??
-              (visit.noteType !== "consult_sim" && course.prescribedFractions > 0 ? course.prescribedFractions : null),
-            projectedFractionsInput: visit.structuredFields.projectedFractionsInput ?? null,
-            biopsyDate: visit.structuredFields.biopsyDate ?? course.startDate ?? "",
+        structuredFields: {
+          ...visit.structuredFields,
+          additionalNotes: visit.structuredFields.additionalNotes ?? "",
+          finalTreatment: Boolean(visit.structuredFields.finalTreatment),
+          prescribedFractionsInput:
+            visit.structuredFields.prescribedFractionsInput ??
+            (visit.noteType !== "consult_sim" && course.prescribedFractions > 0 ? course.prescribedFractions : null),
+          projectedFractionsInput: visit.structuredFields.projectedFractionsInput ?? null,
+          biopsyDate: visit.structuredFields.biopsyDate ?? course.startDate ?? "",
           lastTreatmentDate: visit.structuredFields.lastTreatmentDate ?? course.startDate ?? "",
           physicsComment:
             visit.structuredFields.physicsComment?.trim() ||
             getDefaultPhysicsComment(visit.noteType),
-          siteSnapshots: applyAutoNumberOfBlocks(
-            visit.noteType,
-            visit.structuredFields.siteSnapshots.map((site) => ({
-              ...site,
-              biopsyDate: site.biopsyDate || visit.structuredFields.biopsyDate || course.startDate || ""
-            }))
-          )
+          siteSnapshots: refreshedSiteSnapshots
         },
         generatedText: visit.generatedText,
         editedText: visit.editedText,
         newPhotoUploads: [],
         newAttachmentUploads: []
-      },
-      existingPhotos: this.repository.fetchVisitPhotos(visit.id),
-      existingAttachments: this.repository.fetchVisitAttachments(visit.id),
-      generatedPdfs: this.repository.fetchGeneratedPdfs(visit.id),
+      };
+      const generatedText = this.renderVisitText(patient, course, refreshedNote);
+      const shouldRefreshEditedText = !visit.editedText.trim() || visit.editedText === visit.generatedText;
+
+      return {
+        patient,
+        course,
+        sites,
+        note: {
+          ...refreshedNote,
+          generatedText,
+          editedText: shouldRefreshEditedText ? generatedText : visit.editedText
+        },
+        existingPhotos: this.repository.fetchVisitPhotos(visit.id),
+        existingAttachments: this.repository.fetchVisitAttachments(visit.id),
+        generatedPdfs: this.repository.fetchGeneratedPdfs(visit.id),
       templateKey: getTemplateKey(course.courseType, visit.noteType)
     };
   }
@@ -1215,17 +1240,17 @@ export class RadiationNoteService {
       machine: "Xoft Elekta 1200 SPX",
       energyKv: "",
       treatmentInterval: "",
-      additionalDevices: "",
-        worksheetSide: "",
-        worksheetPositioning: "",
-        worksheetVacLokArea: "NA",
-        worksheetEyeShieldType: "None",
-        worksheetGumShieldPosition: "None",
-        worksheetLipShieldPosition: "None",
-        dailyDose: 0,
-        totalDose: 0,
-      cumulativeDose: 0
-    });
+          additionalDevices: "",
+          worksheetSide: "",
+          worksheetPositioning: "",
+          worksheetVacLokArea: "",
+          worksheetEyeShieldType: "",
+          worksheetGumShieldPosition: "",
+          worksheetLipShieldPosition: "",
+          dailyDose: 0,
+          totalDose: 0,
+        cumulativeDose: 0
+      });
 
     const normalizedSites = applyAutoNumberOfBlocks(note.noteType, note.structuredFields.siteSnapshots);
     const site1 = normalizedSites.find((site) => site.siteNumber === 1) || emptySite(1);

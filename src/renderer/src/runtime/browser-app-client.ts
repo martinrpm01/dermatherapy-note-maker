@@ -27,6 +27,9 @@ import {
   getNextTreatmentNumber,
   getSuggestedNoteType,
   getTemplateKey,
+  normalizeVacLokAreaValue,
+  refreshVisitSiteSnapshots,
+  normalizeWorksheetDeviceDetailsForSite,
   normalizeVacLokPlacement,
   normalizeCutoutSizeLabel
 } from "../../../shared/note-rules";
@@ -250,41 +253,57 @@ export class BrowserAppClient implements AppClient {
       throw new Error("Visit context is incomplete.");
     }
 
+    const sites = structuredDataStore.fetchSites([course.id]);
+    const refreshedSiteSnapshots = refreshVisitSiteSnapshots(
+      visit.noteType,
+      sites,
+      visit.treatmentNumber,
+      visit.structuredFields.siteSnapshots,
+      visit.structuredFields.biopsyDate || course.startDate || ""
+    );
+    const refreshedNote: VisitInput = {
+      id: visit.id,
+      patientId: visit.patientId,
+      courseId: visit.courseId,
+      visitDate: visit.visitDate,
+      noteType: visit.noteType,
+      treatmentNumber: visit.treatmentNumber,
+      status: visit.status,
+      therapistName: visit.therapistName,
+      vitals: visit.vitals,
+      structuredFields: {
+        ...visit.structuredFields,
+        additionalNotes: visit.structuredFields.additionalNotes ?? "",
+        prescribedFractionsInput:
+          visit.structuredFields.prescribedFractionsInput ??
+          (visit.noteType !== "consult_sim" && course.prescribedFractions > 0 ? course.prescribedFractions : null),
+        projectedFractionsInput: visit.structuredFields.projectedFractionsInput ?? null,
+        biopsyDate: visit.structuredFields.biopsyDate || course.startDate || "",
+        lastTreatmentDate: visit.structuredFields.lastTreatmentDate ?? course.startDate ?? "",
+        siteSnapshots: refreshedSiteSnapshots
+      },
+      generatedText: visit.generatedText,
+      editedText: visit.editedText,
+      newPhotoUploads: [],
+      newAttachmentUploads: []
+    };
+    const generatedText = buildVisitPreviewText(
+      structuredDataStore.getTemplates(),
+      patient,
+      course,
+      refreshedNote,
+      structuredDataStore.toSettingsView(structuredDataStore.getSettingsRecord())
+    );
+    const shouldRefreshEditedText = !visit.editedText.trim() || visit.editedText === visit.generatedText;
+
     return {
       patient,
       course,
-      sites: structuredDataStore.fetchSites([course.id]),
+      sites,
       note: {
-        id: visit.id,
-        patientId: visit.patientId,
-        courseId: visit.courseId,
-        visitDate: visit.visitDate,
-        noteType: visit.noteType,
-        treatmentNumber: visit.treatmentNumber,
-        status: visit.status,
-        therapistName: visit.therapistName,
-        vitals: visit.vitals,
-        structuredFields: {
-          ...visit.structuredFields,
-          additionalNotes: visit.structuredFields.additionalNotes ?? "",
-          prescribedFractionsInput:
-            visit.structuredFields.prescribedFractionsInput ??
-            (visit.noteType !== "consult_sim" && course.prescribedFractions > 0 ? course.prescribedFractions : null),
-          projectedFractionsInput: visit.structuredFields.projectedFractionsInput ?? null,
-          biopsyDate: visit.structuredFields.biopsyDate || course.startDate || "",
-          lastTreatmentDate: visit.structuredFields.lastTreatmentDate ?? course.startDate ?? "",
-          siteSnapshots: applyAutoNumberOfBlocks(
-            visit.noteType,
-            visit.structuredFields.siteSnapshots.map((site) => ({
-              ...site,
-              biopsyDate: site.biopsyDate || visit.structuredFields.biopsyDate || course.startDate || ""
-            }))
-          )
-        },
-        generatedText: visit.generatedText,
-        editedText: visit.editedText,
-        newPhotoUploads: [],
-        newAttachmentUploads: []
+        ...refreshedNote,
+        generatedText,
+        editedText: shouldRefreshEditedText ? generatedText : visit.editedText
       },
       existingPhotos: structuredDataStore.fetchVisitPhotos(visit.id),
       existingAttachments: structuredDataStore.fetchVisitAttachments(visit.id),
@@ -770,14 +789,21 @@ export class BrowserAppClient implements AppClient {
   async saveCourse(input: Parameters<AppClient["saveCourse"]>[0]) {
     this.assertUnlocked();
     const structuredDataStore = await this.getStructuredDataStore();
-      const normalizedInput = {
-        ...input,
-        sites: input.sites.map((site) => ({
-          ...site,
-          ...normalizeVacLokPlacement(site.additionalDevices, site.worksheetPositioning),
-          cutoutSize: normalizeCutoutSizeLabel(site.cutoutSize),
-          machine: this.getDefaultMachine(site.machine),
-          treatmentDepth: this.getDefaultTreatmentDepth(site.treatmentDepth),
+        const normalizedInput = {
+          ...input,
+          sites: input.sites.map((site) => ({
+            ...site,
+            ...normalizeVacLokPlacement(site.additionalDevices, site.worksheetPositioning),
+            ...normalizeWorksheetDeviceDetailsForSite({
+              additionalDevices: site.additionalDevices,
+              worksheetEyeShieldType: site.worksheetEyeShieldType,
+              worksheetGumShieldPosition: site.worksheetGumShieldPosition,
+              worksheetLipShieldPosition: site.worksheetLipShieldPosition
+            }),
+            worksheetVacLokArea: normalizeVacLokAreaValue(site.worksheetVacLokArea),
+            cutoutSize: normalizeCutoutSizeLabel(site.cutoutSize),
+            machine: this.getDefaultMachine(site.machine),
+            treatmentDepth: this.getDefaultTreatmentDepth(site.treatmentDepth),
         numberOfBlocks: getAutoNumberOfBlocks("standard_treatment", site.cutoutSize)
       }))
     };
@@ -959,15 +985,18 @@ export class BrowserAppClient implements AppClient {
         projectedFractionsInput: input.structuredFields.projectedFractionsInput ?? null,
         biopsyDate: input.structuredFields.siteSnapshots[0]?.biopsyDate || input.structuredFields.biopsyDate || "",
         lastTreatmentDate: input.structuredFields.lastTreatmentDate ?? "",
-      siteSnapshots: applyAutoNumberOfBlocks(
+      siteSnapshots: refreshVisitSiteSnapshots(
         input.noteType,
-        input.structuredFields.siteSnapshots
-          .map((snapshot) => ({
-            ...snapshot,
-            biopsyDate: snapshot.biopsyDate || input.structuredFields.biopsyDate || "",
-            cumulativeDose: snapshot.dailyDose * (input.treatmentNumber ?? 0)
-          }))
-          .map((snapshot) => ({ ...snapshot, cutoutSize: normalizeCutoutSizeLabel(snapshot.cutoutSize) }))
+        structuredDataStore.fetchSites([course.id]).map((site) => ({
+          ...site,
+          cutoutSize: normalizeCutoutSizeLabel(site.cutoutSize)
+        })),
+        input.treatmentNumber,
+        input.structuredFields.siteSnapshots.map((snapshot) => ({
+          ...snapshot,
+          cutoutSize: normalizeCutoutSizeLabel(snapshot.cutoutSize)
+        })),
+        input.structuredFields.biopsyDate || ""
       )
     };
 

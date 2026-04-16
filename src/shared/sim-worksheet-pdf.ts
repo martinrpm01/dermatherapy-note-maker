@@ -10,6 +10,8 @@ import {
 import {
   formatDisplayDate,
   getCustomAdditionalDevices,
+  normalizeVacLokAreaValue,
+  normalizeWorksheetDetailValue,
   normalizeOptionValue,
   parseAdditionalDevices,
   parseWorksheetSelection,
@@ -267,7 +269,7 @@ function fillSite(
   const hasGumShield = hasDevice(site, "Gum Shield");
   const hasLipShield = hasDevice(site, "Lip Shield");
   setCheckbox(form, fieldMap.vacLok, hasVacLok);
-  setDropdown(form, fieldMap.vacLokArea, site.worksheetVacLokArea || "NA", hasVacLok);
+  setDropdown(form, fieldMap.vacLokArea, normalizeVacLokAreaValue(site.worksheetVacLokArea), hasVacLok);
   const hasHunchedChair = hasPosition(site, "Hunched Over Tx Couch");
   setCheckbox(form, fieldMap.supine, hasPosition(site, "Supine"));
   setCheckbox(form, fieldMap.prone, hasPosition(site, "Prone"));
@@ -275,10 +277,20 @@ function fillSite(
   setCheckbox(form, fieldMap.hunchedChair, hasHunchedChair);
   setCheckbox(form, fieldMap.nasalShield, hasDevice(site, "Nasal Shield"));
   setCheckbox(form, fieldMap.eyeShield, hasEyeShield);
-  setDropdown(form, fieldMap.eyeShieldType, site.worksheetEyeShieldType || "None", hasEyeShield);
+  setDropdown(form, fieldMap.eyeShieldType, normalizeWorksheetDetailValue(site.worksheetEyeShieldType), hasEyeShield);
   setCheckbox(form, fieldMap.gumShield, hasGumShield);
-  setDropdown(form, fieldMap.gumShieldPosition, site.worksheetGumShieldPosition || "None", hasGumShield);
-  setDropdown(form, fieldMap.lipShieldPosition, site.worksheetLipShieldPosition || "None", hasLipShield);
+  setDropdown(
+    form,
+    fieldMap.gumShieldPosition,
+    normalizeWorksheetDetailValue(site.worksheetGumShieldPosition),
+    hasGumShield
+  );
+  setDropdown(
+    form,
+    fieldMap.lipShieldPosition,
+    normalizeWorksheetDetailValue(site.worksheetLipShieldPosition),
+    hasLipShield
+  );
   setCheckbox(form, fieldMap.handRing, hasDevice(site, "Hand Ring"));
   setCheckbox(form, fieldMap.kneeWedge, hasDevice(site, "Knee Wedge"));
   setCheckbox(form, fieldMap.pillow, hasDevice(site, "Pillow"));

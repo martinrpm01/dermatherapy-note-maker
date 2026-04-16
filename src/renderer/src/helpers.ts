@@ -9,6 +9,8 @@ import {
   formatVitals,
   getAutoNumberOfBlocks,
   getDefaultPhysicsComment,
+  normalizeVacLokAreaValue,
+  normalizeWorksheetDeviceDetailsForSite,
   normalizeVacLokPlacement,
   normalizeCutoutSizeLabel
 } from "../../shared/note-rules";
@@ -349,17 +351,17 @@ export function createEmptyCourseForm(patientId: string): CourseInput {
         machine: DEFAULT_TREATMENT_MACHINE,
         energyKv: "50kV",
         treatmentInterval: "bi-weekly",
-        additionalDevices: "None",
-          worksheetSide: "",
-          worksheetPositioning: "",
-          worksheetVacLokArea: "NA",
-          worksheetEyeShieldType: "None",
-          worksheetGumShieldPosition: "None",
-          worksheetLipShieldPosition: "None",
-          dailyDose: 400,
-          totalDose: 4000
-      }
-    ]
+          additionalDevices: "None",
+            worksheetSide: "",
+            worksheetPositioning: "",
+            worksheetVacLokArea: "",
+            worksheetEyeShieldType: "",
+            worksheetGumShieldPosition: "",
+            worksheetLipShieldPosition: "",
+            dailyDose: 400,
+            totalDose: 4000
+        }
+      ]
   };
 }
 
@@ -367,12 +369,18 @@ export function createCourseFormFromDetail(courseDetail: CourseDetail): CourseIn
   const fallback = createEmptyCourseForm(courseDetail.course.patientId);
   const fallbackSite = fallback.sites[0];
   const sites = courseDetail.sites.length
-    ? courseDetail.sites.map((site) => ({
-        ...normalizeVacLokPlacement(site.additionalDevices, site.worksheetPositioning),
-        id: site.id,
-        siteNumber: site.siteNumber,
-        bodyLocation: site.bodyLocation,
-        treatmentLocationText: site.treatmentLocationText,
+      ? courseDetail.sites.map((site) => ({
+          ...normalizeVacLokPlacement(site.additionalDevices, site.worksheetPositioning),
+          ...normalizeWorksheetDeviceDetailsForSite({
+            additionalDevices: site.additionalDevices,
+            worksheetEyeShieldType: site.worksheetEyeShieldType,
+            worksheetGumShieldPosition: site.worksheetGumShieldPosition,
+            worksheetLipShieldPosition: site.worksheetLipShieldPosition
+          }),
+          id: site.id,
+          siteNumber: site.siteNumber,
+          bodyLocation: site.bodyLocation,
+          treatmentLocationText: site.treatmentLocationText,
         diagnosisText: site.diagnosisText,
         icd10: site.icd10,
         numberOfBlocks: getAutoNumberOfBlocks("standard_treatment", site.cutoutSize),
@@ -382,17 +390,14 @@ export function createCourseFormFromDetail(courseDetail: CourseDetail): CourseIn
         cutoutSize: normalizeCutoutSizeLabel(site.cutoutSize),
         shields: site.shields,
         machine: site.machine?.trim() ? site.machine : fallbackSite.machine,
-        energyKv: site.energyKv,
-        treatmentInterval: site.treatmentInterval,
-        worksheetSide: site.worksheetSide,
-        worksheetVacLokArea: site.worksheetVacLokArea,
-        worksheetEyeShieldType: site.worksheetEyeShieldType,
-        worksheetGumShieldPosition: site.worksheetGumShieldPosition,
-        worksheetLipShieldPosition: site.worksheetLipShieldPosition,
-        dailyDose: site.dailyDose > 0 ? site.dailyDose : fallbackSite.dailyDose,
-        totalDose: site.totalDose > 0 ? site.totalDose : fallbackSite.totalDose,
-        prescribedFractions: site.prescribedFractions ?? courseDetail.course.prescribedFractions
-      }))
+          energyKv: site.energyKv,
+          treatmentInterval: site.treatmentInterval,
+          worksheetSide: site.worksheetSide,
+          worksheetVacLokArea: normalizeVacLokAreaValue(site.worksheetVacLokArea),
+          dailyDose: site.dailyDose > 0 ? site.dailyDose : fallbackSite.dailyDose,
+          totalDose: site.totalDose > 0 ? site.totalDose : fallbackSite.totalDose,
+          prescribedFractions: site.prescribedFractions ?? courseDetail.course.prescribedFractions
+        }))
     : fallback.sites;
 
   return {
