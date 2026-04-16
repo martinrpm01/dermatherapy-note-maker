@@ -34,6 +34,7 @@ import {
   getNextTreatmentNumber,
   getSuggestedNoteType,
   getTemplateKey,
+  normalizeVacLokPlacement,
   normalizeCutoutSizeLabel,
   normalizeOptionValue
 } from "../shared/note-rules";
@@ -590,12 +591,13 @@ export class RadiationNoteService {
 
   saveCourse(input: CourseInput) {
     this.assertUnlocked();
-    const normalizedInput: CourseInput = {
-      ...input,
-      sites: input.sites.map((site) => ({
-        ...site,
-        icd10: normalizeIcd10(site.icd10),
-        lesionSize: formatMeasurement(site.lesionSize),
+      const normalizedInput: CourseInput = {
+        ...input,
+        sites: input.sites.map((site) => ({
+          ...site,
+          ...normalizeVacLokPlacement(site.additionalDevices, site.worksheetPositioning),
+          icd10: normalizeIcd10(site.icd10),
+          lesionSize: formatMeasurement(site.lesionSize),
         cutoutSize: normalizeCutoutSizeLabel(site.cutoutSize),
         machine: getDefaultMachine(site.machine),
         treatmentDepth: getDefaultTreatmentDepth(site.treatmentDepth),

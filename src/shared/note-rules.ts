@@ -26,9 +26,21 @@ export const DEVICE_OPTIONS = [
   "Flash Shield",
   "Lip Shield"
 ] as const;
+export const ADDITIONAL_DEVICE_OPTIONS = [
+  "Eye Shield",
+  "Ear Shield",
+  "Nasal Shield",
+  "Gum Shield",
+  "Hand Ring",
+  "Knee Wedge",
+  "Pillow",
+  "Flash Shield",
+  "Lip Shield"
+] as const;
 export const WORKSHEET_POSITION_OPTIONS = [
   "Supine",
   "Prone",
+  "Vac-Lok",
   "Sitting in Chair",
   "Hunched Over Tx Couch"
 ] as const;
@@ -82,8 +94,8 @@ const DEVICE_LABELS = DEVICE_OPTIONS.map((label) => ({
   label
 })) as ReadonlyArray<{ normalized: string; label: string }>;
 
-export function parseAdditionalDevices(value: string): string[] {
-  const parts = value
+export function parseAdditionalDevices(value: string | null | undefined): string[] {
+  const parts = (value ?? "")
     .split(",")
     .map((part) => part.trim())
     .filter(Boolean)
@@ -123,6 +135,34 @@ export function getCustomAdditionalDevices(value: string): string {
     .join(", ");
 }
 
+function hasNormalizedSelection(values: string[], target: string): boolean {
+  return values.some((value) => normalizeOptionValue(value) === normalizeOptionValue(target));
+}
+
+export function normalizeVacLokPlacement(additionalDevices: string, worksheetPositioning: string) {
+  const devices = parseAdditionalDevices(additionalDevices);
+  const nextDevices = devices.filter((device) => normalizeOptionValue(device) !== normalizeOptionValue("Vac-Lok"));
+  const nextPositioning = parseWorksheetSelection(worksheetPositioning);
+
+  if (hasNormalizedSelection(devices, "Vac-Lok") && !hasNormalizedSelection(nextPositioning, "Vac-Lok")) {
+    nextPositioning.push("Vac-Lok");
+  }
+
+  return {
+    additionalDevices: nextDevices.length ? formatAdditionalDevices(nextDevices.join(", ")) : "None",
+    worksheetPositioning: formatWorksheetSelection(
+      WORKSHEET_POSITION_OPTIONS.filter((option) => hasNormalizedSelection(nextPositioning, option))
+    )
+  };
+}
+
+export function siteHasVacLok(site: Pick<SiteSnapshot, "additionalDevices" | "worksheetPositioning">): boolean {
+  return (
+    hasNormalizedSelection(parseWorksheetSelection(site.worksheetPositioning), "Vac-Lok") ||
+    hasNormalizedSelection(parseAdditionalDevices(site.additionalDevices), "Vac-Lok")
+  );
+}
+
 export function formatAdditionalDevicesForSite(site: Pick<
   SiteSnapshot,
   | "additionalDevices"
@@ -131,7 +171,9 @@ export function formatAdditionalDevicesForSite(site: Pick<
   | "worksheetGumShieldPosition"
   | "worksheetLipShieldPosition"
 >): string {
-  const devices = parseAdditionalDevices(site.additionalDevices);
+  const devices = parseAdditionalDevices(site.additionalDevices).filter(
+    (device) => normalizeOptionValue(device) !== normalizeOptionValue("Vac-Lok")
+  );
   if (!devices.length) {
     return "None";
   }
@@ -141,9 +183,6 @@ export function formatAdditionalDevicesForSite(site: Pick<
       const normalized = normalizeOptionValue(device);
       if (normalized === "eye shield" && site.worksheetEyeShieldType && site.worksheetEyeShieldType !== "None") {
         return `Eye Shield - ${site.worksheetEyeShieldType}`;
-      }
-      if (normalized === "vac-lok" && site.worksheetVacLokArea && site.worksheetVacLokArea !== "NA") {
-        return `Vac-Lok - ${site.worksheetVacLokArea}`;
       }
       if (normalized === "gum shield" && site.worksheetGumShieldPosition && site.worksheetGumShieldPosition !== "None") {
         return `Gum Shield - ${site.worksheetGumShieldPosition}`;
@@ -159,8 +198,8 @@ export function formatAdditionalDevicesForSite(site: Pick<
     .join(", ");
 }
 
-export function parseWorksheetSelection(value: string): string[] {
-  return value
+export function parseWorksheetSelection(value: string | null | undefined): string[] {
+  return (value ?? "")
     .split(",")
     .map((part) => {
       const trimmed = part.trim();
@@ -216,7 +255,9 @@ export function buildShieldSummary(shields: string, additionalDevices: string): 
     .filter(Boolean)
     .forEach(pushShield);
 
-  parseAdditionalDevices(additionalDevices).forEach(pushShield);
+  parseAdditionalDevices(additionalDevices)
+    .filter((device) => normalizeOptionValue(device) !== normalizeOptionValue("Vac-Lok"))
+    .forEach(pushShield);
 
   return ordered.length ? ordered.join(", ") : "none";
 }

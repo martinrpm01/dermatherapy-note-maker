@@ -3,7 +3,14 @@ import path from "node:path";
 
 import { PDFDocument, StandardFonts, type PDFCheckBox, type PDFDropdown, type PDFRadioGroup, type PDFTextField } from "pdf-lib";
 
-import { formatDisplayDate, getCustomAdditionalDevices, normalizeOptionValue, parseAdditionalDevices, parseWorksheetSelection } from "../shared/note-rules";
+import {
+  formatDisplayDate,
+  getCustomAdditionalDevices,
+  normalizeOptionValue,
+  parseAdditionalDevices,
+  parseWorksheetSelection,
+  siteHasVacLok
+} from "../shared/note-rules";
 import type { PatientRecord, SiteSnapshot, TreatmentCourseRecord, VisitNoteRecord } from "../shared/types";
 
 type SiteFieldMap = {
@@ -255,7 +262,7 @@ function fillSite(
   setRadioYes(form, fieldMap.cutoutCustom, cutoutType === "custom");
   setRadioYes(form, fieldMap.cutoutStandard, cutoutType === "standard");
 
-  const hasVacLok = hasDevice(site, "Vac-Lok");
+  const hasVacLok = siteHasVacLok(site);
   const hasEyeShield = hasDevice(site, "Eye Shield");
   const hasGumShield = hasDevice(site, "Gum Shield");
   const hasLipShield = hasDevice(site, "Lip Shield");

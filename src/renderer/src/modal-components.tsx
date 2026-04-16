@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  ADDITIONAL_DEVICE_OPTIONS,
   DEVICE_OPTIONS,
   EYE_SHIELD_TYPE_OPTIONS,
   GUM_SHIELD_POSITION_OPTIONS,
@@ -201,7 +202,7 @@ export function CourseModal(props: {
 
   function updateAdditionalDevices(index: number, nextSelected: Set<string>, customValue: string) {
     const nextValues = [
-      ...DEVICE_OPTIONS.filter((option) => nextSelected.has(option)),
+      ...ADDITIONAL_DEVICE_OPTIONS.filter((option) => nextSelected.has(option)),
       ...customValue
         .split(",")
         .map((part) => part.trim())
@@ -211,7 +212,6 @@ export function CourseModal(props: {
     const site = courseForm.sites[index];
     updateSite(index, {
       additionalDevices: nextValues.length ? formatAdditionalDevices(nextValues.join(", ")) : "None",
-      worksheetVacLokArea: nextSelected.has("Vac-Lok") ? (site.worksheetVacLokArea || "NA") : "NA",
       worksheetEyeShieldType: nextSelected.has("Eye Shield") ? (site.worksheetEyeShieldType || "None") : "None",
       worksheetGumShieldPosition: nextSelected.has("Gum Shield") ? (site.worksheetGumShieldPosition || "None") : "None",
       worksheetLipShieldPosition: nextSelected.has("Lip Shield") ? (site.worksheetLipShieldPosition || "None") : "None"
@@ -232,7 +232,11 @@ export function CourseModal(props: {
         nextSelected.delete("Hunched Over Tx Couch");
       }
       const orderedValues = WORKSHEET_POSITION_OPTIONS.filter((option) => nextSelected.has(option));
-      updateSite(index, { [field]: formatWorksheetSelection(orderedValues) });
+      const site = courseForm.sites[index];
+      updateSite(index, {
+        [field]: formatWorksheetSelection(orderedValues),
+        worksheetVacLokArea: nextSelected.has("Vac-Lok") ? (site.worksheetVacLokArea || "NA") : "NA"
+      });
       return;
     }
 
@@ -448,7 +452,7 @@ export function CourseModal(props: {
                     return (
                       <>
                         <div className="checkbox-group compact">
-                          {DEVICE_OPTIONS.map((option) => (
+                          {ADDITIONAL_DEVICE_OPTIONS.map((option) => (
                             <label className="checkbox-label" key={`worksheet-${site.siteNumber}-${option}`}>
                               <input
                                 type="checkbox"
@@ -511,14 +515,6 @@ export function CourseModal(props: {
                     );
                   })()}
                   <div className="form-grid compact-grid">
-                    {getSelectedDevices(site.additionalDevices).selected.has("Vac-Lok") ? (
-                      <label>
-                        Vac-Lok Area
-                        <select value={site.worksheetVacLokArea || "NA"} onChange={(event) => updateSite(index, { worksheetVacLokArea: event.target.value })}>
-                          {VAC_LOK_AREA_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-                        </select>
-                      </label>
-                    ) : null}
                     {getSelectedDevices(site.additionalDevices).selected.has("Eye Shield") ? (
                       <label>
                         Eye Shield Type
@@ -579,6 +575,16 @@ export function CourseModal(props: {
                       });
                     })()}
                   </div>
+                  {getWorksheetSelection(site.worksheetPositioning).has("Vac-Lok") ? (
+                    <div className="form-grid compact-grid" style={{ marginTop: "0.5rem" }}>
+                      <label>
+                        Vac-Lok Area
+                        <select value={site.worksheetVacLokArea || "NA"} onChange={(event) => updateSite(index, { worksheetVacLokArea: event.target.value })}>
+                          {VAC_LOK_AREA_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </label>
+                    </div>
+                  ) : null}
                 </div>
                   <div className="worksheet-section lesion-side-section">
                     <label>Lesion Side</label>

@@ -27,6 +27,7 @@ import {
   getNextTreatmentNumber,
   getSuggestedNoteType,
   getTemplateKey,
+  normalizeVacLokPlacement,
   normalizeCutoutSizeLabel
 } from "../../../shared/note-rules";
 import type { AppClient, ArchiveSnapshot, AssetReference, DashboardSnapshot, PatientRecord, SettingsPayload, VisitEditorState, VisitInput, VisitNoteRecord } from "../../../shared/types";
@@ -751,13 +752,14 @@ export class BrowserAppClient implements AppClient {
   async saveCourse(input: Parameters<AppClient["saveCourse"]>[0]) {
     this.assertUnlocked();
     const structuredDataStore = await this.getStructuredDataStore();
-    const normalizedInput = {
-      ...input,
-      sites: input.sites.map((site) => ({
-        ...site,
-        cutoutSize: normalizeCutoutSizeLabel(site.cutoutSize),
-        machine: this.getDefaultMachine(site.machine),
-        treatmentDepth: this.getDefaultTreatmentDepth(site.treatmentDepth),
+      const normalizedInput = {
+        ...input,
+        sites: input.sites.map((site) => ({
+          ...site,
+          ...normalizeVacLokPlacement(site.additionalDevices, site.worksheetPositioning),
+          cutoutSize: normalizeCutoutSizeLabel(site.cutoutSize),
+          machine: this.getDefaultMachine(site.machine),
+          treatmentDepth: this.getDefaultTreatmentDepth(site.treatmentDepth),
         numberOfBlocks: getAutoNumberOfBlocks("standard_treatment", site.cutoutSize)
       }))
     };

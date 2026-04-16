@@ -9,6 +9,7 @@ import {
   formatVitals,
   getAutoNumberOfBlocks,
   getDefaultPhysicsComment,
+  normalizeVacLokPlacement,
   normalizeCutoutSizeLabel
 } from "../../shared/note-rules";
 import { renderTemplate } from "../../shared/template-engine";
@@ -367,6 +368,7 @@ export function createCourseFormFromDetail(courseDetail: CourseDetail): CourseIn
   const fallbackSite = fallback.sites[0];
   const sites = courseDetail.sites.length
     ? courseDetail.sites.map((site) => ({
+        ...normalizeVacLokPlacement(site.additionalDevices, site.worksheetPositioning),
         id: site.id,
         siteNumber: site.siteNumber,
         bodyLocation: site.bodyLocation,
@@ -382,9 +384,7 @@ export function createCourseFormFromDetail(courseDetail: CourseDetail): CourseIn
         machine: site.machine?.trim() ? site.machine : fallbackSite.machine,
         energyKv: site.energyKv,
         treatmentInterval: site.treatmentInterval,
-        additionalDevices: site.additionalDevices,
         worksheetSide: site.worksheetSide,
-        worksheetPositioning: site.worksheetPositioning,
         worksheetVacLokArea: site.worksheetVacLokArea,
         worksheetEyeShieldType: site.worksheetEyeShieldType,
         worksheetGumShieldPosition: site.worksheetGumShieldPosition,
