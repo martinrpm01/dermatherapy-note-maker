@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useResolvedAssetUrl } from "./asset-url";
 import { buildVisitPreviewText, createCourseFormFromDetail, createEmptyCourseForm, createEmptyPatientForm, fileToCompressedUpload, fileToUpload } from "./helpers";
@@ -78,6 +78,14 @@ function shouldShowInstallPrompt() {
   return isIosDevice && isSafari && !isStandalone && !isDismissed;
 }
 
+function buildAutosaveVisitInput(note: VisitEditorState["note"]) {
+  return {
+    ...note,
+    newPhotoUploads: [],
+    newAttachmentUploads: []
+  };
+}
+
 export default function App({ appClient, initialClientError = "" }: AppProps) {
   const [boot, setBoot] = useState<BootstrapPayload | null>(null);
   const [bootError, setBootError] = useState(initialClientError);
@@ -126,6 +134,8 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
   const [archiveRestoreResult, setArchiveRestoreResult] = useState<PatientArchiveRestoreResult | null>(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [updateReady, setUpdateReady] = useState(false);
+  const autosaveTimerRef = useRef<number | null>(null);
+  const autosaveSignatureRef = useRef("");
   const resolvedLogoSrc = useResolvedAssetUrl(appClient, boot?.settings.dermatologyOfficeLogoAsset);
   const authGateActive = Boolean(pendingRecoveryCode) || browserRecoveryFlow !== "auth";
 
@@ -290,6 +300,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     const editor = await appClient.buildVisitDraft(courseId, mode, existingVisitId);
     setVisitEditor(editor);
     setTextDirty(false);
+    autosaveSignatureRef.current = JSON.stringify(buildAutosaveVisitInput(editor.note));
   }
 
   async function lockApp() {
@@ -400,6 +411,57 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
       }
     });
   }
+
+  useEffect(() => {
+    if (!appClient || screen.name !== "visit" || !visitEditor) {
+      return;
+    }
+
+    const autosaveInput = buildAutosaveVisitInput(visitEditor.note);
+    const signature = JSON.stringify(autosaveInput);
+    if (signature === autosaveSignatureRef.current) {
+      return;
+    }
+
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+    }
+
+    autosaveTimerRef.current = window.setTimeout(() => {
+      void (async () => {
+        const saved = await appClient.saveVisit(autosaveInput);
+        autosaveSignatureRef.current = JSON.stringify({
+          ...autosaveInput,
+          id: saved.id,
+          status: saved.status,
+          generatedText: saved.generatedText,
+          editedText: autosaveInput.editedText
+        });
+        setVisitEditor((current) => {
+          if (!current || current.course.id !== saved.courseId) {
+            return current;
+          }
+
+          return {
+            ...current,
+            note: {
+              ...current.note,
+              id: saved.id,
+              status: saved.status
+            }
+          };
+        });
+        await loadDashboard();
+      })();
+    }, 800);
+
+    return () => {
+      if (autosaveTimerRef.current !== null) {
+        window.clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+    };
+  }, [appClient, screen, visitEditor]);
 
   async function savePatientForm() {
     if (!patientForm) return;
@@ -829,7 +891,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
               await refreshWorkflowSnapshots();
               showToast("Patient moved to Archive.");
             })()}
-            onOpenVisit={(courseId, mode) => setScreen({ name: "visit", courseId, mode })}
+            onOpenVisit={(courseId, mode, existingVisitId) => setScreen({ name: "visit", courseId, mode, existingVisitId })}
             onRestoreArchivedPatient={(patientId) => void (async () => {
               if (!appClient) return;
               await appClient.restorePatient(patientId);

@@ -517,6 +517,9 @@ export class BrowserAppClient implements AppClient {
           const visitsForCourse = visitMap.get(course.id) || [];
           const sitesForCourse = siteMap.get(course.id) || [];
           const hasConsultVisit = visitsForCourse.some((visit) => visit.note.noteType === "consult_sim");
+          const latestDraftVisit = visitsForCourse
+            .filter((visit) => !visit.note.pdfAsset)
+            .sort((left, right) => right.note.updatedAt.localeCompare(left.note.updatedAt))[0];
           const currentFraction = getCurrentFraction(visitsForCourse);
           const shouldStartWithConsult = !hasConsultVisit && course.prescribedFractions <= 0;
           const suggestedTreatmentNumber = shouldStartWithConsult ? null : getNextTreatmentNumber(visitsForCourse);
@@ -538,7 +541,9 @@ export class BrowserAppClient implements AppClient {
             suggestedTreatmentNumber,
             suggestedNoteType,
             nextTemplateKey: getTemplateKey(course.courseType, suggestedNoteType),
-            siteSummary: sitesForCourse.map((site) => site.bodyLocation).join(" + ")
+            siteSummary: sitesForCourse.map((site) => site.bodyLocation).join(" + "),
+            latestDraftVisitId: latestDraftVisit?.note.id ?? null,
+            latestDraftUpdatedAt: latestDraftVisit?.note.updatedAt ?? null
           };
         })
         .filter((course): course is DashboardSnapshot["activeCourses"][number] => Boolean(course)),

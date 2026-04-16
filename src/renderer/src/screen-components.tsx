@@ -632,7 +632,7 @@ export function DashboardScreen(props: {
   onAddPatient: () => void;
   onOpenPatient: (patientId: string) => void;
   onArchivePatient: (patientId: string) => void;
-  onOpenVisit: (courseId: string, mode: "next_treatment" | "consult_sim") => void;
+  onOpenVisit: (courseId: string, mode: "next_treatment" | "consult_sim", existingVisitId?: string) => void;
   onRestoreArchivedPatient: (patientId: string) => void;
 }) {
   const allCourseRows = props.dashboard?.activeCourses || [];
@@ -722,6 +722,11 @@ export function DashboardScreen(props: {
                   </div>
                   <div className="patient-row-actions">
                     <button className="primary" onClick={() => props.onOpenVisit(row.courseId, "next_treatment")}>Start Today's Note</button>
+                    {row.latestDraftVisitId ? (
+                      <button onClick={() => props.onOpenVisit(row.courseId, "next_treatment", row.latestDraftVisitId)}>
+                        Resume Last Note
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               ))}

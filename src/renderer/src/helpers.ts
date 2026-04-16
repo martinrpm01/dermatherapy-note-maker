@@ -6,6 +6,7 @@ import {
   calculateAgeAtDate,
   formatAdditionalDevices,
   formatDisplayDate,
+  formatVitals,
   getAutoNumberOfBlocks,
   getDefaultPhysicsComment,
   normalizeCutoutSizeLabel
@@ -287,7 +288,7 @@ export function buildVisitPreviewText(
     },
     site1,
     site2,
-    vitals: note.vitals,
+    vitals: formatVitals(note.vitals),
     structured: {
       ...note.structuredFields,
       additionalNotesSection: note.structuredFields.additionalNotes.trim()

@@ -212,6 +212,45 @@ export function createEmptyVitals(): Vitals {
   };
 }
 
+function normalizeVitalsWhitespace(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function appendVitalUnit(value: string, unit: string, matcher: RegExp): string {
+  const trimmed = normalizeVitalsWhitespace(value);
+  if (!trimmed) {
+    return "";
+  }
+
+  return matcher.test(trimmed) ? trimmed : `${trimmed} ${unit}`;
+}
+
+export function formatHeartRate(value: string): string {
+  return appendVitalUnit(value, "BPM", /\bBPM$/i);
+}
+
+export function formatOxygenSaturation(value: string): string {
+  const trimmed = normalizeVitalsWhitespace(value);
+  if (!trimmed) {
+    return "";
+  }
+
+  return /%$/.test(trimmed) ? trimmed : `${trimmed}%`;
+}
+
+export function formatWeight(value: string): string {
+  return appendVitalUnit(value, "lbs", /\blbs?$/i);
+}
+
+export function formatVitals(vitals: Vitals): Vitals {
+  return {
+    bloodPressure: normalizeVitalsWhitespace(vitals.bloodPressure),
+    heartRate: formatHeartRate(vitals.heartRate),
+    oxygenSaturation: formatOxygenSaturation(vitals.oxygenSaturation),
+    weight: formatWeight(vitals.weight)
+  };
+}
+
 export function calculateCumulativeDose(dailyDose: number, treatmentNumber: number | null): number {
   if (!treatmentNumber) {
     return 0;

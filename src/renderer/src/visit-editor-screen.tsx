@@ -1,6 +1,14 @@
 import { useState } from "react";
 import type { AppClient, SettingsPayload, VisitEditorState } from "../../shared/types";
-import { NOTE_TYPE_LABELS, getDefaultPhysicsComment, getSuggestedNoteType, isOtvTreatmentNumber } from "../../shared/note-rules";
+import {
+  NOTE_TYPE_LABELS,
+  formatHeartRate,
+  formatOxygenSaturation,
+  formatWeight,
+  getDefaultPhysicsComment,
+  getSuggestedNoteType,
+  isOtvTreatmentNumber
+} from "../../shared/note-rules";
 import { useResolvedAssetUrl } from "./asset-url";
 
 function ExistingPhotoTile(props: {
@@ -330,15 +338,30 @@ export function VisitEditorScreen(props: {
                 </label>
                 <label>
                   Heart Rate
-                  <input placeholder="e.g. 72" value={editor.note.vitals.heartRate} onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, heartRate: event.target.value } } }), { regenerate: true, overwriteEdited: !props.textDirty })} />
+                  <input
+                    placeholder="e.g. 72 BPM"
+                    value={editor.note.vitals.heartRate}
+                    onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, heartRate: event.target.value } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                    onBlur={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, heartRate: formatHeartRate(event.target.value) } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                  />
                 </label>
                 <label>
                   O2 Saturation
-                  <input placeholder="e.g. 98%" value={editor.note.vitals.oxygenSaturation} onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, oxygenSaturation: event.target.value } } }), { regenerate: true, overwriteEdited: !props.textDirty })} />
+                  <input
+                    placeholder="e.g. 98%"
+                    value={editor.note.vitals.oxygenSaturation}
+                    onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, oxygenSaturation: event.target.value } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                    onBlur={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, oxygenSaturation: formatOxygenSaturation(event.target.value) } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                  />
                 </label>
                 <label>
                   Weight
-                  <input placeholder="e.g. 165 lbs" value={editor.note.vitals.weight} onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, weight: event.target.value } } }), { regenerate: true, overwriteEdited: !props.textDirty })} />
+                  <input
+                    placeholder="e.g. 165 lbs"
+                    value={editor.note.vitals.weight}
+                    onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, weight: event.target.value } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                    onBlur={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, weight: formatWeight(event.target.value) } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                  />
                 </label>
               </div>
             </div>

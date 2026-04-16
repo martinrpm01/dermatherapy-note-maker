@@ -322,6 +322,8 @@ export interface DashboardCourseRow {
   suggestedNoteType: NoteType;
   nextTemplateKey: string;
   siteSummary: string;
+  latestDraftVisitId: string | null;
+  latestDraftUpdatedAt: string | null;
 }
 
 export interface VisitNoteBundle {
