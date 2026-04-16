@@ -8,4 +8,9 @@ declare global {
   }
 }
 
+declare module "*.pdf" {
+  const src: string;
+  export default src;
+}
+
 export {};

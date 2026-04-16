@@ -38,10 +38,12 @@ import {
 import { preflightBrowserArchiveRestore, restoreBrowserArchive } from "./browser-archive-restore";
 import { buildVisitPreviewText } from "../helpers";
 import { buildVisitPdf, type PdfBinaryAssetInput } from "../../../main/pdf";
+import { buildSimWorksheetPdfFromTemplateBytes } from "../../../shared/sim-worksheet-pdf";
 import { validateTemplate } from "../../../shared/template-engine";
 import { BrowserBinaryAssetStore } from "../storage/browser-binary-asset-store";
 import { BrowserStructuredDataStore } from "../storage/browser-structured-data-store";
 import brandLogo from "../assets/dermatherapy-note-logo.jpg";
+import simWorksheetTemplateUrl from "../../../../assets/templates/radiation-therapy-sim-worksheet.pdf";
 
 export interface BrowserArchiveClientDependencies {
   exportPatientArchive?: (patientId: string) => Promise<BrowserArchiveExportPayload>;
@@ -71,6 +73,7 @@ export class BrowserAppClient implements AppClient {
   private readonly archiveBlobByHandle = new WeakMap<PatientArchiveIoHandle, Blob>();
   private readonly structuredDataStore: BrowserStructuredDataStore;
   private readonly binaryAssetStore: BrowserBinaryAssetStore;
+  private simWorksheetTemplateBytesPromise: Promise<Uint8Array> | null = null;
   private isLocked = false;
   private hasBootstrapped = false;
 
@@ -207,6 +210,21 @@ export class BrowserAppClient implements AppClient {
     }
 
     return this.readBlobInput(await response.blob(), "dermatherapy-note-logo.jpg");
+  }
+
+  private async readSimWorksheetTemplateBytes() {
+    if (!this.simWorksheetTemplateBytesPromise) {
+      this.simWorksheetTemplateBytesPromise = (async () => {
+        const response = await fetch(simWorksheetTemplateUrl);
+        if (!response.ok) {
+          throw new Error("Could not resolve sim worksheet template.");
+        }
+
+        return new Uint8Array(await response.arrayBuffer());
+      })();
+    }
+
+    return this.simWorksheetTemplateBytesPromise;
   }
 
   private async bytesToDataUrl(bytes: Uint8Array, mimeType: string) {
@@ -1127,8 +1145,86 @@ export class BrowserAppClient implements AppClient {
     };
   }
 
-  async generateSimWorksheet(_visitId: string) {
-    throw new Error("Sim worksheet generation is only available in the desktop app.");
+  async generateSimWorksheet(visitId: string) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    const visit = structuredDataStore.fetchVisit(visitId);
+    if (!visit) {
+      throw new Error("Visit not found.");
+    }
+    if (visit.noteType !== "consult_sim") {
+      throw new Error("Sim worksheet is only available for Sim / Consult visits.");
+    }
+
+    const patient = structuredDataStore.fetchPatient(visit.patientId);
+    const course = structuredDataStore.fetchCourse(visit.courseId);
+    if (!patient || !course) {
+      throw new Error("Visit context is incomplete.");
+    }
+
+    const currentCourseSites = structuredDataStore.fetchSites([course.id]);
+    const latestSnapshots = applyAutoNumberOfBlocks(
+      visit.noteType,
+      buildSiteSnapshots(currentCourseSites, visit.treatmentNumber)
+    ).map((site) => {
+      const existingSnapshot = visit.structuredFields.siteSnapshots.find((snapshot) => snapshot.siteNumber === site.siteNumber);
+      return {
+        ...site,
+        biopsyDate: existingSnapshot?.biopsyDate || visit.structuredFields.biopsyDate || course.startDate || ""
+      };
+    });
+
+    const worksheet = await buildSimWorksheetPdfFromTemplateBytes(await this.readSimWorksheetTemplateBytes(), {
+      patient,
+      course,
+      visit: {
+        ...visit,
+        structuredFields: {
+          ...visit.structuredFields,
+          siteSnapshots: latestSnapshots
+        }
+      }
+    });
+
+    const existingWorksheetAttachments = structuredDataStore
+      .fetchVisitsByCourseIds([course.id])
+      .flatMap((courseVisit) => courseVisit.attachments)
+      .filter((attachment) => attachment.originalName === worksheet.fileName);
+    for (const attachment of existingWorksheetAttachments) {
+      const attachmentPath = this.getStoredAssetPath(binaryAssetStore, attachment.fileAsset);
+      structuredDataStore.deleteVisitAttachmentRecord(attachment.id);
+      this.deleteStoredFiles(binaryAssetStore, [attachmentPath]);
+    }
+
+    const filePath = binaryAssetStore.saveUpload(
+      {
+        name: worksheet.fileName,
+        mimeType: "application/pdf",
+        dataUrl: await this.bytesToDataUrl(worksheet.bytes, "application/pdf")
+      },
+      binaryAssetStore.getVisitAttachmentsDir(patient.id, course.id, visit.id),
+      worksheet.caption
+    );
+    const nextSortOrder = structuredDataStore.fetchVisitAttachments(visit.id).length + 1;
+    structuredDataStore.addVisitAttachment(
+      visit.id,
+      filePath,
+      nextSortOrder,
+      worksheet.caption,
+      "application/pdf",
+      worksheet.fileName
+    );
+
+    await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
+    const created = structuredDataStore
+      .fetchVisitAttachments(visit.id)
+      .find((attachment) => attachment.originalName === worksheet.fileName);
+    if (!created) {
+      throw new Error("Sim worksheet attachment could not be reloaded after save.");
+    }
+
+    return created;
   }
 
   // desktop-only-no-op: desktop returns a real local workspace folder path.
