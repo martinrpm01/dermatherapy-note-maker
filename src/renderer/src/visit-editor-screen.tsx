@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { AppClient, SettingsPayload, VisitEditorState } from "../../shared/types";
 import {
   NOTE_TYPE_LABELS,
+  formatBloodPressure,
   formatHeartRate,
   formatOxygenSaturation,
   formatWeight,
@@ -26,6 +27,16 @@ function ExistingPhotoTile(props: {
   );
 }
 
+function formatTreatmentDepthLabel(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const normalized = trimmed.replace(/\bmm\b(?:\s*\bmm\b)+/gi, "mm");
+  return /mm\b/i.test(normalized) ? normalized : `${normalized} mm`;
+}
+
 export function VisitEditorScreen(props: {
   appClient: AppClient | null;
   visitEditor: VisitEditorState;
@@ -33,9 +44,12 @@ export function VisitEditorScreen(props: {
   textDirty: boolean;
   onSaveDraft: () => void;
   onSaveAndGeneratePdf: () => void;
+  onGenerateSimWorksheet: () => void;
+  onOpenPatient: () => void;
   onResetNoteText: () => void;
   onRemoveExistingPhoto: (photoId: string) => void;
   onRemoveExistingAttachment: (attachmentId: string) => void;
+  onOpenExistingAttachment: (asset: VisitEditorState["existingAttachments"][number]["fileAsset"]) => void;
   onVisitPhotoAdd: (files: FileList | null, siteNumber: 1 | 2) => void;
   onVisitAttachmentAdd: (files: FileList | null) => void;
   onUpdate: (
@@ -49,14 +63,22 @@ export function VisitEditorScreen(props: {
   const editor = props.visitEditor;
   const showPrescribedFractionsInput =
     editor.note.noteType !== "consult_sim" &&
-    (editor.course.prescribedFractions <= 0 || (editor.note.structuredFields.prescribedFractionsInput ?? 0) > 0);
+    (
+      editor.note.treatmentNumber === 1 ||
+      editor.course.prescribedFractions <= 0 ||
+      (editor.note.structuredFields.prescribedFractionsInput ?? 0) > 0
+    );
+  const showProjectedFractionsInput = editor.note.noteType === "consult_sim";
   const otvEligible = editor.note.noteType !== "consult_sim" && isOtvTreatmentNumber(editor.note.treatmentNumber);
+  const isTwoLesionLayout = editor.note.structuredFields.siteSnapshots.length > 1;
   return (
-    <section className="screen">
+    <section className={`screen visit-screen${isTwoLesionLayout ? " two-lesion-screen" : ""}`}>
       <div className="screen-header">
         <div>
           <h2>
-            {editor.patient.lastName}, {editor.patient.firstName}
+            <button type="button" className="patient-name-button" onClick={props.onOpenPatient}>
+              {editor.patient.lastName}, {editor.patient.firstName}
+            </button>
           </h2>
           <p>
             {editor.course.courseName} · {editor.course.courseType === "one_site" ? "1-lesion" : "2-lesion"} course
@@ -80,14 +102,17 @@ export function VisitEditorScreen(props: {
             Note Preview
           </button>
           <button onClick={props.onSaveDraft}>Save Draft</button>
+          {editor.note.noteType === "consult_sim" ? (
+            <button onClick={props.onGenerateSimWorksheet}>Generate Sim Worksheet</button>
+          ) : null}
           <button className="primary" onClick={props.onSaveAndGeneratePdf}>
             Save + Generate PDF
           </button>
         </div>
       </div>
-      <div className={activePanel === "preview" ? "editor-layout preview-mode" : "editor-layout"}>
+      <div className={`${activePanel === "preview" ? "editor-layout preview-mode" : "editor-layout"}${isTwoLesionLayout ? " two-lesion-editor" : ""}`}>
       {activePanel === "details" && <>
-        <div className="panel form-panel">
+        <div className={`panel form-panel${isTwoLesionLayout ? " compact-form-panel" : ""}`}>
           <h3>Visit Details</h3>
           <div className="form-grid">
             <label>
@@ -120,6 +145,7 @@ export function VisitEditorScreen(props: {
                     }
 
                     const nextTreatmentNumber = current.note.treatmentNumber ?? 1;
+                    const projectedFractions = current.note.structuredFields.projectedFractionsInput ?? null;
                     return {
                       ...current,
                       note: {
@@ -128,6 +154,10 @@ export function VisitEditorScreen(props: {
                         noteType: getSuggestedNoteType(nextTreatmentNumber),
                         structuredFields: {
                           ...current.note.structuredFields,
+                          prescribedFractionsInput:
+                            nextTreatmentNumber === 1 && projectedFractions && projectedFractions > 0
+                              ? projectedFractions
+                              : current.note.structuredFields.prescribedFractionsInput,
                           siteSnapshots: current.note.structuredFields.siteSnapshots.map((site) => ({
                             ...site,
                             cumulativeDose: site.dailyDose * nextTreatmentNumber
@@ -162,6 +192,36 @@ export function VisitEditorScreen(props: {
                 }} />
               </label>
             )}
+            {showProjectedFractionsInput ? (
+              <label>
+                Therapist
+                <input value={editor.note.therapistName} list="therapists" onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, therapistName: event.target.value } }), { regenerate: true, overwriteEdited: !props.textDirty })} />
+              </label>
+            ) : null}
+            {showProjectedFractionsInput ? (
+              <label>
+                Projected Fractions
+                <input
+                  type="number"
+                  min={1}
+                  max={15}
+                  value={editor.note.structuredFields.projectedFractionsInput ?? ""}
+                  onChange={(event) => {
+                    const projectedFractions = event.target.value ? Number(event.target.value) : null;
+                    props.onUpdate((current) => ({
+                      ...current,
+                      note: {
+                        ...current.note,
+                        structuredFields: {
+                          ...current.note.structuredFields,
+                          projectedFractionsInput: projectedFractions
+                        }
+                      }
+                    }), { regenerate: true, overwriteEdited: !props.textDirty });
+                  }}
+                />
+              </label>
+            ) : null}
             {showPrescribedFractionsInput ? (
               <label>
                 Prescribed Fractions
@@ -190,10 +250,12 @@ export function VisitEditorScreen(props: {
                 />
               </label>
             ) : null}
-            <label>
-              Therapist
-              <input value={editor.note.therapistName} list="therapists" onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, therapistName: event.target.value } }), { regenerate: true, overwriteEdited: !props.textDirty })} />
-            </label>
+            {editor.note.noteType !== "consult_sim" ? (
+              <label>
+                Therapist
+                <input value={editor.note.therapistName} list="therapists" onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, therapistName: event.target.value } }), { regenerate: true, overwriteEdited: !props.textDirty })} />
+              </label>
+            ) : null}
             {editor.note.noteType !== "consult_sim" && (() => {
               const POST_CARE_OPTIONS = [
                 { label: "Aquaphor", value: "Aquaphor was applied to the treated area." },
@@ -334,7 +396,12 @@ export function VisitEditorScreen(props: {
               <div className="form-grid">
                 <label>
                   Blood Pressure
-                  <input placeholder="e.g. 120/80" value={editor.note.vitals.bloodPressure} onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, bloodPressure: event.target.value } } }), { regenerate: true, overwriteEdited: !props.textDirty })} />
+                  <input
+                    placeholder="e.g. 120/80 mmHg"
+                    value={editor.note.vitals.bloodPressure}
+                    onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, bloodPressure: event.target.value } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                    onBlur={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, bloodPressure: formatBloodPressure(event.target.value) } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                  />
                 </label>
                 <label>
                   Heart Rate
@@ -367,7 +434,7 @@ export function VisitEditorScreen(props: {
             </div>
           )}
         </div>
-        <div className="panel summary-panel">
+        <div className={`panel summary-panel${isTwoLesionLayout ? " compact-summary-panel" : ""}`}>
           <div className="summary-checkboxes">
             {editor.note.noteType === "consult_sim" && (
               <label className="checkbox-label">
@@ -470,7 +537,12 @@ export function VisitEditorScreen(props: {
                   <p><strong>Treatment Lesion:</strong> {site.bodyLocation || "-"}</p>
                   <p><strong>Diagnosis:</strong> {site.diagnosisText || "-"}</p>
                   <p><strong>ICD10:</strong> {site.icd10 || "-"}</p>
-                  <p><strong>Treatment Depth:</strong> {site.treatmentDepth ? `${site.treatmentDepth} mm` : "-"}</p>
+                  <p>
+                    <strong>Treatment Depth:</strong>{" "}
+                    {site.treatmentDepth
+                      ? formatTreatmentDepthLabel(site.treatmentDepth)
+                      : "-"}
+                  </p>
                   <p><strong>Daily Dose:</strong> {site.dailyDose ? `${site.dailyDose} cGy` : "-"}</p>
                   <p><strong>Total Dose:</strong> {site.totalDose ? `${site.totalDose} cGy` : "-"}</p>
                 </div>
@@ -511,18 +583,21 @@ export function VisitEditorScreen(props: {
               onChange={(event) => props.onVisitAttachmentAdd(event.target.files)}
             />
           </label>
-          <div className="attachment-list">
-            {editor.existingAttachments.map((attachment) => (
-              <div className="attachment-row" key={attachment.id}>
-                <div>
-                  <div className="attachment-name">{attachment.originalName || attachment.caption || "Attachment"}</div>
-                  <div className="muted">
-                    {attachment.mimeType.toLowerCase().includes("pdf") ? "PDF attachment" : "Image attachment"}
+            <div className="attachment-list">
+              {editor.existingAttachments.map((attachment) => (
+                <div className="attachment-row" key={attachment.id}>
+                  <div>
+                    <div className="attachment-name">{attachment.originalName || attachment.caption || "Attachment"}</div>
+                    <div className="muted">
+                      {attachment.mimeType.toLowerCase().includes("pdf") ? "PDF attachment" : "Image attachment"}
+                    </div>
+                  </div>
+                  <div className="button-row">
+                    <button onClick={() => props.onOpenExistingAttachment(attachment.fileAsset)}>Open</button>
+                    <button onClick={() => props.onRemoveExistingAttachment(attachment.id)}>Remove</button>
                   </div>
                 </div>
-                <button onClick={() => props.onRemoveExistingAttachment(attachment.id)}>Remove</button>
-              </div>
-            ))}
+              ))}
             {editor.note.newAttachmentUploads.map((attachment) => (
               <div className="attachment-row" key={attachment.name + attachment.dataUrl.slice(0, 12)}>
                 <div>

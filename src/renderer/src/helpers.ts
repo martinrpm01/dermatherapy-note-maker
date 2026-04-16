@@ -4,7 +4,7 @@ import {
   buildSimulationComplicationLine,
   buildSimulationComplicationText,
   calculateAgeAtDate,
-  formatAdditionalDevices,
+  formatAdditionalDevicesForSite,
   formatDisplayDate,
   formatVitals,
   getAutoNumberOfBlocks,
@@ -242,7 +242,7 @@ export function buildVisitPreviewText(
     treatmentDepthDisplay: formatMeasurement(getDefaultTreatmentDepth(site1Base.treatmentDepth)),
       simulationComplications: buildSimulationComplicationText(site1Base.additionalDevices),
       simulationComplicationsLine: buildSimulationComplicationLine(site1Base.additionalDevices),
-      additionalDevices: formatAdditionalDevices(site1Base.additionalDevices)
+        additionalDevices: formatAdditionalDevicesForSite(site1Base)
     };
   const site2 = {
     ...site2Base,
@@ -259,8 +259,8 @@ export function buildVisitPreviewText(
     treatmentDepthDisplay: formatMeasurement(getDefaultTreatmentDepth(site2Base.treatmentDepth)),
       simulationComplications: buildSimulationComplicationText(site2Base.additionalDevices),
       simulationComplicationsLine: buildSimulationComplicationLine(site2Base.additionalDevices),
-      additionalDevices: formatAdditionalDevices(site2Base.additionalDevices)
-    };
+        additionalDevices: formatAdditionalDevicesForSite(site2Base)
+      };
 
   const finalTreatmentSection = buildFinalTreatmentSection(!!note.structuredFields.finalTreatment);
   const mipsSection = buildMipsSection(!!note.structuredFields.addMips);
@@ -349,8 +349,14 @@ export function createEmptyCourseForm(patientId: string): CourseInput {
         energyKv: "50kV",
         treatmentInterval: "bi-weekly",
         additionalDevices: "None",
-        dailyDose: 400,
-        totalDose: 4000
+          worksheetSide: "",
+          worksheetPositioning: "",
+          worksheetVacLokArea: "NA",
+          worksheetEyeShieldType: "None",
+          worksheetGumShieldPosition: "None",
+          worksheetLipShieldPosition: "None",
+          dailyDose: 400,
+          totalDose: 4000
       }
     ]
   };
@@ -377,6 +383,12 @@ export function createCourseFormFromDetail(courseDetail: CourseDetail): CourseIn
         energyKv: site.energyKv,
         treatmentInterval: site.treatmentInterval,
         additionalDevices: site.additionalDevices,
+        worksheetSide: site.worksheetSide,
+        worksheetPositioning: site.worksheetPositioning,
+        worksheetVacLokArea: site.worksheetVacLokArea,
+        worksheetEyeShieldType: site.worksheetEyeShieldType,
+        worksheetGumShieldPosition: site.worksheetGumShieldPosition,
+        worksheetLipShieldPosition: site.worksheetLipShieldPosition,
         dailyDose: site.dailyDose > 0 ? site.dailyDose : fallbackSite.dailyDose,
         totalDose: site.totalDose > 0 ? site.totalDose : fallbackSite.totalDose,
         prescribedFractions: site.prescribedFractions ?? courseDetail.course.prescribedFractions

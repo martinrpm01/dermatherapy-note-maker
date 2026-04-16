@@ -542,6 +542,22 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     }
   }
 
+  async function generateSimWorksheetForVisit() {
+    if (!visitEditor || !appClient) {
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const saved = await appClient.saveVisit(visitEditor.note);
+      await appClient.generateSimWorksheet(saved.id);
+      await loadVisit(visitEditor.course.id, "consult_sim", saved.id);
+      showToast("Sim worksheet generated and attached.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function saveSettingsForm() {
     if (!settingsPayload) return;
     if (!appClient) return;
@@ -950,6 +966,12 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
             textDirty={textDirty}
             onSaveDraft={() => void saveVisit(false)}
             onSaveAndGeneratePdf={() => void saveVisit(true)}
+            onGenerateSimWorksheet={() => void generateSimWorksheetForVisit()}
+            onOpenPatient={() => void (async () => {
+              if (!appClient) return;
+              await appClient.saveVisit(visitEditor.note);
+              setScreen({ name: "patient", patientId: visitEditor.patient.id });
+            })()}
             onResetNoteText={() => updateVisitEditor((current) => current, { regenerate: true, overwriteEdited: true })}
             onRemoveExistingPhoto={(photoId) => void (async () => {
               if (!appClient) return;
@@ -961,6 +983,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
               await appClient.removeVisitAttachment(attachmentId);
               await loadVisit(visitEditor.course.id, "next_treatment", visitEditor.note.id);
             })()}
+            onOpenExistingAttachment={(asset) => void appClient?.openAsset(asset)}
             onVisitPhotoAdd={(files, siteNumber) => {
               void (async () => {
                 if (!files || !visitEditor) return;

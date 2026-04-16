@@ -937,6 +937,12 @@ export class RadiationNoteRepository implements StructuredDataStore {
          energy_kv AS energyKv,
          treatment_interval AS treatmentInterval,
          additional_devices AS additionalDevices,
+         worksheet_side AS worksheetSide,
+         worksheet_positioning AS worksheetPositioning,
+         worksheet_vac_lok_area AS worksheetVacLokArea,
+         worksheet_eye_shield_type AS worksheetEyeShieldType,
+         worksheet_gum_shield_position AS worksheetGumShieldPosition,
+         worksheet_lip_shield_position AS worksheetLipShieldPosition,
          daily_dose AS dailyDose,
          total_dose AS totalDose,
          created_at AS createdAt,
@@ -1472,11 +1478,12 @@ export class RadiationNoteRepository implements StructuredDataStore {
   private insertSite(courseId: string, site: TreatmentSiteInput, timestamp: string) {
     this.run(
       `INSERT INTO treatment_sites (
-        id, course_id, site_number, body_location, treatment_location_text, diagnosis_text, icd10,
-        number_of_blocks, lesion_size, treatment_depth, cone_size, cutout_size, shields, machine, energy_kv, treatment_interval,
-        additional_devices, daily_dose, total_dose, created_at, updated_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
+         id, course_id, site_number, body_location, treatment_location_text, diagnosis_text, icd10,
+         number_of_blocks, lesion_size, treatment_depth, cone_size, cutout_size, shields, machine, energy_kv, treatment_interval,
+         additional_devices, worksheet_side, worksheet_positioning, worksheet_vac_lok_area, worksheet_eye_shield_type,
+         worksheet_gum_shield_position, worksheet_lip_shield_position, daily_dose, total_dose, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
+        [
         site.id ?? makeId("site"),
         courseId,
         site.siteNumber,
@@ -1494,9 +1501,15 @@ export class RadiationNoteRepository implements StructuredDataStore {
         site.energyKv,
         site.treatmentInterval,
         site.additionalDevices,
-        site.dailyDose,
-        site.totalDose,
-        timestamp,
+        site.worksheetSide ?? "",
+        site.worksheetPositioning ?? "",
+          site.worksheetVacLokArea ?? "",
+          site.worksheetEyeShieldType ?? "",
+          site.worksheetGumShieldPosition ?? "",
+          site.worksheetLipShieldPosition ?? "",
+          site.dailyDose,
+          site.totalDose,
+          timestamp,
         timestamp
       ]
     );
@@ -1582,9 +1595,15 @@ export class RadiationNoteRepository implements StructuredDataStore {
         energy_kv TEXT NOT NULL,
         treatment_interval TEXT NOT NULL,
         additional_devices TEXT NOT NULL,
-        daily_dose INTEGER NOT NULL,
-        total_dose INTEGER NOT NULL,
-        created_at TEXT NOT NULL,
+        worksheet_side TEXT NOT NULL DEFAULT '',
+        worksheet_positioning TEXT NOT NULL DEFAULT '',
+         worksheet_vac_lok_area TEXT NOT NULL DEFAULT '',
+         worksheet_eye_shield_type TEXT NOT NULL DEFAULT '',
+         worksheet_gum_shield_position TEXT NOT NULL DEFAULT '',
+         worksheet_lip_shield_position TEXT NOT NULL DEFAULT '',
+         daily_dose INTEGER NOT NULL,
+         total_dose INTEGER NOT NULL,
+         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         FOREIGN KEY(course_id) REFERENCES treatment_courses(id)
       );
@@ -1695,6 +1714,12 @@ export class RadiationNoteRepository implements StructuredDataStore {
 
     // Migration: add number_of_blocks column if missing
     try { this.run(`ALTER TABLE treatment_sites ADD COLUMN number_of_blocks INTEGER NOT NULL DEFAULT 1`); } catch { /* already exists */ }
+    try { this.run(`ALTER TABLE treatment_sites ADD COLUMN worksheet_side TEXT NOT NULL DEFAULT ''`); } catch { /* already exists */ }
+    try { this.run(`ALTER TABLE treatment_sites ADD COLUMN worksheet_positioning TEXT NOT NULL DEFAULT ''`); } catch { /* already exists */ }
+    try { this.run(`ALTER TABLE treatment_sites ADD COLUMN worksheet_vac_lok_area TEXT NOT NULL DEFAULT ''`); } catch { /* already exists */ }
+    try { this.run(`ALTER TABLE treatment_sites ADD COLUMN worksheet_eye_shield_type TEXT NOT NULL DEFAULT ''`); } catch { /* already exists */ }
+    try { this.run(`ALTER TABLE treatment_sites ADD COLUMN worksheet_gum_shield_position TEXT NOT NULL DEFAULT ''`); } catch { /* already exists */ }
+    try { this.run(`ALTER TABLE treatment_sites ADD COLUMN worksheet_lip_shield_position TEXT NOT NULL DEFAULT ''`); } catch { /* already exists */ }
 
     // Migration: add supervising_physician column if missing
     try { this.run(`ALTER TABLE app_settings ADD COLUMN supervising_physician TEXT NOT NULL DEFAULT ''`); } catch { /* already exists */ }

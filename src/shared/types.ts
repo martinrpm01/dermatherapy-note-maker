@@ -108,6 +108,12 @@ export interface TreatmentSiteRecord {
   energyKv: string;
   treatmentInterval: string;
   additionalDevices: string;
+  worksheetSide: string;
+  worksheetPositioning: string;
+  worksheetVacLokArea: string;
+  worksheetEyeShieldType: string;
+  worksheetGumShieldPosition: string;
+  worksheetLipShieldPosition: string;
   dailyDose: number;
   totalDose: number;
   prescribedFractions?: number;
@@ -168,6 +174,12 @@ export interface SiteSnapshot {
   energyKv: string;
   treatmentInterval: string;
   additionalDevices: string;
+  worksheetSide: string;
+  worksheetPositioning: string;
+  worksheetVacLokArea: string;
+  worksheetEyeShieldType: string;
+  worksheetGumShieldPosition: string;
+  worksheetLipShieldPosition: string;
   dailyDose: number;
   totalDose: number;
   cumulativeDose: number;
@@ -179,6 +191,7 @@ export interface VisitStructuredFields {
   additionalNotes: string;
   finalTreatment: boolean;
   prescribedFractionsInput: number | null;
+  projectedFractionsInput: number | null;
   biopsyDate: string;
   lastTreatmentDate: string;
   focusedExam: string;
@@ -265,6 +278,12 @@ export interface TreatmentSiteInput {
   energyKv: string;
   treatmentInterval: string;
   additionalDevices: string;
+  worksheetSide: string;
+  worksheetPositioning: string;
+  worksheetVacLokArea: string;
+  worksheetEyeShieldType: string;
+  worksheetGumShieldPosition: string;
+  worksheetLipShieldPosition: string;
   dailyDose: number;
   totalDose: number;
   prescribedFractions?: number;
@@ -431,6 +450,7 @@ export interface AppClient {
   saveVisit: (input: VisitInput) => Promise<VisitNoteRecord>;
   deleteVisit: (visitId: string) => Promise<void>;
   generatePdf: (visitId: string) => Promise<PdfGenerationResult>;
+  generateSimWorksheet: (visitId: string) => Promise<VisitAttachmentRecord>;
   // Desktop-first helper that returns the local visit workspace path.
   // A future browser client can map this to a virtual folder or download flow.
   getVisitFolder: (visitId: string) => Promise<string>;

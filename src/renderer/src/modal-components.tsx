@@ -1,12 +1,25 @@
 import { useEffect, useState } from "react";
-import { formatAdditionalDevices, getAutoNumberOfBlocks, normalizeCutoutSizeLabel, parseAdditionalDevices } from "../../shared/note-rules";
+import {
+  DEVICE_OPTIONS,
+  EYE_SHIELD_TYPE_OPTIONS,
+  GUM_SHIELD_POSITION_OPTIONS,
+  LIP_SHIELD_POSITION_OPTIONS,
+  VAC_LOK_AREA_OPTIONS,
+  WORKSHEET_POSITION_OPTIONS,
+  WORKSHEET_SIDE_OPTIONS,
+  formatAdditionalDevices,
+  formatWorksheetSelection,
+  getAutoNumberOfBlocks,
+  normalizeCutoutSizeLabel,
+  parseAdditionalDevices,
+  parseWorksheetSelection
+} from "../../shared/note-rules";
 import type { CourseInput, PatientInput } from "../../shared/types";
 
 const FRACTION_PRESETS = [8, 10, 12, 15];
 const DAILY_DOSE_PRESETS = [350, 400, 500];
 const TOTAL_DOSE_PRESETS = [4000, 4200];
 const DEPTH_OPTIONS = ["3", "4", "5"];
-const DEVICE_OPTIONS = ["Eye Shield", "Ear Shield"];
 
 function normalizeIcd10Input(value: string) {
   const trimmedStart = value.replace(/^\s+/, "");
@@ -109,6 +122,8 @@ export function CourseModal(props: {
   const [doseModes, setDoseModes] = useState<Record<number, { dailyDose: "preset" | "other"; totalDose: "preset" | "other" }>>({});
   const [siteFractionModes, setSiteFractionModes] = useState<Record<number, { mode: "preset" | "other"; custom: string }>>({});
   const [customInputs, setCustomInputs] = useState<Record<number, string>>({});
+  const [customShieldEnabled, setCustomShieldEnabled] = useState<Record<number, boolean>>({});
+  const isTwoSite = courseForm.courseType === "two_site";
 
   useEffect(() => {
     if (FRACTION_PRESETS.includes(courseForm.prescribedFractions)) {
@@ -148,6 +163,17 @@ export function CourseModal(props: {
     });
   }, [courseForm.id, courseForm.sites.length]);
 
+  useEffect(() => {
+    setCustomShieldEnabled((current) => {
+      const next: typeof current = {};
+      courseForm.sites.forEach((site, index) => {
+        const existingCustomValue = getSelectedDevices(site.additionalDevices).customValue.trim();
+        next[index] = current[index] ?? Boolean(existingCustomValue);
+      });
+      return next;
+    });
+  }, [courseForm.id, courseForm.sites]);
+
   function getSiteFractionMode(index: number): "preset" | "other" {
     const site = courseForm.sites[index];
     const fracs = site.prescribedFractions ?? 0;
@@ -182,9 +208,35 @@ export function CourseModal(props: {
         .filter(Boolean)
     ];
 
+    const site = courseForm.sites[index];
     updateSite(index, {
-      additionalDevices: nextValues.length ? formatAdditionalDevices(nextValues.join(", ")) : "None"
+      additionalDevices: nextValues.length ? formatAdditionalDevices(nextValues.join(", ")) : "None",
+      worksheetVacLokArea: nextSelected.has("Vac-Lok") ? (site.worksheetVacLokArea || "NA") : "NA",
+      worksheetEyeShieldType: nextSelected.has("Eye Shield") ? (site.worksheetEyeShieldType || "None") : "None",
+      worksheetGumShieldPosition: nextSelected.has("Gum Shield") ? (site.worksheetGumShieldPosition || "None") : "None",
+      worksheetLipShieldPosition: nextSelected.has("Lip Shield") ? (site.worksheetLipShieldPosition || "None") : "None"
     });
+  }
+
+  function getWorksheetSelection(value: string) {
+    return new Set(parseWorksheetSelection(value));
+  }
+
+  function updateWorksheetSelection(index: number, field: "worksheetPositioning" | "worksheetSide", values: string[]) {
+    if (field === "worksheetPositioning") {
+      const nextSelected = new Set(parseWorksheetSelection(values.join(", ")));
+      if (nextSelected.has("Hunched Over Tx Couch")) {
+        nextSelected.add("Sitting in Chair");
+      }
+      if (!nextSelected.has("Sitting in Chair")) {
+        nextSelected.delete("Hunched Over Tx Couch");
+      }
+      const orderedValues = WORKSHEET_POSITION_OPTIONS.filter((option) => nextSelected.has(option));
+      updateSite(index, { [field]: formatWorksheetSelection(orderedValues) });
+      return;
+    }
+
+    updateSite(index, { [field]: formatWorksheetSelection(values) });
   }
 
   function getDoseMode(index: number, key: "dailyDose" | "totalDose") {
@@ -204,8 +256,6 @@ export function CourseModal(props: {
     }));
   }
 
-  const isTwoSite = courseForm.courseType === "two_site";
-
   function updateSite(index: number, patch: Partial<CourseInput["sites"][0]>) {
     const nextSite = { ...courseForm.sites[index], ...patch };
     props.onChange({
@@ -221,9 +271,9 @@ export function CourseModal(props: {
     });
   }
 
-  return (
-    <div className="modal-backdrop">
-      <div className="modal-card wide">
+    return (
+      <div className="modal-backdrop">
+      <div className={`modal-card wide${isTwoSite ? " two-site-course-modal" : ""}`}>
         <h3>{courseForm.id ? "Edit Course" : "Add Treatment Course"}</h3>
         <div className="form-grid">
           <label>
@@ -281,9 +331,9 @@ export function CourseModal(props: {
             <input type="date" value={courseForm.startDate} onChange={(event) => props.onChange({ ...courseForm, startDate: event.target.value })} />
           </label>
         </div>
-        <div className="site-grid">
-          {courseForm.sites.map((site, index) => (
-            <div className="subpanel" key={site.siteNumber}>
+        <div className={`site-grid${isTwoSite ? " two-site-course-grid" : ""}`}>
+            {courseForm.sites.map((site, index) => (
+              <div className={`subpanel${isTwoSite ? " compact-course-subpanel" : ""}`} key={site.siteNumber}>
               <h4>{isTwoSite ? `Lesion ${site.siteNumber}` : "Lesion"}</h4>
               {showFractionsField && isTwoSite && (
                 <label>
@@ -389,50 +439,169 @@ export function CourseModal(props: {
                   </select>
                 </label>
               </div>
-              <div className="form-grid">
-                <div>
+              <div className="worksheet-setup-grid">
+                <div className="worksheet-section">
                   <label>Additional Treatment Devices</label>
                   {(() => {
                     const deviceState = getSelectedDevices(site.additionalDevices);
+                    const hasCustomShield = customShieldEnabled[index] ?? Boolean(deviceState.customValue.trim());
                     return (
-                      <div className="checkbox-group">
-                        {DEVICE_OPTIONS.map((option) => (
-                          <label className="checkbox-label" key={option}>
+                      <>
+                        <div className="checkbox-group compact">
+                          {DEVICE_OPTIONS.map((option) => (
+                            <label className="checkbox-label" key={`worksheet-${site.siteNumber}-${option}`}>
+                              <input
+                                type="checkbox"
+                                checked={deviceState.selected.has(option)}
+                                onChange={(event) => {
+                                  const nextSelected = new Set(deviceState.selected);
+                                  if (event.target.checked) {
+                                    nextSelected.add(option);
+                                  } else {
+                                    nextSelected.delete(option);
+                                  }
+                                  updateAdditionalDevices(index, nextSelected, deviceState.customValue);
+                                }}
+                              />
+                              {option}
+                            </label>
+                          ))}
+                          <label className="checkbox-label" key={`worksheet-${site.siteNumber}-custom-shield`}>
                             <input
                               type="checkbox"
-                              checked={deviceState.selected.has(option)}
+                              checked={hasCustomShield}
                               onChange={(event) => {
-                                const nextSelected = new Set(deviceState.selected);
+                                if (event.target.checked) {
+                                  setCustomShieldEnabled((prev) => ({ ...prev, [index]: true }));
+                                  setCustomInputs((prev) => ({ ...prev, [index]: deviceState.customValue }));
+                                  return;
+                                }
+                                setCustomShieldEnabled((prev) => ({ ...prev, [index]: false }));
+                                setCustomInputs((prev) => {
+                                  const next = { ...prev };
+                                  delete next[index];
+                                  return next;
+                                });
+                                updateAdditionalDevices(index, deviceState.selected, "");
+                              }}
+                            />
+                            Custom Shield
+                          </label>
+                        </div>
+                        {hasCustomShield ? (
+                          <label style={{ marginTop: "0.35rem" }}>
+                            Custom Shield Details
+                            <input
+                              placeholder="Enter custom shield/device"
+                              value={customInputs[index] ?? deviceState.customValue}
+                              onChange={(event) => {
+                                const val = event.target.value;
+                                setCustomInputs((prev) => ({ ...prev, [index]: val }));
+                                updateAdditionalDevices(index, deviceState.selected, val);
+                              }}
+                              onBlur={(event) => {
+                                const val = event.target.value;
+                                setCustomInputs((prev) => ({ ...prev, [index]: val }));
+                                updateAdditionalDevices(index, deviceState.selected, val);
+                              }}
+                            />
+                          </label>
+                        ) : null}
+                      </>
+                    );
+                  })()}
+                  <div className="form-grid compact-grid">
+                    {getSelectedDevices(site.additionalDevices).selected.has("Vac-Lok") ? (
+                      <label>
+                        Vac-Lok Area
+                        <select value={site.worksheetVacLokArea || "NA"} onChange={(event) => updateSite(index, { worksheetVacLokArea: event.target.value })}>
+                          {VAC_LOK_AREA_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </label>
+                    ) : null}
+                    {getSelectedDevices(site.additionalDevices).selected.has("Eye Shield") ? (
+                      <label>
+                        Eye Shield Type
+                        <select value={site.worksheetEyeShieldType || "None"} onChange={(event) => updateSite(index, { worksheetEyeShieldType: event.target.value })}>
+                          {EYE_SHIELD_TYPE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </label>
+                    ) : null}
+                    {getSelectedDevices(site.additionalDevices).selected.has("Gum Shield") ? (
+                      <label>
+                        Gum Shield Position
+                        <select value={site.worksheetGumShieldPosition || "None"} onChange={(event) => updateSite(index, { worksheetGumShieldPosition: event.target.value })}>
+                          {GUM_SHIELD_POSITION_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </label>
+                    ) : null}
+                    {getSelectedDevices(site.additionalDevices).selected.has("Lip Shield") ? (
+                      <label>
+                        Lip Shield Position
+                        <select value={site.worksheetLipShieldPosition || "None"} onChange={(event) => updateSite(index, { worksheetLipShieldPosition: event.target.value })}>
+                          {LIP_SHIELD_POSITION_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </label>
+                    ) : null}
+                  </div>
+                </div>
+                  <div className="worksheet-section positioning-section">
+                    <label>Positioning</label>
+                    <div className="position-list">
+                    {(() => {
+                      const selected = getWorksheetSelection(site.worksheetPositioning);
+                      if (selected.has("Hunched Over Tx Couch")) {
+                        selected.add("Sitting in Chair");
+                      }
+                      return WORKSHEET_POSITION_OPTIONS.map((option) => {
+                        const optionId = `position-${site.siteNumber}-${option.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
+                        return (
+                          <div className="checkbox-option" key={`position-${site.siteNumber}-${option}`}>
+                            <input
+                              id={optionId}
+                              type="checkbox"
+                              checked={selected.has(option)}
+                              onChange={(event) => {
+                                const nextSelected = new Set(selected);
                                 if (event.target.checked) {
                                   nextSelected.add(option);
                                 } else {
                                   nextSelected.delete(option);
                                 }
-                                updateAdditionalDevices(index, nextSelected, deviceState.customValue);
+                                updateWorksheetSelection(index, "worksheetPositioning", [...nextSelected]);
                               }}
                             />
+                            <label className="checkbox-option-label" htmlFor={optionId}>
+                              {option}
+                            </label>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                </div>
+                  <div className="worksheet-section lesion-side-section">
+                    <label>Lesion Side</label>
+                    <div className="side-list">
+                      {WORKSHEET_SIDE_OPTIONS.map((option) => {
+                      const selected = getWorksheetSelection(site.worksheetSide);
+                      const isChecked = selected.has(option);
+                      const optionId = `side-${site.siteNumber}-${option.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
+                      return (
+                        <div className="checkbox-option" key={`side-${site.siteNumber}-${option}`}>
+                          <input
+                            id={optionId}
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(event) => updateWorksheetSelection(index, "worksheetSide", event.target.checked ? [option] : [])}
+                          />
+                          <label className="checkbox-option-label" htmlFor={optionId}>
                             {option}
                           </label>
-                        ))}
-                        <label>
-                          Custom Shield
-                          <input
-                            placeholder="Enter custom shield/device"
-                            value={customInputs[index] ?? deviceState.customValue}
-                            onChange={(event) => setCustomInputs((prev) => ({ ...prev, [index]: event.target.value }))}
-                            onBlur={(event) => {
-                              const val = event.target.value;
-                              setCustomInputs((prev) => { const next = { ...prev }; delete next[index]; return next; });
-                              updateAdditionalDevices(index, deviceState.selected, val);
-                            }}
-                          />
-                        </label>
-                        {!deviceState.selected.size && !deviceState.customValue.trim() ? (
-                          <div className="muted">None</div>
-                        ) : null}
-                      </div>
-                    );
-                  })()}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
               <div className="form-grid">

@@ -14,6 +14,29 @@ export const NOTE_TYPE_LABELS: Record<NoteType, string> = {
 };
 
 export const MAX_TREATMENT_NUMBER = 15;
+export const DEVICE_OPTIONS = [
+  "Eye Shield",
+  "Ear Shield",
+  "Nasal Shield",
+  "Gum Shield",
+  "Vac-Lok",
+  "Hand Ring",
+  "Knee Wedge",
+  "Pillow",
+  "Flash Shield",
+  "Lip Shield"
+] as const;
+export const WORKSHEET_POSITION_OPTIONS = [
+  "Supine",
+  "Prone",
+  "Sitting in Chair",
+  "Hunched Over Tx Couch"
+] as const;
+export const WORKSHEET_SIDE_OPTIONS = ["Left", "Right", "Medial"] as const;
+export const VAC_LOK_AREA_OPTIONS = ["Head", "Leg", "Arm", "Hand", "Foot", "Ear", "Chest", "Back", "NA"] as const;
+export const EYE_SHIELD_TYPE_OPTIONS = ["None", "External", "Internal"] as const;
+export const GUM_SHIELD_POSITION_OPTIONS = ["None", "Upper", "Lower"] as const;
+export const LIP_SHIELD_POSITION_OPTIONS = ["None", "Upper", "Lower"] as const;
 
 export function clampTreatmentNumber(value: number | null): number | null {
   if (value === null || Number.isNaN(value)) {
@@ -54,10 +77,10 @@ export function normalizeOptionValue(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
-const DEVICE_LABELS = [
-  { normalized: "eye shield", label: "Eye Shield" },
-  { normalized: "ear shield", label: "Ear Shield" }
-] as const;
+const DEVICE_LABELS = DEVICE_OPTIONS.map((label) => ({
+  normalized: normalizeOptionValue(label),
+  label
+})) as ReadonlyArray<{ normalized: string; label: string }>;
 
 export function parseAdditionalDevices(value: string): string[] {
   const parts = value
@@ -92,6 +115,69 @@ export function parseAdditionalDevices(value: string): string[] {
 export function formatAdditionalDevices(value: string): string {
   const devices = parseAdditionalDevices(value);
   return devices.length ? devices.join(", ") : "None";
+}
+
+export function getCustomAdditionalDevices(value: string): string {
+  return parseAdditionalDevices(value)
+    .filter((device) => !DEVICE_OPTIONS.includes(device as typeof DEVICE_OPTIONS[number]))
+    .join(", ");
+}
+
+export function formatAdditionalDevicesForSite(site: Pick<
+  SiteSnapshot,
+  | "additionalDevices"
+  | "worksheetVacLokArea"
+  | "worksheetEyeShieldType"
+  | "worksheetGumShieldPosition"
+  | "worksheetLipShieldPosition"
+>): string {
+  const devices = parseAdditionalDevices(site.additionalDevices);
+  if (!devices.length) {
+    return "None";
+  }
+
+  return devices
+    .map((device) => {
+      const normalized = normalizeOptionValue(device);
+      if (normalized === "eye shield" && site.worksheetEyeShieldType && site.worksheetEyeShieldType !== "None") {
+        return `Eye Shield - ${site.worksheetEyeShieldType}`;
+      }
+      if (normalized === "vac-lok" && site.worksheetVacLokArea && site.worksheetVacLokArea !== "NA") {
+        return `Vac-Lok - ${site.worksheetVacLokArea}`;
+      }
+      if (normalized === "gum shield" && site.worksheetGumShieldPosition && site.worksheetGumShieldPosition !== "None") {
+        return `Gum Shield - ${site.worksheetGumShieldPosition}`;
+      }
+      if (normalized === "lip shield" && site.worksheetLipShieldPosition && site.worksheetLipShieldPosition !== "None") {
+        return `Lip Shield - ${site.worksheetLipShieldPosition}`;
+      }
+      if (!DEVICE_OPTIONS.some((option) => normalizeOptionValue(option) === normalized)) {
+        return `Custom Shield - ${device}`;
+      }
+      return device;
+    })
+    .join(", ");
+}
+
+export function parseWorksheetSelection(value: string): string[] {
+  return value
+    .split(",")
+    .map((part) => {
+      const trimmed = part.trim();
+      return normalizeOptionValue(trimmed) === normalizeOptionValue("Sitting in Chair, Hunched Over Tx Couch")
+        ? "Hunched Over Tx Couch"
+        : trimmed;
+    })
+    .filter(Boolean)
+    .filter((part, index, all) => all.findIndex((candidate) => normalizeOptionValue(candidate) === normalizeOptionValue(part)) === index);
+}
+
+export function formatWorksheetSelection(values: string[]): string {
+  return values
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .filter((value, index, all) => all.findIndex((candidate) => normalizeOptionValue(candidate) === normalizeOptionValue(value)) === index)
+    .join(", ");
 }
 
 export function buildShieldSummary(shields: string, additionalDevices: string): string {
@@ -216,17 +302,22 @@ function normalizeVitalsWhitespace(value: string): string {
   return value.trim().replace(/\s+/g, " ");
 }
 
-function appendVitalUnit(value: string, unit: string, matcher: RegExp): string {
+function normalizeVitalUnit(value: string, unit: string, trailingUnitPattern: RegExp): string {
   const trimmed = normalizeVitalsWhitespace(value);
   if (!trimmed) {
     return "";
   }
 
-  return matcher.test(trimmed) ? trimmed : `${trimmed} ${unit}`;
+  const withoutTrailingUnit = trimmed.replace(trailingUnitPattern, "").trim();
+  return withoutTrailingUnit ? `${withoutTrailingUnit} ${unit}` : "";
+}
+
+export function formatBloodPressure(value: string): string {
+  return normalizeVitalUnit(value, "mmHg", /(?:\s*(?:mm\s*hg|mm\s*gh))+$/i);
 }
 
 export function formatHeartRate(value: string): string {
-  return appendVitalUnit(value, "BPM", /\bBPM$/i);
+  return normalizeVitalUnit(value, "BPM", /(?:\s*bpm)+$/i);
 }
 
 export function formatOxygenSaturation(value: string): string {
@@ -235,16 +326,17 @@ export function formatOxygenSaturation(value: string): string {
     return "";
   }
 
-  return /%$/.test(trimmed) ? trimmed : `${trimmed}%`;
+  const withoutPercent = trimmed.replace(/\s*%+\s*$/g, "").trim();
+  return withoutPercent ? `${withoutPercent}%` : "";
 }
 
 export function formatWeight(value: string): string {
-  return appendVitalUnit(value, "lbs", /\blbs?$/i);
+  return normalizeVitalUnit(value, "lbs", /(?:\s*lbs?)+$/i);
 }
 
 export function formatVitals(vitals: Vitals): Vitals {
   return {
-    bloodPressure: normalizeVitalsWhitespace(vitals.bloodPressure),
+    bloodPressure: formatBloodPressure(vitals.bloodPressure),
     heartRate: formatHeartRate(vitals.heartRate),
     oxygenSaturation: formatOxygenSaturation(vitals.oxygenSaturation),
     weight: formatWeight(vitals.weight)
@@ -293,6 +385,12 @@ export function buildSiteSnapshots(
     energyKv: string;
     treatmentInterval: string;
     additionalDevices: string;
+    worksheetSide: string;
+    worksheetPositioning: string;
+    worksheetVacLokArea: string;
+    worksheetEyeShieldType: string;
+    worksheetGumShieldPosition: string;
+    worksheetLipShieldPosition: string;
     dailyDose: number;
     totalDose: number;
     prescribedFractions?: number;
@@ -374,6 +472,7 @@ export function buildDefaultStructuredFields(
     additionalNotes: "",
     finalTreatment: false,
     prescribedFractionsInput: null,
+    projectedFractionsInput: null,
     biopsyDate: defaults.biopsyDate ?? "",
     lastTreatmentDate: defaults.lastTreatmentDate ?? "",
     focusedExam: `An exam was performed including the ${combinedSiteLabel}.`,

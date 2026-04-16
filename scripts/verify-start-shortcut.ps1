@@ -17,6 +17,16 @@ if (-not (Test-Path -LiteralPath $ShortcutPath)) {
   throw "Start shortcut not found at '$ShortcutPath'."
 }
 
+$shell = New-Object -ComObject WScript.Shell
+$shortcut = $shell.CreateShortcut($ShortcutPath)
+$iconLocation = $shortcut.IconLocation
+if (-not [string]::IsNullOrWhiteSpace($iconLocation)) {
+  $iconPath = ($iconLocation -split ",")[0].Trim()
+  if (-not (Test-Path -LiteralPath $iconPath)) {
+    throw "Start shortcut icon not found at '$iconPath'."
+  }
+}
+
 Start-Process -FilePath $ShortcutPath
 
 $deadline = $startedAt.AddSeconds($TimeoutSeconds)

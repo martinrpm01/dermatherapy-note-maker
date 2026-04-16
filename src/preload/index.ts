@@ -38,6 +38,7 @@ const api: ElectronApi = {
   saveVisit: (input) => ipcRenderer.invoke("visit:save", input),
   deleteVisit: (visitId) => ipcRenderer.invoke("visit:delete", visitId),
   generatePdf: (visitId) => ipcRenderer.invoke("visit:generatePdf", visitId),
+  generateSimWorksheet: (visitId) => ipcRenderer.invoke("visit:generateSimWorksheet", visitId),
   getVisitFolder: (visitId) => ipcRenderer.invoke("visit:getFolder", visitId),
   removeVisitPhoto: (photoId) => ipcRenderer.invoke("visit:removePhoto", photoId),
   removeVisitAttachment: (attachmentId) => ipcRenderer.invoke("visit:removeAttachment", attachmentId),

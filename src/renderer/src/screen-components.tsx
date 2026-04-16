@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { PatientArchiveExportResult, PatientArchivePreflightResult, PatientArchiveRestoreBlocker, PatientArchiveRestoreResult, PatientArchiveValidationIssue } from "../../shared/archive";
 import { TEMPLATE_PLACEHOLDERS } from "../../shared/templates";
 import type { AppClient, ArchiveSnapshot, AssetReference, DashboardSnapshot, PatientDetail, SettingsPayload, TemplateDefinitionRecord, AppSettingsView } from "../../shared/types";
-import { formatDisplayDate } from "../../shared/note-rules";
+import { NOTE_TYPE_LABELS, formatDisplayDate } from "../../shared/note-rules";
 import { useResolvedAssetUrl } from "./asset-url";
 
 function patientDisplayName(detail: PatientDetail["patient"]) {
@@ -51,6 +51,15 @@ function buildPatientDetailMatches(details: PatientDetail[], search: string) {
       `${patientDisplayName(detail.patient)} ${detail.patient.mrn} ${detail.courses.map((course) => course.course.courseName).join(" ")}`,
       search
     )
+  );
+}
+
+function getVisitSimWorksheet(visit: PatientDetail["courses"][number]["visits"][number]) {
+  return (
+    visit.attachments.find((attachment) =>
+      attachment.mimeType.toLowerCase().includes("pdf") &&
+      attachment.originalName.toLowerCase().startsWith("sim worksheet")
+    ) ?? null
   );
 }
 
@@ -828,17 +837,18 @@ export function PatientScreen(props: {
             ))}
           </div>
           <div className="visit-list">
-            {courseDetail.visits.map((visit) => (
-              <div className="visit-row" key={visit.note.id}>
+            {courseDetail.visits.map((visit) => {
+              const simWorksheet = getVisitSimWorksheet(visit);
+              return (
+                <div className="visit-row" key={visit.note.id}>
                 <div>
                   <strong>{formatDisplayDate(visit.note.visitDate)}</strong>
-                  <span>
-                    {visit.note.noteType.replace("_", " ")}
-                    {visit.note.treatmentNumber ? ` · Fraction ${visit.note.treatmentNumber}` : ""}
-                  </span>
+                  <span style={{ marginLeft: "0.4rem" }}>{NOTE_TYPE_LABELS[visit.note.noteType]}</span>
+                  {visit.note.treatmentNumber ? <span style={{ marginLeft: "0.4rem" }}>{`· Fraction ${visit.note.treatmentNumber}`}</span> : null}
                 </div>
                 <div className="button-row">
                   <button onClick={() => props.onOpenVisit(courseDetail.course.id, "next_treatment", visit.note.id)}>Open Note</button>
+                  {simWorksheet ? <button onClick={() => props.onOpenPdf(simWorksheet.fileAsset)}>Open Sim Worksheet</button> : null}
                   {visit.note.pdfAsset ? <button onClick={() => props.onOpenPdf(visit.note.pdfAsset!)}>Open PDF</button> : null}
                   <button
                     style={{ color: "var(--danger)", borderColor: "var(--danger)" }}
@@ -851,8 +861,9 @@ export function PatientScreen(props: {
                     Delete Note
                   </button>
                 </div>
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
         </section>
       ))}

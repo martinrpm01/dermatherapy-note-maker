@@ -21,6 +21,7 @@ import {
   buildDefaultStructuredFields,
   buildSiteSnapshots,
   createEmptyVitals,
+  formatVitals,
   getCurrentFraction,
   getAutoNumberOfBlocks,
   getNextTreatmentNumber,
@@ -250,6 +251,7 @@ export class BrowserAppClient implements AppClient {
           prescribedFractionsInput:
             visit.structuredFields.prescribedFractionsInput ??
             (visit.noteType !== "consult_sim" && course.prescribedFractions > 0 ? course.prescribedFractions : null),
+          projectedFractionsInput: visit.structuredFields.projectedFractionsInput ?? null,
           biopsyDate: visit.structuredFields.biopsyDate || course.startDate || "",
           lastTreatmentDate: visit.structuredFields.lastTreatmentDate ?? course.startDate ?? "",
           siteSnapshots: applyAutoNumberOfBlocks(
@@ -848,13 +850,17 @@ export class BrowserAppClient implements AppClient {
     }
 
     const noteType = mode === "consult_sim" || shouldStartWithConsult ? "consult_sim" : getSuggestedNoteType(treatmentNumber);
-    const siteSnapshots = applyAutoNumberOfBlocks(noteType, buildSiteSnapshots(sites, treatmentNumber));
-    const settings = structuredDataStore.getSettingsRecord();
-    const mostRecentVisitDate =
-      visits
-        .map((visit) => visit.note.visitDate)
-        .filter(Boolean)
-        .sort()
+      const siteSnapshots = applyAutoNumberOfBlocks(noteType, buildSiteSnapshots(sites, treatmentNumber));
+      const settings = structuredDataStore.getSettingsRecord();
+      const latestConsultVisit = visits
+        .filter((visit) => visit.note.noteType === "consult_sim")
+        .sort((left, right) => right.note.updatedAt.localeCompare(left.note.updatedAt))[0];
+      const projectedFractionsFromConsult = latestConsultVisit?.note.structuredFields.projectedFractionsInput ?? null;
+      const mostRecentVisitDate =
+        visits
+          .map((visit) => visit.note.visitDate)
+          .filter(Boolean)
+          .sort()
         .at(-1) ?? course.startDate;
     const structuredFields = buildDefaultStructuredFields(noteType, siteSnapshots, settings.supervisingPhysician, {
       biopsyDate: course.startDate,
@@ -864,9 +870,13 @@ export class BrowserAppClient implements AppClient {
       ...site,
       biopsyDate: site.biopsyDate || course.startDate || ""
     }));
-    if (noteType !== "consult_sim" && course.prescribedFractions <= 0) {
-      structuredFields.prescribedFractionsInput = course.prescribedFractions > 0 ? course.prescribedFractions : null;
-    }
+      if (noteType !== "consult_sim") {
+        if (treatmentNumber === 1 && projectedFractionsFromConsult && projectedFractionsFromConsult > 0) {
+          structuredFields.prescribedFractionsInput = projectedFractionsFromConsult;
+        } else if (course.prescribedFractions <= 0) {
+          structuredFields.prescribedFractionsInput = course.prescribedFractions > 0 ? course.prescribedFractions : null;
+        }
+      }
 
     const note: VisitInput = {
       patientId: patient.id,
@@ -922,12 +932,13 @@ export class BrowserAppClient implements AppClient {
       }
     }
 
-    const structuredFields = {
-      ...input.structuredFields,
-      additionalNotes: input.structuredFields.additionalNotes ?? "",
-      prescribedFractionsInput: input.structuredFields.prescribedFractionsInput ?? null,
-      biopsyDate: input.structuredFields.siteSnapshots[0]?.biopsyDate || input.structuredFields.biopsyDate || "",
-      lastTreatmentDate: input.structuredFields.lastTreatmentDate ?? "",
+      const structuredFields = {
+        ...input.structuredFields,
+        additionalNotes: input.structuredFields.additionalNotes ?? "",
+        prescribedFractionsInput: input.structuredFields.prescribedFractionsInput ?? null,
+        projectedFractionsInput: input.structuredFields.projectedFractionsInput ?? null,
+        biopsyDate: input.structuredFields.siteSnapshots[0]?.biopsyDate || input.structuredFields.biopsyDate || "",
+        lastTreatmentDate: input.structuredFields.lastTreatmentDate ?? "",
       siteSnapshots: applyAutoNumberOfBlocks(
         input.noteType,
         input.structuredFields.siteSnapshots
@@ -943,6 +954,7 @@ export class BrowserAppClient implements AppClient {
     const normalizedInput: VisitInput = {
       ...input,
       therapistName: input.therapistName.trim(),
+      vitals: formatVitals(input.vitals),
       structuredFields
     };
 
@@ -1111,6 +1123,10 @@ export class BrowserAppClient implements AppClient {
       pdfAsset: persistedPdf.fileAsset,
       versionNumber
     };
+  }
+
+  async generateSimWorksheet(_visitId: string) {
+    throw new Error("Sim worksheet generation is only available in the desktop app.");
   }
 
   // desktop-only-no-op: desktop returns a real local workspace folder path.

@@ -127,6 +127,10 @@ export class ElectronAppClient implements AppClient {
     return this.api.generatePdf(visitId);
   }
 
+  generateSimWorksheet(visitId: string) {
+    return this.api.generateSimWorksheet(visitId);
+  }
+
   getVisitFolder(visitId: string) {
     return this.api.getVisitFolder(visitId);
   }

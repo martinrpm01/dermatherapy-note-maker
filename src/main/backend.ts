@@ -11,6 +11,7 @@ import type {
   PreparedPatientArchiveDescription
 } from "../shared/archive";
 import { buildVisitPdf } from "./pdf";
+import { buildSimWorksheetPdf } from "./sim-worksheet";
 import { PatientArchivePreparationService } from "./archive-preparation";
 import { DesktopPatientArchiveExportService } from "./archive-export";
 import { DesktopPatientArchiveReaderService } from "./archive-reader";
@@ -24,7 +25,7 @@ import {
   calculateAgeAtDate,
   buildSiteSnapshots,
   createEmptyVitals,
-  formatAdditionalDevices,
+  formatAdditionalDevicesForSite,
   formatDisplayDate,
   formatVitals,
   getAutoNumberOfBlocks,
@@ -675,13 +676,17 @@ export class RadiationNoteService {
     }
 
     const noteType = mode === "consult_sim" || shouldStartWithConsult ? "consult_sim" : getSuggestedNoteType(treatmentNumber);
-    const siteSnapshots = applyAutoNumberOfBlocks(noteType, buildSiteSnapshots(sites, treatmentNumber));
-    const settings = this.repository.getSettingsRecord();
-    const mostRecentVisitDate =
-      visits
-        .map((visit) => visit.note.visitDate)
-        .filter(Boolean)
-        .sort()
+      const siteSnapshots = applyAutoNumberOfBlocks(noteType, buildSiteSnapshots(sites, treatmentNumber));
+      const settings = this.repository.getSettingsRecord();
+      const latestConsultVisit = visits
+        .filter((visit) => visit.note.noteType === "consult_sim")
+        .sort((left, right) => right.note.updatedAt.localeCompare(left.note.updatedAt))[0];
+      const projectedFractionsFromConsult = latestConsultVisit?.note.structuredFields.projectedFractionsInput ?? null;
+      const mostRecentVisitDate =
+        visits
+          .map((visit) => visit.note.visitDate)
+          .filter(Boolean)
+          .sort()
         .at(-1) ?? course.startDate;
     const structuredFields = buildDefaultStructuredFields(noteType, siteSnapshots, settings.supervisingPhysician, {
       biopsyDate: course.startDate,
@@ -691,9 +696,13 @@ export class RadiationNoteService {
       ...site,
       biopsyDate: site.biopsyDate || course.startDate || ""
     }));
-    if (noteType !== "consult_sim" && course.prescribedFractions <= 0) {
-      structuredFields.prescribedFractionsInput = course.prescribedFractions > 0 ? course.prescribedFractions : null;
-    }
+      if (noteType !== "consult_sim") {
+        if (treatmentNumber === 1 && projectedFractionsFromConsult && projectedFractionsFromConsult > 0) {
+          structuredFields.prescribedFractionsInput = projectedFractionsFromConsult;
+        } else if (course.prescribedFractions <= 0) {
+          structuredFields.prescribedFractionsInput = course.prescribedFractions > 0 ? course.prescribedFractions : null;
+        }
+      }
 
     const note: VisitInput = {
       patientId: patient.id,
@@ -734,8 +743,8 @@ export class RadiationNoteService {
       throw new Error("Visit context is incomplete.");
     }
 
-    const prescribedFractionsInput =
-      input.noteType !== "consult_sim" ? input.structuredFields.prescribedFractionsInput ?? null : null;
+      const prescribedFractionsInput =
+        input.noteType !== "consult_sim" ? input.structuredFields.prescribedFractionsInput ?? null : null;
     if (prescribedFractionsInput && prescribedFractionsInput > 0 && prescribedFractionsInput !== course.prescribedFractions) {
       this.repository.updateCoursePrescribedFractions(course.id, prescribedFractionsInput);
       course = this.repository.fetchCourse(input.courseId);
@@ -746,10 +755,11 @@ export class RadiationNoteService {
 
     const structuredFields = {
       ...input.structuredFields,
-      additionalNotes: input.structuredFields.additionalNotes ?? "",
-      finalTreatment: Boolean(input.structuredFields.finalTreatment),
-      prescribedFractionsInput: input.structuredFields.prescribedFractionsInput ?? null,
-      biopsyDate: input.structuredFields.siteSnapshots[0]?.biopsyDate || input.structuredFields.biopsyDate || "",
+        additionalNotes: input.structuredFields.additionalNotes ?? "",
+        finalTreatment: Boolean(input.structuredFields.finalTreatment),
+        prescribedFractionsInput: input.structuredFields.prescribedFractionsInput ?? null,
+        projectedFractionsInput: input.structuredFields.projectedFractionsInput ?? null,
+        biopsyDate: input.structuredFields.siteSnapshots[0]?.biopsyDate || input.structuredFields.biopsyDate || "",
       lastTreatmentDate: input.structuredFields.lastTreatmentDate ?? "",
       physicsComment:
         input.structuredFields.physicsComment?.trim() ||
@@ -767,6 +777,7 @@ export class RadiationNoteService {
     const normalizedInput: VisitInput = {
       ...input,
       therapistName: input.therapistName.trim(),
+      vitals: formatVitals(input.vitals),
       structuredFields
     };
 
@@ -907,6 +918,82 @@ export class RadiationNoteService {
       pdfAsset: persistedPdf.fileAsset,
       versionNumber
     };
+  }
+
+  async generateSimWorksheet(visitId: string) {
+    this.assertUnlocked();
+    const visit = this.repository.fetchVisit(visitId);
+    if (!visit) {
+      throw new Error("Visit not found.");
+    }
+    if (visit.noteType !== "consult_sim") {
+      throw new Error("Sim worksheet is only available for Sim / Consult visits.");
+    }
+
+      const patient = this.repository.fetchPatient(visit.patientId);
+      const course = this.repository.fetchCourse(visit.courseId);
+      if (!patient || !course) {
+        throw new Error("Visit context is incomplete.");
+      }
+
+      const currentCourseSites = this.repository.fetchSites([course.id]);
+      const latestSnapshots = applyAutoNumberOfBlocks(
+        visit.noteType,
+        buildSiteSnapshots(currentCourseSites, visit.treatmentNumber)
+      ).map((site) => {
+        const existingSnapshot = visit.structuredFields.siteSnapshots.find((snapshot) => snapshot.siteNumber === site.siteNumber);
+        return {
+          ...site,
+          biopsyDate: existingSnapshot?.biopsyDate || visit.structuredFields.biopsyDate || course.startDate || ""
+        };
+      });
+
+      const worksheet = await buildSimWorksheetPdf({
+        patient,
+        course,
+        visit: {
+          ...visit,
+          structuredFields: {
+            ...visit.structuredFields,
+            siteSnapshots: latestSnapshots
+          }
+        }
+      });
+      const attachmentsDir = this.assetStore.getVisitAttachmentsDir(patient.id, course.id, visit.id);
+      this.assetStore.ensureDirectory(attachmentsDir);
+      const outputPath = path.join(attachmentsDir, worksheet.fileName);
+
+      const existingWorksheetAttachments = this.repository
+        .fetchVisitsByCourseIds([course.id])
+        .flatMap((courseVisit) => courseVisit.attachments)
+        .filter((attachment) => attachment.originalName === worksheet.fileName);
+      for (const attachment of existingWorksheetAttachments) {
+        this.repository.deleteVisitAttachmentRecord(attachment.id);
+        const attachmentPath = this.resolveAssetPath(attachment.fileAsset);
+        if (attachmentPath) {
+        this.assetStore.deleteFile(attachmentPath);
+      }
+    }
+
+    this.assetStore.writeBinaryFile(outputPath, worksheet.bytes);
+    const nextSortOrder = this.repository.fetchVisitAttachments(visit.id).length + 1;
+    (this.repository as AssetAwareStructuredDataStore).addVisitAttachment(
+      visit.id,
+      this.assetStore.createAssetReference(outputPath, "visit_attachment")!,
+      nextSortOrder,
+      worksheet.caption,
+      "application/pdf",
+      worksheet.fileName
+    );
+
+    const created = this.repository
+      .fetchVisitAttachments(visit.id)
+      .find((attachment) => attachment.originalName === worksheet.fileName);
+    if (!created) {
+      throw new Error("Sim worksheet attachment could not be reloaded after save.");
+    }
+
+    return created;
   }
 
   getVisitFolder(visitId: string): string {
@@ -1067,14 +1154,15 @@ export class RadiationNoteService {
         status: visit.status,
         therapistName: visit.therapistName,
         vitals: visit.vitals,
-        structuredFields: {
-          ...visit.structuredFields,
-          additionalNotes: visit.structuredFields.additionalNotes ?? "",
-          finalTreatment: Boolean(visit.structuredFields.finalTreatment),
-          prescribedFractionsInput:
-            visit.structuredFields.prescribedFractionsInput ??
-            (visit.noteType !== "consult_sim" && course.prescribedFractions > 0 ? course.prescribedFractions : null),
-          biopsyDate: visit.structuredFields.biopsyDate ?? course.startDate ?? "",
+          structuredFields: {
+            ...visit.structuredFields,
+            additionalNotes: visit.structuredFields.additionalNotes ?? "",
+            finalTreatment: Boolean(visit.structuredFields.finalTreatment),
+            prescribedFractionsInput:
+              visit.structuredFields.prescribedFractionsInput ??
+              (visit.noteType !== "consult_sim" && course.prescribedFractions > 0 ? course.prescribedFractions : null),
+            projectedFractionsInput: visit.structuredFields.projectedFractionsInput ?? null,
+            biopsyDate: visit.structuredFields.biopsyDate ?? course.startDate ?? "",
           lastTreatmentDate: visit.structuredFields.lastTreatmentDate ?? course.startDate ?? "",
           physicsComment:
             visit.structuredFields.physicsComment?.trim() ||
@@ -1126,8 +1214,14 @@ export class RadiationNoteService {
       energyKv: "",
       treatmentInterval: "",
       additionalDevices: "",
-      dailyDose: 0,
-      totalDose: 0,
+        worksheetSide: "",
+        worksheetPositioning: "",
+        worksheetVacLokArea: "NA",
+        worksheetEyeShieldType: "None",
+        worksheetGumShieldPosition: "None",
+        worksheetLipShieldPosition: "None",
+        dailyDose: 0,
+        totalDose: 0,
       cumulativeDose: 0
     });
 
@@ -1148,7 +1242,7 @@ export class RadiationNoteService {
       treatmentDepthDisplay: formatMeasurement(getDefaultTreatmentDepth(site1.treatmentDepth)),
       simulationComplications: buildSimulationComplicationText(site1.additionalDevices),
       simulationComplicationsLine: buildSimulationComplicationLine(site1.additionalDevices),
-      additionalDevices: formatAdditionalDevices(site1.additionalDevices)
+        additionalDevices: formatAdditionalDevicesForSite(site1)
     };
     const site2Render = {
       ...site2,
@@ -1164,8 +1258,8 @@ export class RadiationNoteService {
       treatmentDepthDisplay: formatMeasurement(getDefaultTreatmentDepth(site2.treatmentDepth)),
       simulationComplications: buildSimulationComplicationText(site2.additionalDevices),
       simulationComplicationsLine: buildSimulationComplicationLine(site2.additionalDevices),
-      additionalDevices: formatAdditionalDevices(site2.additionalDevices)
-    };
+        additionalDevices: formatAdditionalDevicesForSite(site2)
+      };
 
     const finalTreatmentSection = buildFinalTreatmentSection(note.structuredFields.finalTreatment);
     const mipsSection = buildMipsSection(note.structuredFields.addMips);

@@ -253,7 +253,7 @@ Treatment Interval: {{site1.treatmentInterval}}
 Current Cumulative Dose to Date: {{site1.cumulativeDose}} cGy
 Total Target Dose: {{site1.totalDose}} cGy
 Treatment Parameters:
-Additional Treatment Devices: {{site1.shields}}
+Additional Treatment Devices: {{site1.additionalDevices}}
 Flex Shield (Cutout Used): {{site1.cutoutSizeDisplay}}
 kV: {{site1.energyKv}}
 Dose: {{site1.dailyDose}} cGy
@@ -327,7 +327,7 @@ Treatment Interval: {{site1.treatmentInterval}}
 Current Cumulative Dose to Date: {{site1.cumulativeDose}} cGy
 Total Target Dose: {{site1.totalDose}} cGy
 Treatment Parameters:
-Additional Treatment Devices: {{site1.shields}}
+Additional Treatment Devices: {{site1.additionalDevices}}
 Flex Shield (Cutout Used): {{site1.cutoutSizeDisplay}}
 kV: {{site1.energyKv}}
 Dose: {{site1.dailyDose}} cGy
@@ -410,7 +410,7 @@ Treatment Interval: {{site1.treatmentInterval}}
 Current Cumulative Dose to Date: {{site1.cumulativeDose}} cGy
 Total Target Dose: {{site1.totalDose}} cGy
 Treatment Parameters:
-Additional Treatment Devices: {{site1.shields}}
+Additional Treatment Devices: {{site1.additionalDevices}}
 Flex Shield (Cutout Used): {{site1.cutoutSizeDisplay}}
 kV: {{site1.energyKv}}
 Dose: {{site1.dailyDose}} cGy
@@ -641,7 +641,7 @@ Treatment Interval: {{site1.treatmentInterval}}
 Current Cumulative Dose to Date: {{site1.cumulativeDose}} cGy
 Total Target Dose: {{site1.totalDose}} cGy
 Treatment Parameters:
-Additional Treatment Devices: {{site1.shields}}
+Additional Treatment Devices: {{site1.additionalDevices}}
 Flex Shield (Cutout Used): {{site1.cutoutSizeDisplay}}
 kV: {{site1.energyKv}}
 Dose: {{site1.dailyDose}} cGy
@@ -667,7 +667,7 @@ Treatment Interval: {{site2.treatmentInterval}}
 Current Cumulative Dose to Date: {{site2.cumulativeDose}} cGy
 Total Target Dose: {{site2.totalDose}} cGy
 Treatment Parameters:
-Additional Treatment Devices: {{site2.shields}}
+Additional Treatment Devices: {{site2.additionalDevices}}
 Flex Shield (Cutout Used): {{site2.cutoutSizeDisplay}}
 kV: {{site2.energyKv}}
 Dose: {{site2.dailyDose}} cGy
@@ -740,7 +740,7 @@ Treatment Interval: {{site1.treatmentInterval}}
 Current Cumulative Dose to Date: {{site1.cumulativeDose}} cGy
 Total Target Dose: {{site1.totalDose}} cGy
 Treatment Parameters:
-Additional Treatment Devices: {{site1.shields}}
+Additional Treatment Devices: {{site1.additionalDevices}}
 Flex Shield (Cutout Used): {{site1.cutoutSizeDisplay}}
 kV: {{site1.energyKv}}
 Dose: {{site1.dailyDose}} cGy
@@ -766,7 +766,7 @@ Treatment Interval: {{site2.treatmentInterval}}
 Current Cumulative Dose to Date: {{site2.cumulativeDose}} cGy
 Total Target Dose: {{site2.totalDose}} cGy
 Treatment Parameters:
-Additional Treatment Devices: {{site2.shields}}
+Additional Treatment Devices: {{site2.additionalDevices}}
 Flex Shield (Cutout Used): {{site2.cutoutSizeDisplay}}
 kV: {{site2.energyKv}}
 Dose: {{site2.dailyDose}} cGy
@@ -848,7 +848,7 @@ Treatment Interval: {{site1.treatmentInterval}}
 Current Cumulative Dose to Date: {{site1.cumulativeDose}} cGy
 Total Target Dose: {{site1.totalDose}} cGy
 Treatment Parameters:
-Additional Treatment Devices: {{site1.shields}}
+Additional Treatment Devices: {{site1.additionalDevices}}
 Flex Shield (Cutout Used): {{site1.cutoutSizeDisplay}}
 kV: {{site1.energyKv}}
 Dose: {{site1.dailyDose}} cGy
@@ -879,7 +879,7 @@ Treatment Interval: {{site2.treatmentInterval}}
 Current Cumulative Dose to Date: {{site2.cumulativeDose}} cGy
 Total Target Dose: {{site2.totalDose}} cGy
 Treatment Parameters:
-Additional Treatment Devices: {{site2.shields}}
+Additional Treatment Devices: {{site2.additionalDevices}}
 Flex Shield (Cutout Used): {{site2.cutoutSizeDisplay}}
 kV: {{site2.energyKv}}
 Dose: {{site2.dailyDose}} cGy

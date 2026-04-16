@@ -218,6 +218,7 @@ function registerIpc() {
   ipcMain.handle("visit:save", (_, input) => service.saveVisit(input));
   ipcMain.handle("visit:delete", (_, visitId: string) => service.deleteVisit(visitId));
   ipcMain.handle("visit:generatePdf", (_, visitId: string) => service.generatePdf(visitId));
+  ipcMain.handle("visit:generateSimWorksheet", (_, visitId: string) => service.generateSimWorksheet(visitId));
   ipcMain.handle("visit:removePhoto", (_, photoId: string) => service.removeVisitPhoto(photoId));
   ipcMain.handle("visit:removeAttachment", (_, attachmentId: string) => service.removeVisitAttachment(attachmentId));
 
