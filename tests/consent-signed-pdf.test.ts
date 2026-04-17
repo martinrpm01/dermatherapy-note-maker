@@ -115,7 +115,7 @@ describe("signed consent pdf", () => {
     const pdfDoc = await PDFDocument.load(result.bytes);
     const form = pdfDoc.getForm();
 
-    expect(result.fileName).toBe("Consent Form John Smith.pdf");
+    expect(result.fileName).toBe("John Smith Radiation Consent.pdf");
     expect(pdfDoc.getPageCount()).toBeGreaterThan(0);
     expect(form.getFields()).toHaveLength(0);
   });

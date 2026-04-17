@@ -31,8 +31,8 @@ describe("consent upload pdf", () => {
     const result = await buildConsentUploadPdf(tinyPngUpload, patient);
     const pdf = await PDFDocument.load(result.bytes);
 
-    expect(result.fileName).toBe("Consent Form John Smith.pdf");
-    expect(result.caption).toBe("Consent Form John Smith");
+    expect(result.fileName).toBe("John Smith Radiation Consent.pdf");
+    expect(result.caption).toBe("John Smith Radiation Consent");
     expect(pdf.getPageCount()).toBe(1);
   });
 });
