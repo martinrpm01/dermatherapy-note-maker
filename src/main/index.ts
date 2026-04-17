@@ -169,6 +169,7 @@ function registerIpc() {
   ipcMain.handle("app:wipeAllLocalData", () => service.wipeAllLocalData());
 
   ipcMain.handle("dashboard:getSnapshot", () => service.getDashboardSnapshot());
+  ipcMain.handle("documents:getSnapshot", () => service.getDocumentOnlySnapshot());
   ipcMain.handle("patient:getDetail", (_, patientId: string) => service.getPatientDetail(patientId));
   ipcMain.handle("completed:list", () => service.listCompleted());
   ipcMain.handle("archive:list", () => service.listArchive());
@@ -206,6 +207,13 @@ function registerIpc() {
   ipcMain.handle("patient:restoreArchive", (_, archive: PatientArchiveIoHandle) => service.restorePatientArchive(archive));
 
   ipcMain.handle("course:save", (_, input) => service.saveCourse(input));
+  ipcMain.handle("documents:saveRecord", (_, input) => service.saveDocumentOnlyRecord(input));
+  ipcMain.handle("documents:deleteRecord", (_, recordId: string) => service.deleteDocumentOnlyRecord(recordId));
+  ipcMain.handle("documents:generateConsent", (_, recordId: string) => service.generateDocumentOnlyConsent(recordId));
+  ipcMain.handle("documents:finalizeConsent", (_, recordId: string, input) =>
+    service.finalizeDocumentOnlyConsent(recordId, input)
+  );
+  ipcMain.handle("documents:generateSimWorksheet", (_, recordId: string) => service.generateDocumentOnlySimWorksheet(recordId));
   ipcMain.handle("course:complete", (_, courseId: string) => service.completeCourse(courseId));
   ipcMain.handle("course:restore", (_, courseId: string) => service.restoreCourse(courseId));
   ipcMain.handle("course:delete", (_, courseId: string) => service.deleteCourse(courseId));

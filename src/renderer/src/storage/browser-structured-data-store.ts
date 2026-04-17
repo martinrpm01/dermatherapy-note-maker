@@ -3,6 +3,10 @@ import type {
   AppSettingsView,
   CourseDocumentRecord,
   CourseInput,
+  DocumentOnlyFileRecord,
+  DocumentOnlyInput,
+  DocumentOnlyRecord,
+  DocumentOnlySiteRecord,
   GeneratedPdfRecord,
   PatientInput,
   PatientRecord,
@@ -29,6 +33,9 @@ type BrowserStoreName =
   | "settings"
   | "savedOptions"
   | "patients"
+  | "documentOnlyRecords"
+  | "documentOnlySites"
+  | "documentOnlyFiles"
   | "courses"
   | "sites"
   | "courseDocuments"
@@ -41,7 +48,7 @@ type BrowserStoreName =
 type SqlValue = string | number | null;
 
 const DATABASE_NAME = "dermatherapy-note-maker-browser";
-const DATABASE_VERSION = 2;
+const DATABASE_VERSION = 3;
 
 const DEFAULT_SETTINGS_RECORD: AppSettingsRecord = {
   id: 1,
@@ -164,6 +171,9 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
   private settings = { ...DEFAULT_SETTINGS_RECORD };
   private savedOptions = new Map<string, SavedOptionRecord>();
   private patients = new Map<string, PatientRecord>();
+  private documentOnlyRecords = new Map<string, DocumentOnlyRecord>();
+  private documentOnlySites = new Map<string, DocumentOnlySiteRecord>();
+  private documentOnlyFiles = new Map<string, DocumentOnlyFileRecord>();
   private courses = new Map<string, TreatmentCourseRecord>();
   private sites = new Map<string, TreatmentSiteRecord>();
   private courseDocuments = new Map<string, CourseDocumentRecord>();
@@ -203,6 +213,9 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
     this.settings = { ...DEFAULT_SETTINGS_RECORD };
     this.savedOptions.clear();
     this.patients.clear();
+    this.documentOnlyRecords.clear();
+    this.documentOnlySites.clear();
+    this.documentOnlyFiles.clear();
     this.courses.clear();
     this.sites.clear();
     this.courseDocuments.clear();
@@ -352,6 +365,147 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
         this.queuePut("courses", nextCourse);
       }
     }
+  }
+
+  fetchDocumentOnlyRecords(recordId?: string) {
+    this.ensureInitialized();
+    const records = [...this.documentOnlyRecords.values()].sort(
+      (left, right) => `${right.updatedAt}|${right.lastName}|${right.firstName}`.localeCompare(`${left.updatedAt}|${left.lastName}|${left.firstName}`)
+    );
+    return recordId ? records.filter((record) => record.id === recordId) : records;
+  }
+
+  fetchDocumentOnlySites(recordIds: string[]) {
+    this.ensureInitialized();
+    return [...this.documentOnlySites.values()]
+      .filter((site) => recordIds.includes(site.recordId))
+      .sort((left, right) => `${left.recordId}|${left.siteNumber}`.localeCompare(`${right.recordId}|${right.siteNumber}`));
+  }
+
+  fetchDocumentOnlyFiles(recordId: string) {
+    this.ensureInitialized();
+    return [...this.documentOnlyFiles.values()]
+      .filter((file) => file.recordId === recordId)
+      .sort((left, right) => `${right.updatedAt}|${right.createdAt}`.localeCompare(`${left.updatedAt}|${left.createdAt}`));
+  }
+
+  saveDocumentOnlyRecord(input: DocumentOnlyInput) {
+    this.ensureInitialized();
+    const existing = input.id ? this.documentOnlyRecords.get(input.id) ?? null : null;
+    const record: DocumentOnlyRecord = {
+      id: input.id ?? makeId("document-only"),
+      firstName: input.firstName.trim(),
+      lastName: input.lastName.trim(),
+      mrn: input.mrn.trim(),
+      dob: input.dob,
+      sex: input.sex.trim(),
+      therapistName: input.therapistName.trim(),
+      courseType: input.courseType,
+      biopsyDate: input.biopsyDate,
+      simConsultDate: input.simConsultDate,
+      createdAt: existing?.createdAt ?? nowIso(),
+      updatedAt: nowIso()
+    };
+
+    this.documentOnlyRecords.set(record.id, record);
+    this.queuePut("documentOnlyRecords", record);
+
+    for (const existingSite of [...this.documentOnlySites.values()].filter((site) => site.recordId === record.id)) {
+      this.documentOnlySites.delete(existingSite.id);
+      this.queueDelete("documentOnlySites", existingSite.id);
+    }
+
+    for (const siteInput of input.sites) {
+      const site: DocumentOnlySiteRecord = {
+        id: siteInput.id ?? makeId("document-only-site"),
+        recordId: record.id,
+        siteNumber: siteInput.siteNumber,
+        bodyLocation: siteInput.bodyLocation,
+        treatmentLocationText: siteInput.treatmentLocationText,
+        diagnosisText: siteInput.diagnosisText,
+        icd10: normalizeIcd10(siteInput.icd10),
+        numberOfBlocks: siteInput.numberOfBlocks,
+        lesionSize: formatMeasurement(siteInput.lesionSize),
+        treatmentDepth: siteInput.treatmentDepth,
+        coneSize: siteInput.coneSize,
+        cutoutSize: siteInput.cutoutSize,
+        shields: siteInput.shields,
+        machine: siteInput.machine,
+        energyKv: siteInput.energyKv,
+        treatmentInterval: siteInput.treatmentInterval,
+        additionalDevices: siteInput.additionalDevices,
+        worksheetSide: siteInput.worksheetSide,
+        worksheetPositioning: siteInput.worksheetPositioning,
+        worksheetVacLokArea: siteInput.worksheetVacLokArea,
+        worksheetEyeShieldType: siteInput.worksheetEyeShieldType,
+        worksheetGumShieldPosition: siteInput.worksheetGumShieldPosition,
+        worksheetLipShieldPosition: siteInput.worksheetLipShieldPosition,
+        dailyDose: siteInput.dailyDose,
+        totalDose: siteInput.totalDose,
+        projectedFractions: siteInput.projectedFractions ?? null,
+        createdAt: nowIso(),
+        updatedAt: nowIso()
+      };
+      this.documentOnlySites.set(site.id, site);
+      this.queuePut("documentOnlySites", site);
+    }
+
+    return record;
+  }
+
+  upsertDocumentOnlyFile(
+    recordId: string,
+    fileType: DocumentOnlyFileRecord["fileType"],
+    filePath: string,
+    caption: string,
+    mimeType: string,
+    originalName: string
+  ) {
+    this.ensureInitialized();
+    const existing = this.fetchDocumentOnlyFiles(recordId).find((file) => file.fileType === fileType) ?? null;
+    const record: DocumentOnlyFileRecord = {
+      id: existing?.id ?? makeId("document-only-file"),
+      recordId,
+      fileType,
+      fileAsset: createAssetReferenceForPath("course_document", filePath),
+      caption,
+      mimeType,
+      originalName,
+      createdAt: existing?.createdAt ?? nowIso(),
+      updatedAt: nowIso()
+    };
+    this.documentOnlyFiles.set(record.id, record);
+    this.queuePut("documentOnlyFiles", record);
+    const parentRecord = this.documentOnlyRecords.get(recordId);
+    if (parentRecord) {
+      const nextParent: DocumentOnlyRecord = {
+        ...parentRecord,
+        updatedAt: nowIso()
+      };
+      this.documentOnlyRecords.set(recordId, nextParent);
+      this.queuePut("documentOnlyRecords", nextParent);
+    }
+    return record;
+  }
+
+  deleteDocumentOnlyFileRecord(fileId: string) {
+    this.ensureInitialized();
+    this.documentOnlyFiles.delete(fileId);
+    this.queueDelete("documentOnlyFiles", fileId);
+  }
+
+  deleteDocumentOnlyRecord(recordId: string) {
+    this.ensureInitialized();
+    for (const file of this.fetchDocumentOnlyFiles(recordId)) {
+      this.documentOnlyFiles.delete(file.id);
+      this.queueDelete("documentOnlyFiles", file.id);
+    }
+    for (const site of this.fetchDocumentOnlySites([recordId])) {
+      this.documentOnlySites.delete(site.id);
+      this.queueDelete("documentOnlySites", site.id);
+    }
+    this.documentOnlyRecords.delete(recordId);
+    this.queueDelete("documentOnlyRecords", recordId);
   }
 
   fetchCourses(whereClause?: string, params: SqlValue[] = []): TreatmentCourseRecord[] {
@@ -815,6 +969,18 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
       }));
   }
 
+  loadDocumentOnlyDetails(recordIds?: string[]) {
+    const filteredIds = recordIds?.length ? recordIds : this.fetchDocumentOnlyRecords().map((record) => record.id);
+    return filteredIds
+      .map((recordId) => this.documentOnlyRecords.get(recordId) ?? null)
+      .filter((record): record is DocumentOnlyRecord => Boolean(record))
+      .map((record) => ({
+        record,
+        sites: this.fetchDocumentOnlySites([record.id]),
+        files: this.fetchDocumentOnlyFiles(record.id)
+      }));
+  }
+
   getVisitAssetRecordSet(visitId: string): VisitAssetRecordSet | null {
     const note = this.fetchVisit(visitId);
     if (!note) {
@@ -890,6 +1056,9 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
     this.settings = settings ?? { ...DEFAULT_SETTINGS_RECORD };
     this.savedOptions = this.asMap(await this.getAllFromStore<SavedOptionRecord>("savedOptions"));
     this.patients = this.asMap(await this.getAllFromStore<PatientRecord>("patients"));
+    this.documentOnlyRecords = this.asMap(await this.getAllFromStore<DocumentOnlyRecord>("documentOnlyRecords"));
+    this.documentOnlySites = this.asMap(await this.getAllFromStore<DocumentOnlySiteRecord>("documentOnlySites"));
+    this.documentOnlyFiles = this.asMap(await this.getAllFromStore<DocumentOnlyFileRecord>("documentOnlyFiles"));
     this.courses = this.asMap(
       (await this.getAllFromStore<TreatmentCourseRecord>("courses")).map((course) => ({
         ...course,
@@ -1021,6 +1190,9 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
         ensureStore("settings", "id");
         ensureStore("savedOptions", "id");
         ensureStore("patients", "id");
+        ensureStore("documentOnlyRecords", "id");
+        ensureStore("documentOnlySites", "id");
+        ensureStore("documentOnlyFiles", "id");
         ensureStore("courses", "id");
         ensureStore("sites", "id");
         ensureStore("courseDocuments", "id");

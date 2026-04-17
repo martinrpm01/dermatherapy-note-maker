@@ -19,6 +19,7 @@ export type AssetKind =
   | "course_document"
   | "settings_logo";
 export type CourseDocumentType = "consent_form";
+export type DocumentOnlyFileType = "consent_form" | "sim_worksheet";
 
 export interface AssetReference {
   assetId: string;
@@ -162,6 +163,64 @@ export interface CourseDocumentRecord {
   id: string;
   courseId: string;
   documentType: CourseDocumentType;
+  fileAsset: AssetReference;
+  caption: string;
+  mimeType: string;
+  originalName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DocumentOnlyRecord {
+  id: string;
+  firstName: string;
+  lastName: string;
+  mrn: string;
+  dob: string;
+  sex: string;
+  therapistName: string;
+  courseType: Exclude<CourseType, "consult">;
+  biopsyDate: string;
+  simConsultDate: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DocumentOnlySiteRecord {
+  id: string;
+  recordId: string;
+  siteNumber: 1 | 2;
+  bodyLocation: string;
+  treatmentLocationText: string;
+  diagnosisText: string;
+  icd10: string;
+  numberOfBlocks: number;
+  lesionSize: string;
+  treatmentDepth: string;
+  coneSize: string;
+  cutoutSize: string;
+  shields: string;
+  machine: string;
+  energyKv: string;
+  treatmentInterval: string;
+  additionalDevices: string;
+  worksheetSide: string;
+  worksheetPositioning: string;
+  worksheetVacLokArea: string;
+  worksheetEyeShieldType: string;
+  worksheetGumShieldPosition: string;
+  worksheetLipShieldPosition: string;
+  dailyDose: number;
+  totalDose: number;
+  projectedFractions: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DocumentOnlyFileRecord {
+  id: string;
+  recordId: string;
+  fileType: DocumentOnlyFileType;
   fileAsset: AssetReference;
   caption: string;
   mimeType: string;
@@ -322,6 +381,48 @@ export interface CourseInput {
   sites: TreatmentSiteInput[];
 }
 
+export interface DocumentOnlySiteInput {
+  id?: string;
+  siteNumber: 1 | 2;
+  bodyLocation: string;
+  treatmentLocationText: string;
+  diagnosisText: string;
+  icd10: string;
+  numberOfBlocks: number;
+  lesionSize: string;
+  treatmentDepth: string;
+  coneSize: string;
+  cutoutSize: string;
+  shields: string;
+  machine: string;
+  energyKv: string;
+  treatmentInterval: string;
+  additionalDevices: string;
+  worksheetSide: string;
+  worksheetPositioning: string;
+  worksheetVacLokArea: string;
+  worksheetEyeShieldType: string;
+  worksheetGumShieldPosition: string;
+  worksheetLipShieldPosition: string;
+  dailyDose: number;
+  totalDose: number;
+  projectedFractions?: number | null;
+}
+
+export interface DocumentOnlyInput {
+  id?: string;
+  firstName: string;
+  lastName: string;
+  mrn: string;
+  dob: string;
+  sex: string;
+  therapistName: string;
+  courseType: Exclude<CourseType, "consult">;
+  biopsyDate: string;
+  simConsultDate: string;
+  sites: DocumentOnlySiteInput[];
+}
+
 export interface StoredAssetUpload {
   name: string;
   mimeType: string;
@@ -413,6 +514,16 @@ export interface ArchiveSnapshot {
   patients: PatientDetail[];
 }
 
+export interface DocumentOnlyDetail {
+  record: DocumentOnlyRecord;
+  sites: DocumentOnlySiteRecord[];
+  files: DocumentOnlyFileRecord[];
+}
+
+export interface DocumentOnlySnapshot {
+  records: DocumentOnlyDetail[];
+}
+
 export interface VisitEditorState {
   patient: PatientRecord;
   course: TreatmentCourseRecord;
@@ -473,6 +584,7 @@ export interface AppClient {
   resetPinWithRecoveryCode: (recoveryCode: string, nextPin: string) => Promise<string | null>;
   wipeAllLocalData: () => Promise<void>;
   getDashboardSnapshot: () => Promise<DashboardSnapshot>;
+  getDocumentOnlySnapshot: () => Promise<DocumentOnlySnapshot>;
   getPatientDetail: (patientId: string) => Promise<PatientDetail>;
   listCompleted: () => Promise<ArchiveSnapshot>;
   listArchive: () => Promise<ArchiveSnapshot>;
@@ -487,6 +599,11 @@ export interface AppClient {
   readPatientArchive: (archive: PatientArchiveIoHandle) => Promise<PatientArchiveReadResult>;
   restorePatientArchive: (archive: PatientArchiveIoHandle) => Promise<PatientArchiveRestoreResult>;
   saveCourse: (input: CourseInput) => Promise<TreatmentCourseRecord>;
+  saveDocumentOnlyRecord: (input: DocumentOnlyInput) => Promise<DocumentOnlyRecord>;
+  deleteDocumentOnlyRecord: (recordId: string) => Promise<void>;
+  generateDocumentOnlyConsent: (recordId: string) => Promise<DocumentOnlyFileRecord>;
+  finalizeDocumentOnlyConsent: (recordId: string, input: ConsentSigningInput) => Promise<DocumentOnlyFileRecord>;
+  generateDocumentOnlySimWorksheet: (recordId: string) => Promise<DocumentOnlyFileRecord>;
   completeCourse: (courseId: string) => Promise<void>;
   restoreCourse: (courseId: string) => Promise<void>;
   deleteCourse: (courseId: string) => Promise<void>;

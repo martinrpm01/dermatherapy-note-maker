@@ -53,11 +53,16 @@ import {
   verifyPin
 } from "../shared/pin-auth";
 import { renderTemplate, validateTemplate } from "../shared/template-engine";
+import {
+  buildDocumentOnlySyntheticContext
+} from "../shared/document-only";
 import type {
   AssetReference,
   ArchiveSnapshot,
   BootstrapPayload,
   ConsentSigningInput,
+  DocumentOnlyInput,
+  DocumentOnlySnapshot,
   CourseInput,
   DashboardSnapshot,
   PatientDetail,
@@ -528,6 +533,13 @@ export class RadiationNoteService {
     };
   }
 
+  getDocumentOnlySnapshot(): DocumentOnlySnapshot {
+    this.assertUnlocked();
+    return {
+      records: this.repository.loadDocumentOnlyDetails()
+    };
+  }
+
   getPatientDetail(patientId: string): PatientDetail {
     this.assertUnlocked();
     const detail = this.repository.loadPatientDetails([patientId])[0];
@@ -568,6 +580,74 @@ export class RadiationNoteService {
       patientInput,
       this.assetStore.createAssetReference(facePhotoPath, "patient_face_photo")
     );
+  }
+
+  saveDocumentOnlyRecord(input: DocumentOnlyInput) {
+    this.assertUnlocked();
+    const normalizedInput: DocumentOnlyInput = {
+      ...input,
+      firstName: input.firstName.trim(),
+      lastName: input.lastName.trim(),
+      mrn: input.mrn.trim(),
+      dob: input.dob,
+      sex: input.sex.trim(),
+      therapistName: input.therapistName.trim(),
+      sites: input.sites.map((site) => {
+        const normalizedPlacement = normalizeVacLokPlacement(site.additionalDevices, site.worksheetPositioning);
+        const normalizedDetails = normalizeWorksheetDeviceDetailsForSite({
+          additionalDevices: normalizedPlacement.additionalDevices,
+          worksheetEyeShieldType: site.worksheetEyeShieldType,
+          worksheetGumShieldPosition: site.worksheetGumShieldPosition,
+          worksheetLipShieldPosition: site.worksheetLipShieldPosition
+        });
+        return {
+          ...site,
+          bodyLocation: site.treatmentLocationText.trim() || site.bodyLocation.trim(),
+          treatmentLocationText: site.treatmentLocationText.trim() || site.bodyLocation.trim(),
+          diagnosisText: site.diagnosisText.trim(),
+          icd10: normalizeIcd10(site.icd10),
+          numberOfBlocks: getAutoNumberOfBlocks("consult_sim", site.cutoutSize),
+          lesionSize: formatMeasurement(site.lesionSize),
+          treatmentDepth: getDefaultTreatmentDepth(site.treatmentDepth),
+          coneSize: formatMeasurement(site.coneSize),
+          cutoutSize: normalizeCutoutSizeLabel(site.cutoutSize),
+          machine: getDefaultMachine(site.machine),
+          additionalDevices: normalizedPlacement.additionalDevices,
+          worksheetPositioning: normalizedPlacement.worksheetPositioning,
+          worksheetVacLokArea: normalizeVacLokAreaValue(site.worksheetVacLokArea),
+          worksheetEyeShieldType: normalizedDetails.worksheetEyeShieldType,
+          worksheetGumShieldPosition: normalizedDetails.worksheetGumShieldPosition,
+          worksheetLipShieldPosition: normalizedDetails.worksheetLipShieldPosition,
+          projectedFractions: site.projectedFractions ?? null
+        };
+      })
+    };
+
+    return this.repository.saveDocumentOnlyRecord(normalizedInput);
+  }
+
+  deleteDocumentOnlyRecord(recordId: string) {
+    this.assertUnlocked();
+    const detail = this.repository.loadDocumentOnlyDetails([recordId])[0];
+    if (!detail) {
+      return;
+    }
+
+    const filePaths = detail.files.map((file) => this.resolveAssetPath(file.fileAsset));
+    this.repository.deleteDocumentOnlyRecord(recordId);
+    for (const filePath of filePaths) {
+      if (!filePath) {
+        continue;
+      }
+      this.assetStore.deleteFile(filePath);
+      this.assetStore.cleanupEmptyDirectoryChain(path.dirname(filePath), this.assetStore.rootDir);
+    }
+
+    const recordRoot = path.join(this.assetStore.rootDir, "document-only", encodeURIComponent(recordId));
+    if (this.assetStore.directoryExists(recordRoot)) {
+      this.assetStore.removeDirectory(recordRoot);
+      this.assetStore.cleanupEmptyDirectoryChain(path.dirname(recordRoot), this.assetStore.rootDir);
+    }
   }
 
   archivePatient(patientId: string) {
@@ -1126,6 +1206,130 @@ export class RadiationNoteService {
     }
 
     return created;
+  }
+
+  async generateDocumentOnlyConsent(recordId: string) {
+    this.assertUnlocked();
+    const detail = this.repository.loadDocumentOnlyDetails([recordId])[0];
+    if (!detail) {
+      throw new Error("Document record not found.");
+    }
+
+    const { patient, course, sites } = buildDocumentOnlySyntheticContext(detail);
+    const existingFile = detail.files.find((file) => file.fileType === "consent_form") ?? null;
+    const documentsDir = this.assetStore.getDocumentOnlyFilesDir(recordId);
+    this.assetStore.ensureDirectory(documentsDir);
+
+    const consentForm = await buildConsentFormPdf({
+      patient,
+      course,
+      sites
+    });
+    const outputPath = path.join(documentsDir, consentForm.fileName);
+    this.assetStore.writeBinaryFile(outputPath, consentForm.bytes);
+
+    const persistedFile = this.repository.upsertDocumentOnlyFile(
+      recordId,
+      "consent_form",
+      outputPath,
+      consentForm.caption,
+      "application/pdf",
+      consentForm.fileName
+    );
+
+    const previousPath = existingFile ? this.resolveAssetPath(existingFile.fileAsset) : null;
+    if (previousPath && previousPath !== outputPath) {
+      this.assetStore.deleteFile(previousPath);
+      this.assetStore.cleanupEmptyDirectoryChain(path.dirname(previousPath), this.assetStore.rootDir);
+    }
+
+    return persistedFile;
+  }
+
+  async finalizeDocumentOnlyConsent(recordId: string, signing: ConsentSigningInput) {
+    this.assertUnlocked();
+    const detail = this.repository.loadDocumentOnlyDetails([recordId])[0];
+    if (!detail) {
+      throw new Error("Document record not found.");
+    }
+
+    const { patient, course, sites } = buildDocumentOnlySyntheticContext(detail);
+    const existingFile = detail.files.find((file) => file.fileType === "consent_form") ?? null;
+    const documentsDir = this.assetStore.getDocumentOnlyFilesDir(recordId);
+    this.assetStore.ensureDirectory(documentsDir);
+
+    const consentForm = await buildSignedConsentFormPdf({
+      patient,
+      course,
+      sites,
+      signing
+    });
+    const outputPath = path.join(documentsDir, consentForm.fileName);
+    this.assetStore.writeBinaryFile(outputPath, consentForm.bytes);
+
+    const persistedFile = this.repository.upsertDocumentOnlyFile(
+      recordId,
+      "consent_form",
+      outputPath,
+      consentForm.caption,
+      "application/pdf",
+      consentForm.fileName
+    );
+
+    const previousPath = existingFile ? this.resolveAssetPath(existingFile.fileAsset) : null;
+    if (previousPath && previousPath !== outputPath) {
+      this.assetStore.deleteFile(previousPath);
+      this.assetStore.cleanupEmptyDirectoryChain(path.dirname(previousPath), this.assetStore.rootDir);
+    }
+
+    return persistedFile;
+  }
+
+  async generateDocumentOnlySimWorksheet(recordId: string) {
+    this.assertUnlocked();
+    const detail = this.repository.loadDocumentOnlyDetails([recordId])[0];
+    if (!detail) {
+      throw new Error("Document record not found.");
+    }
+
+    const { patient, course, visit } = buildDocumentOnlySyntheticContext(detail);
+    const existingFile = detail.files.find((file) => file.fileType === "sim_worksheet") ?? null;
+    const documentsDir = this.assetStore.getDocumentOnlyFilesDir(recordId);
+    this.assetStore.ensureDirectory(documentsDir);
+
+    const worksheet = await buildSimWorksheetPdf({
+      patient,
+      course,
+      visit: {
+        ...visit,
+        id: `doc_visit_${recordId}`,
+        status: "draft",
+        createdAt: detail.record.createdAt,
+        updatedAt: detail.record.updatedAt,
+        pdfAsset: null,
+        generatedText: "",
+        editedText: ""
+      }
+    });
+    const outputPath = path.join(documentsDir, worksheet.fileName);
+    this.assetStore.writeBinaryFile(outputPath, worksheet.bytes);
+
+    const persistedFile = this.repository.upsertDocumentOnlyFile(
+      recordId,
+      "sim_worksheet",
+      outputPath,
+      worksheet.caption,
+      "application/pdf",
+      worksheet.fileName
+    );
+
+    const previousPath = existingFile ? this.resolveAssetPath(existingFile.fileAsset) : null;
+    if (previousPath && previousPath !== outputPath) {
+      this.assetStore.deleteFile(previousPath);
+      this.assetStore.cleanupEmptyDirectoryChain(path.dirname(previousPath), this.assetStore.rootDir);
+    }
+
+    return persistedFile;
   }
 
   async generateConsentForm(courseId: string) {

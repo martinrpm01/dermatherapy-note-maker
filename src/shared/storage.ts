@@ -3,6 +3,10 @@ import type {
   AssetReference,
   AppSettingsRecord,
   AppSettingsView,
+  DocumentOnlyFileRecord,
+  DocumentOnlyInput,
+  DocumentOnlyRecord,
+  DocumentOnlySiteRecord,
   CourseDocumentRecord,
   CourseInput,
   GeneratedPdfRecord,
@@ -62,6 +66,20 @@ export interface StructuredDataStore {
   fetchPatient(patientId: string): PatientRecord | null;
   savePatient(input: PatientInput, facePhotoPath: string | null): PatientRecord;
   setPatientStatus(patientId: string, status: PatientRecord["status"]): void;
+  fetchDocumentOnlyRecords(recordId?: string): DocumentOnlyRecord[];
+  fetchDocumentOnlySites(recordIds: string[]): DocumentOnlySiteRecord[];
+  fetchDocumentOnlyFiles(recordId: string): DocumentOnlyFileRecord[];
+  saveDocumentOnlyRecord(input: DocumentOnlyInput): DocumentOnlyRecord;
+  upsertDocumentOnlyFile(
+    recordId: string,
+    fileType: DocumentOnlyFileRecord["fileType"],
+    filePath: string,
+    caption: string,
+    mimeType: string,
+    originalName: string
+  ): DocumentOnlyFileRecord;
+  deleteDocumentOnlyFileRecord(fileId: string): void;
+  deleteDocumentOnlyRecord(recordId: string): void;
   fetchCourses(whereClause?: string, params?: SqlValue[]): TreatmentCourseRecord[];
   fetchCourse(courseId: string): TreatmentCourseRecord | null;
   saveCourse(input: CourseInput): TreatmentCourseRecord;
@@ -124,6 +142,11 @@ export interface StructuredDataStore {
       visits: VisitAssetRecordSet[];
     }>;
   }>;
+  loadDocumentOnlyDetails(recordIds?: string[]): Array<{
+    record: DocumentOnlyRecord;
+    sites: DocumentOnlySiteRecord[];
+    files: DocumentOnlyFileRecord[];
+  }>;
   getVisitAssetRecordSet(visitId: string): VisitAssetRecordSet | null;
   getCourseAssetRecordSet(courseId: string): CourseAssetRecordSet | null;
   getPatientAssetRecordSet(patientId: string): PatientAssetRecordSet;
@@ -135,6 +158,7 @@ export interface BinaryAssetStore {
   initialize(): void;
   getPatientProfileDir(patientId: string): string;
   getCourseDocumentsDir(patientId: string, courseId: string): string;
+  getDocumentOnlyFilesDir(recordId: string): string;
   getVisitPhotosDir(patientId: string, courseId: string, visitId: string): string;
   getVisitAttachmentsDir(patientId: string, courseId: string, visitId: string): string;
   getVisitWorkspaceDir(patientId: string, courseId: string, visitId: string): string;

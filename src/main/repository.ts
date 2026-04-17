@@ -12,6 +12,11 @@ import type {
   AppSettingsView,
   CourseDocumentRecord,
   CourseInput,
+  DocumentOnlyFileRecord,
+  DocumentOnlyInput,
+  DocumentOnlyRecord,
+  DocumentOnlySiteInput,
+  DocumentOnlySiteRecord,
   GeneratedPdfRecord,
   PatientInput,
   PatientRecord,
@@ -193,6 +198,15 @@ export class RadiationNoteRepository implements StructuredDataStore {
   private toCourseDocumentRecord(
     row: Omit<CourseDocumentRecord, "fileAsset"> & { filePath: string; fileAssetId?: string | null }
   ): CourseDocumentRecord {
+    return {
+      ...row,
+      fileAsset: this.toAssetReference(row.filePath, "course_document", row.fileAssetId)!
+    };
+  }
+
+  private toDocumentOnlyFileRecord(
+    row: Omit<DocumentOnlyFileRecord, "fileAsset"> & { filePath: string; fileAssetId?: string | null }
+  ): DocumentOnlyFileRecord {
     return {
       ...row,
       fileAsset: this.toAssetReference(row.filePath, "course_document", row.fileAssetId)!
@@ -431,6 +445,208 @@ export class RadiationNoteRepository implements StructuredDataStore {
           [timestamp, timestamp, patientId]
         );
       }
+    });
+  }
+
+  fetchDocumentOnlyRecords(recordId?: string) {
+    return this.queryAll<DocumentOnlyRecord>(
+      `SELECT
+         id,
+         first_name AS firstName,
+         last_name AS lastName,
+         mrn,
+         dob,
+         sex,
+         therapist_name AS therapistName,
+         course_type AS courseType,
+         biopsy_date AS biopsyDate,
+         sim_consult_date AS simConsultDate,
+         created_at AS createdAt,
+         updated_at AS updatedAt
+       FROM document_only_records
+       ${recordId ? "WHERE id = ?" : ""}
+       ORDER BY updated_at DESC, last_name ASC, first_name ASC`,
+      recordId ? [recordId] : []
+    );
+  }
+
+  fetchDocumentOnlySites(recordIds: string[]) {
+    if (!recordIds.length) {
+      return [] as DocumentOnlySiteRecord[];
+    }
+
+    return this.queryAll<DocumentOnlySiteRecord>(
+      `SELECT
+         id,
+         record_id AS recordId,
+         site_number AS siteNumber,
+         body_location AS bodyLocation,
+         treatment_location_text AS treatmentLocationText,
+         diagnosis_text AS diagnosisText,
+         icd10,
+         number_of_blocks AS numberOfBlocks,
+         lesion_size AS lesionSize,
+         treatment_depth AS treatmentDepth,
+         cone_size AS coneSize,
+         cutout_size AS cutoutSize,
+         shields,
+         machine,
+         energy_kv AS energyKv,
+         treatment_interval AS treatmentInterval,
+         additional_devices AS additionalDevices,
+         worksheet_side AS worksheetSide,
+         worksheet_positioning AS worksheetPositioning,
+         worksheet_vac_lok_area AS worksheetVacLokArea,
+         worksheet_eye_shield_type AS worksheetEyeShieldType,
+         worksheet_gum_shield_position AS worksheetGumShieldPosition,
+         worksheet_lip_shield_position AS worksheetLipShieldPosition,
+         daily_dose AS dailyDose,
+         total_dose AS totalDose,
+         projected_fractions AS projectedFractions,
+         created_at AS createdAt,
+         updated_at AS updatedAt
+       FROM document_only_sites
+       WHERE record_id IN (${this.placeholders(recordIds.length)})
+       ORDER BY record_id ASC, site_number ASC`,
+      recordIds
+    );
+  }
+
+  fetchDocumentOnlyFiles(recordId: string) {
+    return this.queryAll<
+      Omit<DocumentOnlyFileRecord, "fileAsset"> & { filePath: string; fileAssetId: string | null }
+    >(
+      `SELECT
+         id,
+         record_id AS recordId,
+         file_type AS fileType,
+         file_path AS filePath,
+         file_asset_id AS fileAssetId,
+         caption,
+         mime_type AS mimeType,
+         original_name AS originalName,
+         created_at AS createdAt,
+         updated_at AS updatedAt
+       FROM document_only_files
+       WHERE record_id = ?
+       ORDER BY updated_at DESC, created_at DESC`,
+      [recordId]
+    ).map((row) => this.toDocumentOnlyFileRecord(row));
+  }
+
+  saveDocumentOnlyRecord(input: DocumentOnlyInput) {
+    const recordId = input.id ?? makeId("document-only");
+    const existing = input.id ? this.fetchDocumentOnlyRecords(input.id)[0] ?? null : null;
+    const timestamp = nowIso();
+
+    this.mutate(() => {
+      if (existing) {
+        this.run(
+          `UPDATE document_only_records
+           SET first_name = ?, last_name = ?, mrn = ?, dob = ?, sex = ?, therapist_name = ?, course_type = ?, biopsy_date = ?, sim_consult_date = ?, updated_at = ?
+           WHERE id = ?`,
+          [
+            input.firstName.trim(),
+            input.lastName.trim(),
+            input.mrn.trim(),
+            input.dob,
+            input.sex.trim(),
+            input.therapistName.trim(),
+            input.courseType,
+            input.biopsyDate,
+            input.simConsultDate,
+            timestamp,
+            recordId
+          ]
+        );
+      } else {
+        this.run(
+          `INSERT INTO document_only_records (
+             id, first_name, last_name, mrn, dob, sex, therapist_name, course_type, biopsy_date, sim_consult_date, created_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            recordId,
+            input.firstName.trim(),
+            input.lastName.trim(),
+            input.mrn.trim(),
+            input.dob,
+            input.sex.trim(),
+            input.therapistName.trim(),
+            input.courseType,
+            input.biopsyDate,
+            input.simConsultDate,
+            timestamp,
+            timestamp
+          ]
+        );
+      }
+
+      this.run(`DELETE FROM document_only_sites WHERE record_id = ?`, [recordId]);
+      for (const site of input.sites) {
+        this.insertDocumentOnlySite(recordId, site, timestamp);
+      }
+    });
+
+    return this.fetchDocumentOnlyRecords(recordId)[0]!;
+  }
+
+  upsertDocumentOnlyFile(
+    recordId: string,
+    fileType: DocumentOnlyFileRecord["fileType"],
+    filePath: string,
+    caption: string,
+    mimeType: string,
+    originalName: string
+  ) {
+    const existing = this.queryOne<{ id: string; filePath: string | null; fileAssetId: string | null }>(
+      `SELECT id, file_path AS filePath, file_asset_id AS fileAssetId
+       FROM document_only_files
+       WHERE record_id = ? AND file_type = ?
+       LIMIT 1`,
+      [recordId, fileType]
+    );
+    const fileAssetId = this.resolveNextAssetId(existing?.filePath ?? null, existing?.fileAssetId ?? null, filePath);
+    const timestamp = nowIso();
+
+    this.mutate(() => {
+      if (existing) {
+        this.run(
+          `UPDATE document_only_files
+           SET file_path = ?, file_asset_id = ?, caption = ?, mime_type = ?, original_name = ?, updated_at = ?
+           WHERE id = ?`,
+          [filePath, fileAssetId, caption, mimeType, originalName, timestamp, existing.id]
+        );
+      } else {
+        this.run(
+          `INSERT INTO document_only_files (
+             id, record_id, file_type, file_path, file_asset_id, caption, mime_type, original_name, created_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [makeId("document-only-file"), recordId, fileType, filePath, fileAssetId, caption, mimeType, originalName, timestamp, timestamp]
+        );
+      }
+
+      this.run(
+        `UPDATE document_only_records
+         SET updated_at = ?
+         WHERE id = ?`,
+        [timestamp, recordId]
+      );
+    });
+
+    return this.fetchDocumentOnlyFiles(recordId).find((fileRecord) => fileRecord.fileType === fileType)!;
+  }
+
+  deleteDocumentOnlyFileRecord(fileId: string) {
+    this.mutate(() => {
+      this.run(`DELETE FROM document_only_files WHERE id = ?`, [fileId]);
+    });
+  }
+
+  deleteDocumentOnlyRecord(recordId: string) {
+    this.mutate(() => {
+      this.run(`DELETE FROM document_only_files WHERE record_id = ?`, [recordId]);
+      this.run(`DELETE FROM document_only_sites WHERE record_id = ?`, [recordId]);
+      this.run(`DELETE FROM document_only_records WHERE id = ?`, [recordId]);
     });
   }
 
@@ -912,6 +1128,12 @@ export class RadiationNoteRepository implements StructuredDataStore {
       );
       this.run(
         `UPDATE course_documents
+         SET file_path = REPLACE(file_path, ?, ?)
+         WHERE file_path LIKE ?`,
+        [fromPrefix, toPrefix, likePattern]
+      );
+      this.run(
+        `UPDATE document_only_files
          SET file_path = REPLACE(file_path, ?, ?)
          WHERE file_path LIKE ?`,
         [fromPrefix, toPrefix, likePattern]
@@ -1501,6 +1723,46 @@ export class RadiationNoteRepository implements StructuredDataStore {
     }>;
   }
 
+  loadDocumentOnlyDetails(recordIds?: string[]) {
+    const filteredRecordIds = recordIds?.length ? recordIds : this.fetchDocumentOnlyRecords().map((record) => record.id);
+    if (!filteredRecordIds.length) {
+      return [] as Array<{
+        record: DocumentOnlyRecord;
+        sites: DocumentOnlySiteRecord[];
+        files: DocumentOnlyFileRecord[];
+      }>;
+    }
+
+    const recordMap = new Map(this.fetchDocumentOnlyRecords().map((record) => [record.id, record]));
+    const sites = this.fetchDocumentOnlySites(filteredRecordIds);
+    const sitesByRecord = new Map<string, DocumentOnlySiteRecord[]>();
+    for (const site of sites) {
+      const list = sitesByRecord.get(site.recordId) || [];
+      list.push(site);
+      list.sort((left, right) => left.siteNumber - right.siteNumber);
+      sitesByRecord.set(site.recordId, list);
+    }
+
+    return filteredRecordIds
+      .map((recordId) => {
+        const record = recordMap.get(recordId);
+        if (!record) {
+          return null;
+        }
+
+        return {
+          record,
+          sites: sitesByRecord.get(recordId) || [],
+          files: this.fetchDocumentOnlyFiles(recordId)
+        };
+      })
+      .filter(Boolean) as Array<{
+      record: DocumentOnlyRecord;
+      sites: DocumentOnlySiteRecord[];
+      files: DocumentOnlyFileRecord[];
+    }>;
+  }
+
   private attachVisitChildren(
     visits: Array<{
       id: string;
@@ -1646,6 +1908,47 @@ export class RadiationNoteRepository implements StructuredDataStore {
     return new Array(count).fill("?").join(", ");
   }
 
+  private insertDocumentOnlySite(recordId: string, site: DocumentOnlySiteInput, timestamp: string) {
+    this.run(
+      `INSERT INTO document_only_sites (
+         id, record_id, site_number, body_location, treatment_location_text, diagnosis_text, icd10,
+         number_of_blocks, lesion_size, treatment_depth, cone_size, cutout_size, shields, machine, energy_kv, treatment_interval,
+         additional_devices, worksheet_side, worksheet_positioning, worksheet_vac_lok_area, worksheet_eye_shield_type,
+         worksheet_gum_shield_position, worksheet_lip_shield_position, daily_dose, total_dose, projected_fractions, created_at, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        site.id ?? makeId("document-only-site"),
+        recordId,
+        site.siteNumber,
+        site.bodyLocation,
+        site.treatmentLocationText,
+        site.diagnosisText,
+        site.icd10,
+        site.numberOfBlocks,
+        site.lesionSize,
+        site.treatmentDepth,
+        site.coneSize,
+        site.cutoutSize,
+        site.shields,
+        site.machine,
+        site.energyKv,
+        site.treatmentInterval,
+        site.additionalDevices,
+        site.worksheetSide ?? "",
+        site.worksheetPositioning ?? "",
+        site.worksheetVacLokArea ?? "",
+        site.worksheetEyeShieldType ?? "",
+        site.worksheetGumShieldPosition ?? "",
+        site.worksheetLipShieldPosition ?? "",
+        site.dailyDose,
+        site.totalDose,
+        site.projectedFractions ?? null,
+        timestamp,
+        timestamp
+      ]
+    );
+  }
+
   private insertSite(courseId: string, site: TreatmentSiteInput, timestamp: string) {
     this.run(
       `INSERT INTO treatment_sites (
@@ -1732,6 +2035,67 @@ export class RadiationNoteRepository implements StructuredDataStore {
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         archived_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS document_only_records (
+        id TEXT PRIMARY KEY,
+        first_name TEXT NOT NULL,
+        last_name TEXT NOT NULL,
+        mrn TEXT NOT NULL,
+        dob TEXT NOT NULL,
+        sex TEXT NOT NULL DEFAULT '',
+        therapist_name TEXT NOT NULL DEFAULT '',
+        course_type TEXT NOT NULL,
+        biopsy_date TEXT NOT NULL,
+        sim_consult_date TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS document_only_sites (
+        id TEXT PRIMARY KEY,
+        record_id TEXT NOT NULL,
+        site_number INTEGER NOT NULL,
+        body_location TEXT NOT NULL,
+        treatment_location_text TEXT NOT NULL,
+        diagnosis_text TEXT NOT NULL,
+        icd10 TEXT NOT NULL,
+        number_of_blocks INTEGER NOT NULL DEFAULT 1,
+        lesion_size TEXT NOT NULL DEFAULT '',
+        treatment_depth TEXT NOT NULL,
+        cone_size TEXT NOT NULL,
+        cutout_size TEXT NOT NULL,
+        shields TEXT NOT NULL,
+        machine TEXT NOT NULL,
+        energy_kv TEXT NOT NULL,
+        treatment_interval TEXT NOT NULL,
+        additional_devices TEXT NOT NULL,
+        worksheet_side TEXT NOT NULL DEFAULT '',
+        worksheet_positioning TEXT NOT NULL DEFAULT '',
+        worksheet_vac_lok_area TEXT NOT NULL DEFAULT '',
+        worksheet_eye_shield_type TEXT NOT NULL DEFAULT '',
+        worksheet_gum_shield_position TEXT NOT NULL DEFAULT '',
+        worksheet_lip_shield_position TEXT NOT NULL DEFAULT '',
+        daily_dose INTEGER NOT NULL,
+        total_dose INTEGER NOT NULL,
+        projected_fractions INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(record_id) REFERENCES document_only_records(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS document_only_files (
+        id TEXT PRIMARY KEY,
+        record_id TEXT NOT NULL,
+        file_type TEXT NOT NULL,
+        file_path TEXT NOT NULL,
+        file_asset_id TEXT,
+        caption TEXT NOT NULL DEFAULT '',
+        mime_type TEXT NOT NULL DEFAULT '',
+        original_name TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(record_id) REFERENCES document_only_records(id)
       );
 
         CREATE TABLE IF NOT EXISTS treatment_courses (
@@ -2084,6 +2448,12 @@ export class RadiationNoteRepository implements StructuredDataStore {
         this.run(`UPDATE course_documents SET file_asset_id = ? WHERE id = ?`, [makeAssetId(), row.id]);
       });
 
+      this.queryAll<{ id: string }>(
+        `SELECT id FROM document_only_files WHERE file_path IS NOT NULL AND (file_asset_id IS NULL OR file_asset_id = '')`
+      ).forEach((row) => {
+        this.run(`UPDATE document_only_files SET file_asset_id = ? WHERE id = ?`, [makeAssetId(), row.id]);
+      });
+
       this.queryAll<{ id: string; pdfPath: string }>(
         `SELECT id, pdf_path AS pdfPath
          FROM visit_notes
@@ -2146,6 +2516,10 @@ export class RadiationNoteRepository implements StructuredDataStore {
 
     this.queryAll<{ assetId: string | null; filePath: string | null }>(
       `SELECT file_asset_id AS assetId, file_path AS filePath FROM course_documents WHERE file_path IS NOT NULL`
+    ).forEach((row) => register(row.assetId, row.filePath, "course_document"));
+
+    this.queryAll<{ assetId: string | null; filePath: string | null }>(
+      `SELECT file_asset_id AS assetId, file_path AS filePath FROM document_only_files WHERE file_path IS NOT NULL`
     ).forEach((row) => register(row.assetId, row.filePath, "course_document"));
   }
 

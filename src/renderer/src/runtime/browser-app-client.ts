@@ -35,7 +35,18 @@ import {
   normalizeVacLokPlacement,
   normalizeCutoutSizeLabel
 } from "../../../shared/note-rules";
-import type { AppClient, ArchiveSnapshot, AssetReference, DashboardSnapshot, PatientRecord, SettingsPayload, VisitEditorState, VisitInput, VisitNoteRecord } from "../../../shared/types";
+import type {
+  AppClient,
+  ArchiveSnapshot,
+  AssetReference,
+  DashboardSnapshot,
+  DocumentOnlySnapshot,
+  PatientRecord,
+  SettingsPayload,
+  VisitEditorState,
+  VisitInput,
+  VisitNoteRecord
+} from "../../../shared/types";
 import {
   exportPatientArchiveFromBrowserStores,
   type BrowserArchiveExportPayload
@@ -50,6 +61,7 @@ import {
 } from "../../../shared/consent-form-pdf";
 import { buildSimWorksheetPdfFromTemplateBytes } from "../../../shared/sim-worksheet-pdf";
 import { validateTemplate } from "../../../shared/template-engine";
+import { buildDocumentOnlySyntheticContext } from "../../../shared/document-only";
 import { BrowserBinaryAssetStore } from "../storage/browser-binary-asset-store";
 import { BrowserStructuredDataStore } from "../storage/browser-structured-data-store";
 import brandLogo from "../assets/dermatherapy-note-logo.jpg";
@@ -655,6 +667,14 @@ export class BrowserAppClient implements AppClient {
     };
   }
 
+  async getDocumentOnlySnapshot(): Promise<DocumentOnlySnapshot> {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    return {
+      records: structuredDataStore.loadDocumentOnlyDetails()
+    };
+  }
+
   // fully-portable: loads a full patient detail/history view model.
   // Browser implementation will read the same shape from browser-local data.
   async getPatientDetail(patientId: string) {
@@ -875,6 +895,62 @@ export class BrowserAppClient implements AppClient {
     const course = structuredDataStore.saveCourse(normalizedInput);
     await structuredDataStore.flush();
     return course;
+  }
+
+  async saveDocumentOnlyRecord(input: Parameters<AppClient["saveDocumentOnlyRecord"]>[0]) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const normalizedInput = {
+      ...input,
+      firstName: input.firstName.trim(),
+      lastName: input.lastName.trim(),
+      mrn: input.mrn.trim(),
+      sex: input.sex.trim(),
+      therapistName: input.therapistName.trim(),
+      sites: input.sites.map((site) => {
+        const normalizedPlacement = normalizeVacLokPlacement(site.additionalDevices, site.worksheetPositioning);
+        const normalizedDetails = normalizeWorksheetDeviceDetailsForSite({
+          additionalDevices: normalizedPlacement.additionalDevices,
+          worksheetEyeShieldType: site.worksheetEyeShieldType,
+          worksheetGumShieldPosition: site.worksheetGumShieldPosition,
+          worksheetLipShieldPosition: site.worksheetLipShieldPosition
+        });
+        return {
+          ...site,
+          bodyLocation: site.treatmentLocationText.trim() || site.bodyLocation.trim(),
+          treatmentLocationText: site.treatmentLocationText.trim() || site.bodyLocation.trim(),
+          cutoutSize: normalizeCutoutSizeLabel(site.cutoutSize),
+          machine: this.getDefaultMachine(site.machine),
+          treatmentDepth: this.getDefaultTreatmentDepth(site.treatmentDepth),
+          additionalDevices: normalizedPlacement.additionalDevices,
+          worksheetPositioning: normalizedPlacement.worksheetPositioning,
+          worksheetVacLokArea: normalizeVacLokAreaValue(site.worksheetVacLokArea),
+          worksheetEyeShieldType: normalizedDetails.worksheetEyeShieldType,
+          worksheetGumShieldPosition: normalizedDetails.worksheetGumShieldPosition,
+          worksheetLipShieldPosition: normalizedDetails.worksheetLipShieldPosition,
+          numberOfBlocks: getAutoNumberOfBlocks("consult_sim", site.cutoutSize)
+        };
+      })
+    };
+    const record = structuredDataStore.saveDocumentOnlyRecord(normalizedInput);
+    await structuredDataStore.flush();
+    return record;
+  }
+
+  async deleteDocumentOnlyRecord(recordId: string) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    const detail = structuredDataStore.loadDocumentOnlyDetails([recordId])[0];
+    if (!detail) {
+      return;
+    }
+
+    const filePaths = detail.files.map((file) => this.getStoredAssetPath(binaryAssetStore, file.fileAsset));
+    structuredDataStore.deleteDocumentOnlyRecord(recordId);
+    this.deleteStoredFiles(binaryAssetStore, filePaths);
+    this.removeDirectory(binaryAssetStore, `${binaryAssetStore.rootDir}/document-only/${encodeURIComponent(recordId)}`);
+    await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
   }
 
   // fully-portable: marks a course completed.
@@ -1405,6 +1481,151 @@ export class BrowserAppClient implements AppClient {
     }
 
     return created;
+  }
+
+  async generateDocumentOnlyConsent(recordId: string) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    const detail = structuredDataStore.loadDocumentOnlyDetails([recordId])[0];
+    if (!detail) {
+      throw new Error("Document record not found.");
+    }
+
+    const { patient, course, sites } = buildDocumentOnlySyntheticContext(detail);
+    const existingFile = detail.files.find((file) => file.fileType === "consent_form") ?? null;
+    const consentForm = await buildConsentFormPdfFromTemplateBytes(await this.readConsentFormTemplateBytes(), {
+      patient,
+      course,
+      sites
+    });
+
+    const filePath = binaryAssetStore.saveUpload(
+      {
+        name: consentForm.fileName,
+        mimeType: "application/pdf",
+        dataUrl: await this.bytesToDataUrl(consentForm.bytes, "application/pdf")
+      },
+      binaryAssetStore.getDocumentOnlyFilesDir(recordId),
+      consentForm.caption
+    );
+
+    const persistedFile = structuredDataStore.upsertDocumentOnlyFile(
+      recordId,
+      "consent_form",
+      filePath,
+      consentForm.caption,
+      "application/pdf",
+      consentForm.fileName
+    );
+
+    const previousPath = existingFile ? this.getStoredAssetPath(binaryAssetStore, existingFile.fileAsset) : null;
+    if (previousPath && previousPath !== filePath) {
+      this.deleteStoredFiles(binaryAssetStore, [previousPath]);
+    }
+
+    await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
+    return persistedFile;
+  }
+
+  async finalizeDocumentOnlyConsent(recordId: string, input: Parameters<AppClient["finalizeDocumentOnlyConsent"]>[1]) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    const detail = structuredDataStore.loadDocumentOnlyDetails([recordId])[0];
+    if (!detail) {
+      throw new Error("Document record not found.");
+    }
+
+    const { patient, course, sites } = buildDocumentOnlySyntheticContext(detail);
+    const existingFile = detail.files.find((file) => file.fileType === "consent_form") ?? null;
+    const consentForm = await buildSignedConsentFormPdfFromTemplateBytes(await this.readConsentFormTemplateBytes(), {
+      patient,
+      course,
+      sites,
+      signing: input
+    });
+
+    const filePath = binaryAssetStore.saveUpload(
+      {
+        name: consentForm.fileName,
+        mimeType: "application/pdf",
+        dataUrl: await this.bytesToDataUrl(consentForm.bytes, "application/pdf")
+      },
+      binaryAssetStore.getDocumentOnlyFilesDir(recordId),
+      consentForm.caption
+    );
+
+    const persistedFile = structuredDataStore.upsertDocumentOnlyFile(
+      recordId,
+      "consent_form",
+      filePath,
+      consentForm.caption,
+      "application/pdf",
+      consentForm.fileName
+    );
+
+    const previousPath = existingFile ? this.getStoredAssetPath(binaryAssetStore, existingFile.fileAsset) : null;
+    if (previousPath && previousPath !== filePath) {
+      this.deleteStoredFiles(binaryAssetStore, [previousPath]);
+    }
+
+    await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
+    return persistedFile;
+  }
+
+  async generateDocumentOnlySimWorksheet(recordId: string) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    const detail = structuredDataStore.loadDocumentOnlyDetails([recordId])[0];
+    if (!detail) {
+      throw new Error("Document record not found.");
+    }
+
+    const { patient, course, visit } = buildDocumentOnlySyntheticContext(detail);
+    const existingFile = detail.files.find((file) => file.fileType === "sim_worksheet") ?? null;
+    const worksheet = await buildSimWorksheetPdfFromTemplateBytes(await this.readSimWorksheetTemplateBytes(), {
+      patient,
+      course,
+      visit: {
+        ...visit,
+        id: `doc_visit_${recordId}`,
+        status: "draft",
+        createdAt: detail.record.createdAt,
+        updatedAt: detail.record.updatedAt,
+        pdfAsset: null,
+        generatedText: "",
+        editedText: ""
+      }
+    });
+
+    const filePath = binaryAssetStore.saveUpload(
+      {
+        name: worksheet.fileName,
+        mimeType: "application/pdf",
+        dataUrl: await this.bytesToDataUrl(worksheet.bytes, "application/pdf")
+      },
+      binaryAssetStore.getDocumentOnlyFilesDir(recordId),
+      worksheet.caption
+    );
+
+    const persistedFile = structuredDataStore.upsertDocumentOnlyFile(
+      recordId,
+      "sim_worksheet",
+      filePath,
+      worksheet.caption,
+      "application/pdf",
+      worksheet.fileName
+    );
+
+    const previousPath = existingFile ? this.getStoredAssetPath(binaryAssetStore, existingFile.fileAsset) : null;
+    if (previousPath && previousPath !== filePath) {
+      this.deleteStoredFiles(binaryAssetStore, [previousPath]);
+    }
+
+    await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
+    return persistedFile;
   }
 
   async generateConsentForm(courseId: string) {

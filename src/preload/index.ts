@@ -14,6 +14,7 @@ const api: ElectronApi = {
   wipeAllLocalData: () => ipcRenderer.invoke("app:wipeAllLocalData"),
 
   getDashboardSnapshot: () => ipcRenderer.invoke("dashboard:getSnapshot"),
+  getDocumentOnlySnapshot: () => ipcRenderer.invoke("documents:getSnapshot"),
   getPatientDetail: (patientId) => ipcRenderer.invoke("patient:getDetail", patientId),
   listCompleted: () => ipcRenderer.invoke("completed:list"),
   listArchive: () => ipcRenderer.invoke("archive:list"),
@@ -29,6 +30,12 @@ const api: ElectronApi = {
   restorePatientArchive: (archive) => ipcRenderer.invoke("patient:restoreArchive", archive),
 
   saveCourse: (input) => ipcRenderer.invoke("course:save", input),
+  saveDocumentOnlyRecord: (input) => ipcRenderer.invoke("documents:saveRecord", input),
+  deleteDocumentOnlyRecord: (recordId) => ipcRenderer.invoke("documents:deleteRecord", recordId),
+  generateDocumentOnlyConsent: (recordId) => ipcRenderer.invoke("documents:generateConsent", recordId),
+  finalizeDocumentOnlyConsent: (recordId, input) =>
+    ipcRenderer.invoke("documents:finalizeConsent", recordId, input),
+  generateDocumentOnlySimWorksheet: (recordId) => ipcRenderer.invoke("documents:generateSimWorksheet", recordId),
   completeCourse: (courseId) => ipcRenderer.invoke("course:complete", courseId),
   restoreCourse: (courseId) => ipcRenderer.invoke("course:restore", courseId),
   deleteCourse: (courseId) => ipcRenderer.invoke("course:delete", courseId),

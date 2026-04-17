@@ -39,6 +39,10 @@ export class ElectronAppClient implements AppClient {
     return this.api.getDashboardSnapshot();
   }
 
+  getDocumentOnlySnapshot() {
+    return this.api.getDocumentOnlySnapshot();
+  }
+
   getPatientDetail(patientId: string) {
     return this.api.getPatientDetail(patientId);
   }
@@ -93,6 +97,26 @@ export class ElectronAppClient implements AppClient {
 
   saveCourse(input: Parameters<AppClient["saveCourse"]>[0]) {
     return this.api.saveCourse(input);
+  }
+
+  saveDocumentOnlyRecord(input: Parameters<AppClient["saveDocumentOnlyRecord"]>[0]) {
+    return this.api.saveDocumentOnlyRecord(input);
+  }
+
+  deleteDocumentOnlyRecord(recordId: string) {
+    return this.api.deleteDocumentOnlyRecord(recordId);
+  }
+
+  generateDocumentOnlyConsent(recordId: string) {
+    return this.api.generateDocumentOnlyConsent(recordId);
+  }
+
+  finalizeDocumentOnlyConsent(recordId: string, input: Parameters<AppClient["finalizeDocumentOnlyConsent"]>[1]) {
+    return this.api.finalizeDocumentOnlyConsent(recordId, input);
+  }
+
+  generateDocumentOnlySimWorksheet(recordId: string) {
+    return this.api.generateDocumentOnlySimWorksheet(recordId);
   }
 
   completeCourse(courseId: string) {

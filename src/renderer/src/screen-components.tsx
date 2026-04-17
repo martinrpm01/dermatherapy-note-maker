@@ -1,7 +1,17 @@
 import { useEffect, useState } from "react";
 import type { PatientArchiveExportResult, PatientArchivePreflightResult, PatientArchiveRestoreBlocker, PatientArchiveRestoreResult, PatientArchiveValidationIssue } from "../../shared/archive";
 import { TEMPLATE_PLACEHOLDERS } from "../../shared/templates";
-import type { AppClient, ArchiveSnapshot, AssetReference, DashboardSnapshot, PatientDetail, SettingsPayload, TemplateDefinitionRecord, AppSettingsView } from "../../shared/types";
+import type {
+  AppClient,
+  ArchiveSnapshot,
+  AssetReference,
+  DashboardSnapshot,
+  DocumentOnlySnapshot,
+  PatientDetail,
+  SettingsPayload,
+  TemplateDefinitionRecord,
+  AppSettingsView
+} from "../../shared/types";
 import { NOTE_TYPE_LABELS, formatDisplayDate } from "../../shared/note-rules";
 import { useResolvedAssetUrl } from "./asset-url";
 
@@ -834,6 +844,127 @@ export function DashboardScreen(props: {
         </>
       ) : null}
     </section>
+  );
+}
+
+export function DocumentOnlyScreen(props: {
+  snapshot: DocumentOnlySnapshot | null;
+  search: string;
+  onSearchChange: (value: string) => void;
+  onAddRecord: () => void;
+  onEditRecord: (recordId: string) => void;
+  onDeleteRecord: (recordId: string) => void;
+  onReviewConsent: (recordId: string) => void;
+  onGenerateSimWorksheet: (recordId: string) => void;
+  onOpenConsent: (asset: AssetReference) => void;
+  onOpenSimWorksheet: (asset: AssetReference) => void;
+}) {
+  const records = (props.snapshot?.records ?? []).filter((detail) =>
+    matchesSearch(
+      `${detail.record.lastName}, ${detail.record.firstName} ${detail.record.mrn} ${detail.sites
+        .map((site) => `${site.treatmentLocationText} ${site.diagnosisText}`)
+        .join(" ")}`,
+      props.search
+    )
+  );
+
+  return (
+    <>
+      <section className="panel">
+        <div className="section-header">
+          <div>
+            <h2>Consent / Sim Docs</h2>
+            <p>Generate and sign consent forms first, then add worksheet-only setup when you need the sim worksheet.</p>
+          </div>
+          <button className="primary" onClick={props.onAddRecord}>Add Document Record</button>
+        </div>
+        <label style={{ display: "block", maxWidth: "360px" }}>
+          <input
+            placeholder="Search patient, MRN, lesion, or diagnosis"
+            value={props.search}
+            onChange={(event) => props.onSearchChange(event.target.value)}
+          />
+        </label>
+      </section>
+
+      {!records.length ? (
+        <section className="panel empty-state">
+          <h3>No Document Records Yet</h3>
+          <p>Create a document-only record to review/sign consent and generate a sim worksheet in one place.</p>
+        </section>
+      ) : (
+        <section className="panel">
+          <div className="patient-list">
+            {records.map((detail) => {
+              const consentFile = detail.files.find((file) => file.fileType === "consent_form") ?? null;
+              const worksheetFile = detail.files.find((file) => file.fileType === "sim_worksheet") ?? null;
+              return (
+                <article className="patient-row-card patient-row-grouped" key={detail.record.id}>
+                  <div className="patient-row-grouped-header">
+                    <div className="patient-row-identity">
+                      <div className="patient-row-name">
+                        {detail.record.lastName}, {detail.record.firstName}
+                      </div>
+                      <div className="muted" style={{ fontSize: "0.9rem" }}>
+                        MRN {detail.record.mrn} · DOB {formatDisplayDate(detail.record.dob)} ·{" "}
+                        {detail.record.courseType === "two_site" ? "2-lesion" : "1-lesion"} document record
+                      </div>
+                      <div className="muted" style={{ fontSize: "0.9rem", marginTop: "0.35rem" }}>
+                        {detail.sites
+                          .map((site) => site.treatmentLocationText || site.bodyLocation || `Lesion ${site.siteNumber}`)
+                          .filter(Boolean)
+                          .join(" + ")}
+                      </div>
+                    </div>
+                    <div className="patient-row-actions">
+                      <button onClick={() => props.onEditRecord(detail.record.id)}>Edit Intake</button>
+                      <button
+                        style={{ color: "var(--danger)", borderColor: "var(--danger)" }}
+                        onClick={() => props.onDeleteRecord(detail.record.id)}
+                      >
+                        Delete Record
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="patient-row-grouped-course-row">
+                    <div>
+                      <div className="strong" style={{ fontSize: "0.92rem" }}>Consent Form</div>
+                      <div className="muted" style={{ fontSize: "0.85rem" }}>
+                        {consentFile ? "Signed consent is saved for this record." : "No consent form generated yet."}
+                      </div>
+                    </div>
+                    <div className="patient-row-actions">
+                      <button onClick={() => props.onReviewConsent(detail.record.id)}>
+                        {consentFile ? "Re-sign Consent" : "Review / Sign Consent"}
+                      </button>
+                      {consentFile ? <button onClick={() => props.onOpenConsent(consentFile.fileAsset)}>Open Consent</button> : null}
+                    </div>
+                  </div>
+
+                  <div className="patient-row-grouped-course-row">
+                    <div>
+                      <div className="strong" style={{ fontSize: "0.92rem" }}>Sim Worksheet</div>
+                      <div className="muted" style={{ fontSize: "0.85rem" }}>
+                        {worksheetFile ? "Sim worksheet is ready for this record." : "Worksheet setup will be collected when you generate it."}
+                      </div>
+                    </div>
+                    <div className="patient-row-actions">
+                      <button onClick={() => props.onGenerateSimWorksheet(detail.record.id)}>
+                        {worksheetFile ? "Regenerate Sim Worksheet" : "Generate Sim Worksheet"}
+                      </button>
+                      {worksheetFile ? (
+                        <button onClick={() => props.onOpenSimWorksheet(worksheetFile.fileAsset)}>Open Sim Worksheet</button>
+                      ) : null}
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
+    </>
   );
 }
 

@@ -534,6 +534,16 @@ label select {
   padding: 0.7rem 1.1rem;
 }
 
+.patient-row-grouped-course-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.7rem 1.1rem;
+  border-top: 1px solid var(--line);
+  background: var(--panel-strong, rgba(0,0,0,0.02));
+}
+
 .patient-row-course-sub {
   display: flex;
   align-items: center;
@@ -597,6 +607,10 @@ label select {
   padding: 0.5rem 0.85rem;
   font-size: 0.88rem;
   white-space: nowrap;
+}
+
+.empty-state {
+  text-align: center;
 }
 
 .site-grid {

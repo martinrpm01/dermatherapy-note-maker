@@ -21,6 +21,7 @@ import {
 import type {
   ConsentSigningInput,
   CourseInput,
+  DocumentOnlyInput,
   PatientInput,
   PatientRecord,
   TreatmentCourseRecord,
@@ -610,6 +611,42 @@ function createIntakeSite(siteNumber: 1 | 2, source?: CourseInput["sites"][numbe
   };
 }
 
+function createDocumentOnlySite(siteNumber: 1 | 2, source?: DocumentOnlyInput["sites"][number]): DocumentOnlyInput["sites"][number] {
+  return {
+    ...(source ?? {
+      bodyLocation: "",
+      treatmentLocationText: "",
+      diagnosisText: "",
+      icd10: "",
+      numberOfBlocks: 1,
+      lesionSize: "",
+      treatmentDepth: "3",
+      coneSize: "",
+      cutoutSize: "",
+      shields: "",
+      machine: "Xoft Elekta 1200 SPX",
+      energyKv: "50kV",
+      treatmentInterval: "bi-weekly",
+      additionalDevices: "None",
+      worksheetSide: "",
+      worksheetPositioning: "",
+      worksheetVacLokArea: "",
+      worksheetEyeShieldType: "",
+      worksheetGumShieldPosition: "",
+      worksheetLipShieldPosition: "",
+      dailyDose: 400,
+      totalDose: 4000,
+      projectedFractions: null
+    }),
+    id: source?.id,
+    siteNumber,
+    bodyLocation: source?.bodyLocation ?? "",
+    treatmentLocationText: source?.treatmentLocationText ?? "",
+    diagnosisText: source?.diagnosisText ?? "",
+    icd10: source?.icd10 ?? ""
+  };
+}
+
 export function PendingCourseIntakeModal(props: {
   courseForm: CourseInput;
   busy: boolean;
@@ -761,6 +798,519 @@ export function PendingCourseIntakeModal(props: {
           ) : null}
           <button className="primary" disabled={props.busy} onClick={props.onSave}>
             Save Intake
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function DocumentOnlyRecordModal(props: {
+  recordForm: DocumentOnlyInput;
+  busy: boolean;
+  onChange: (next: DocumentOnlyInput) => void;
+  onClose: () => void;
+  onSave: () => void;
+  onDelete?: () => void;
+}) {
+  const recordForm = props.recordForm;
+  const isTwoSite = recordForm.courseType === "two_site";
+
+  function updateSite(index: number, patch: Partial<DocumentOnlyInput["sites"][0]>) {
+    props.onChange({
+      ...recordForm,
+      sites: recordForm.sites.map((site, siteIndex) =>
+        siteIndex === index
+          ? {
+              ...site,
+              ...patch,
+              bodyLocation: patch.treatmentLocationText ?? patch.bodyLocation ?? site.bodyLocation,
+              treatmentLocationText: patch.treatmentLocationText ?? patch.bodyLocation ?? site.treatmentLocationText
+            }
+          : site
+      )
+    });
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <div className={`modal-card wide${isTwoSite ? " two-site-course-modal" : ""}`}>
+        <h3>{recordForm.id ? "Edit Document Record" : "New Document Record"}</h3>
+        <div className="pending-course-intro">
+          <p className="muted">
+            Capture only the information needed for consent now. Additional worksheet setup will be collected later when you generate the Sim Worksheet.
+          </p>
+        </div>
+        <div className="form-grid">
+          <label>
+            First Name
+            <input value={recordForm.firstName} onChange={(event) => props.onChange({ ...recordForm, firstName: event.target.value })} />
+          </label>
+          <label>
+            Last Name
+            <input value={recordForm.lastName} onChange={(event) => props.onChange({ ...recordForm, lastName: event.target.value })} />
+          </label>
+          <label>
+            MRN
+            <input value={recordForm.mrn} onChange={(event) => props.onChange({ ...recordForm, mrn: event.target.value })} />
+          </label>
+          <label>
+            DOB
+            <input type="date" value={recordForm.dob} onChange={(event) => props.onChange({ ...recordForm, dob: event.target.value })} />
+          </label>
+          <label>
+            Sex
+            <select value={recordForm.sex} onChange={(event) => props.onChange({ ...recordForm, sex: event.target.value })}>
+              <option value="">Select Sex</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+            </select>
+          </label>
+          <label>
+            Number of Lesions
+            <select
+              value={recordForm.courseType}
+              onChange={(event) => {
+                const nextType = event.target.value as DocumentOnlyInput["courseType"];
+                props.onChange({
+                  ...recordForm,
+                  courseType: nextType,
+                  sites:
+                    nextType === "two_site"
+                      ? [createDocumentOnlySite(1, recordForm.sites[0]), createDocumentOnlySite(2, recordForm.sites[1])]
+                      : [createDocumentOnlySite(1, recordForm.sites[0])]
+                });
+              }}
+            >
+              <option value="one_site">1 Lesion</option>
+              <option value="two_site">2 Lesions</option>
+            </select>
+          </label>
+          <label>
+            Sim / Consult Date
+            <input
+              type="date"
+              value={recordForm.simConsultDate}
+              onChange={(event) => props.onChange({ ...recordForm, simConsultDate: event.target.value })}
+            />
+          </label>
+        </div>
+        <div className={`site-grid${isTwoSite ? " two-site-course-grid" : ""}`}>
+          {recordForm.sites.map((site, index) => {
+            return (
+              <div className="subpanel compact-course-subpanel" key={site.siteNumber}>
+                <h4>{isTwoSite ? `Lesion ${site.siteNumber}` : "Lesion"}</h4>
+                <div className="form-grid course-top-grid">
+                  <label>
+                    Treatment Lesion
+                    <input
+                      placeholder="Treatment location"
+                      value={site.treatmentLocationText}
+                      onChange={(event) =>
+                        updateSite(index, { treatmentLocationText: event.target.value, bodyLocation: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Diagnosis
+                    <select value={site.diagnosisText} onChange={(event) => updateSite(index, { diagnosisText: event.target.value })}>
+                      <option value="">Select Diagnosis</option>
+                      {DIAGNOSIS_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    ICD10
+                    <input
+                      placeholder="ICD10"
+                      value={site.icd10}
+                      onChange={(event) => updateSite(index, { icd10: normalizeIcd10Input(event.target.value) })}
+                    />
+                  </label>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="button-row">
+          <button onClick={props.onClose}>Cancel</button>
+          {props.onDelete && recordForm.id ? (
+            <button style={{ color: "var(--danger)", borderColor: "var(--danger)" }} onClick={props.onDelete}>
+              Delete Record
+            </button>
+          ) : null}
+          <button className="primary" disabled={props.busy} onClick={props.onSave}>
+            Save Record
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function DocumentOnlyWorksheetModal(props: {
+  recordForm: DocumentOnlyInput;
+  busy: boolean;
+  onChange: (next: DocumentOnlyInput) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const recordForm = props.recordForm;
+  const isTwoSite = recordForm.courseType === "two_site";
+  const [customShieldEnabled, setCustomShieldEnabled] = useState<Record<number, boolean>>({});
+
+  useEffect(() => {
+    setCustomShieldEnabled((current) => {
+      const next: typeof current = {};
+      recordForm.sites.forEach((site, index) => {
+        const existingCustomValue = getSelectedDevices(site.additionalDevices).customValue.trim();
+        next[index] = current[index] ?? Boolean(existingCustomValue);
+      });
+      return next;
+    });
+  }, [recordForm.id, recordForm.sites]);
+
+  function getSelectedDevices(value: string) {
+    const parsed = parseAdditionalDevices(value);
+    const selected = new Set(parsed);
+    const customValues = parsed.filter((device) => !DEVICE_OPTIONS.includes(device));
+    return {
+      selected,
+      customValue: customValues.join(", ")
+    };
+  }
+
+  function updateSite(index: number, patch: Partial<DocumentOnlyInput["sites"][0]>) {
+    props.onChange({
+      ...recordForm,
+      sites: recordForm.sites.map((site, siteIndex) =>
+        siteIndex === index
+          ? {
+              ...site,
+              ...patch,
+              bodyLocation: patch.treatmentLocationText ?? patch.bodyLocation ?? site.bodyLocation,
+              treatmentLocationText: patch.treatmentLocationText ?? patch.bodyLocation ?? site.treatmentLocationText,
+              numberOfBlocks: getAutoNumberOfBlocks("consult_sim", patch.cutoutSize ?? site.cutoutSize)
+            }
+          : site
+      )
+    });
+  }
+
+  function updateAdditionalDevices(index: number, nextSelected: Set<string>, customValue: string) {
+    const nextValues = [
+      ...ADDITIONAL_DEVICE_OPTIONS.filter((option) => nextSelected.has(option)),
+      ...customValue
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean)
+    ];
+
+    const site = recordForm.sites[index];
+    const normalizedCurrentDetails = normalizeWorksheetDeviceDetailsForSite(site);
+    updateSite(index, {
+      additionalDevices: nextValues.length ? formatAdditionalDevices(nextValues.join(", ")) : "None",
+      worksheetEyeShieldType: nextSelected.has("Eye Shield") ? normalizedCurrentDetails.worksheetEyeShieldType : "",
+      worksheetGumShieldPosition: nextSelected.has("Gum Shield") ? normalizedCurrentDetails.worksheetGumShieldPosition : "",
+      worksheetLipShieldPosition: nextSelected.has("Lip Shield") ? normalizedCurrentDetails.worksheetLipShieldPosition : ""
+    });
+  }
+
+  function getWorksheetSelection(value: string) {
+    return new Set(parseWorksheetSelection(value));
+  }
+
+  function updateWorksheetSelection(index: number, field: "worksheetPositioning" | "worksheetSide", values: string[]) {
+    if (field === "worksheetPositioning") {
+      const nextSelected = new Set(parseWorksheetSelection(values.join(", ")));
+      if (nextSelected.has("Hunched Over Tx Couch")) {
+        nextSelected.add("Sitting in Chair");
+      }
+      if (!nextSelected.has("Sitting in Chair")) {
+        nextSelected.delete("Hunched Over Tx Couch");
+      }
+      const orderedValues = WORKSHEET_POSITION_OPTIONS.filter((option) => nextSelected.has(option));
+      const site = recordForm.sites[index];
+      updateSite(index, {
+        [field]: formatWorksheetSelection(orderedValues),
+        worksheetVacLokArea: nextSelected.has("Vac-Lok") ? normalizeVacLokAreaValue(site.worksheetVacLokArea) : ""
+      });
+      return;
+    }
+
+    updateSite(index, { [field]: formatWorksheetSelection(values) });
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <div className={`modal-card wide${isTwoSite ? " two-site-course-modal" : ""}`}>
+        <h3>Sim Worksheet Setup</h3>
+        <div className="pending-course-intro">
+          <p className="muted">
+            Add the worksheet-only setup here. Your consent intake stays separate, and these values can be revised later if needed.
+          </p>
+        </div>
+        <div className="form-grid">
+          <label>
+            Therapist Name
+            <input
+              value={recordForm.therapistName}
+              onChange={(event) => props.onChange({ ...recordForm, therapistName: event.target.value })}
+              onBlur={(event) => props.onChange({ ...recordForm, therapistName: ensureTherapistCredentials(event.target.value) })}
+            />
+          </label>
+        </div>
+        <div className={`site-grid${isTwoSite ? " two-site-course-grid" : ""}`}>
+          {recordForm.sites.map((site, index) => {
+            const selectedDevices = getSelectedDevices(site.additionalDevices);
+            const worksheetPositioning = getWorksheetSelection(site.worksheetPositioning);
+            const worksheetSide = getWorksheetSelection(site.worksheetSide);
+            const customShieldValue = selectedDevices.customValue;
+            return (
+              <div className="subpanel compact-course-subpanel" key={site.siteNumber}>
+                <h4>{isTwoSite ? `Lesion ${site.siteNumber}` : "Lesion"}</h4>
+                <div className="muted" style={{ fontSize: "0.88rem", marginBottom: "0.45rem", lineHeight: 1.35 }}>
+                  <div><strong>Treatment Lesion:</strong> {site.treatmentLocationText || "Not entered yet"}</div>
+                  <div><strong>Diagnosis:</strong> {site.diagnosisText || "Not entered yet"}</div>
+                  <div><strong>ICD10:</strong> {site.icd10 || "Not entered yet"}</div>
+                </div>
+                <div className="form-grid course-top-grid">
+                  <label>
+                    Projected Fractions
+                    <input
+                      type="number"
+                      min={1}
+                      max={15}
+                      placeholder="e.g. 10"
+                      value={site.projectedFractions ?? ""}
+                      onChange={(event) =>
+                        updateSite(index, { projectedFractions: event.target.value ? Number(event.target.value) : null })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Cone Size
+                    <input
+                      placeholder="e.g. 20mm"
+                      value={site.coneSize}
+                      onChange={(event) => updateSite(index, { coneSize: normalizeMeasurementInput(event.target.value) })}
+                    />
+                  </label>
+                  <label>
+                    Cutout Size
+                    <input
+                      placeholder="Open Cone or e.g. 18mm"
+                      value={site.cutoutSize}
+                      onChange={(event) => updateSite(index, { cutoutSize: normalizeMeasurementInput(event.target.value) })}
+                    />
+                  </label>
+                  <label>
+                    Lesion Size (mm)
+                    <input
+                      placeholder="e.g. 10mm"
+                      value={site.lesionSize}
+                      onChange={(event) => updateSite(index, { lesionSize: normalizeMeasurementInput(event.target.value) })}
+                    />
+                  </label>
+                  <label>
+                    Treatment Depth
+                    <select value={site.treatmentDepth} onChange={(event) => updateSite(index, { treatmentDepth: event.target.value })}>
+                      {DEPTH_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option} mm
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <div className="worksheet-setup-grid">
+                  <div className="worksheet-section">
+                    <h4>Additional Treatment Devices</h4>
+                    <div className="checkbox-group compact">
+                      {ADDITIONAL_DEVICE_OPTIONS.map((option) => (
+                        <label className="checkbox-label" key={option}>
+                          <input
+                            type="checkbox"
+                            checked={selectedDevices.selected.has(option)}
+                            onChange={(event) => {
+                              const next = new Set(selectedDevices.selected);
+                              if (event.target.checked) {
+                                next.add(option);
+                              } else {
+                                next.delete(option);
+                              }
+                              updateAdditionalDevices(index, next, customShieldEnabled[index] ? customShieldValue : "");
+                            }}
+                          />
+                          <span>{option}</span>
+                        </label>
+                      ))}
+                      <label className="checkbox-label">
+                        <input
+                          type="checkbox"
+                          checked={customShieldEnabled[index] ?? Boolean(customShieldValue)}
+                          onChange={(event) => {
+                            const enabled = event.target.checked;
+                            setCustomShieldEnabled((current) => ({ ...current, [index]: enabled }));
+                            updateAdditionalDevices(index, selectedDevices.selected, enabled ? customShieldValue : "");
+                          }}
+                        />
+                        <span>Custom Shield</span>
+                      </label>
+                    </div>
+                    {selectedDevices.selected.has("Eye Shield") ? (
+                      <label>
+                        Eye Shield Type
+                        <select
+                          value={normalizeWorksheetDetailValue(site.worksheetEyeShieldType, EYE_SHIELD_TYPE_OPTIONS)}
+                          onChange={(event) => updateSite(index, { worksheetEyeShieldType: event.target.value })}
+                        >
+                          <option value="">Select type</option>
+                          {EYE_SHIELD_TYPE_OPTIONS.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
+                    {selectedDevices.selected.has("Gum Shield") ? (
+                      <label>
+                        Gum Shield Position
+                        <select
+                          value={normalizeWorksheetDetailValue(site.worksheetGumShieldPosition, GUM_SHIELD_POSITION_OPTIONS)}
+                          onChange={(event) => updateSite(index, { worksheetGumShieldPosition: event.target.value })}
+                        >
+                          <option value="">Select position</option>
+                          {GUM_SHIELD_POSITION_OPTIONS.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
+                    {selectedDevices.selected.has("Lip Shield") ? (
+                      <label>
+                        Lip Shield Position
+                        <select
+                          value={normalizeWorksheetDetailValue(site.worksheetLipShieldPosition, LIP_SHIELD_POSITION_OPTIONS)}
+                          onChange={(event) => updateSite(index, { worksheetLipShieldPosition: event.target.value })}
+                        >
+                          <option value="">Select position</option>
+                          {LIP_SHIELD_POSITION_OPTIONS.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
+                    {(customShieldEnabled[index] ?? Boolean(customShieldValue)) ? (
+                      <label>
+                        Custom Shield
+                        <input
+                          placeholder="Enter custom shield/device"
+                          value={customShieldValue}
+                          onChange={(event) => updateAdditionalDevices(index, selectedDevices.selected, event.target.value)}
+                        />
+                      </label>
+                    ) : null}
+                  </div>
+
+                  <div className="worksheet-section positioning-section">
+                    <h4>Positioning</h4>
+                    <div className="position-list">
+                      {WORKSHEET_POSITION_OPTIONS.map((option) => (
+                        <label className="checkbox-option" key={option}>
+                          <input
+                            type="checkbox"
+                            checked={worksheetPositioning.has(option)}
+                            onChange={(event) => {
+                              const next = new Set(worksheetPositioning);
+                              if (event.target.checked) {
+                                next.add(option);
+                              } else {
+                                next.delete(option);
+                              }
+                              updateWorksheetSelection(index, "worksheetPositioning", [...next]);
+                            }}
+                          />
+                          <span className="checkbox-option-label">{option}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {worksheetPositioning.has("Vac-Lok") ? (
+                      <label>
+                        Vac-Lok Area
+                        <select
+                          value={normalizeVacLokAreaValue(site.worksheetVacLokArea)}
+                          onChange={(event) => updateSite(index, { worksheetVacLokArea: event.target.value })}
+                        >
+                          <option value="">Select area</option>
+                          {VAC_LOK_AREA_OPTIONS.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
+                  </div>
+
+                  <div className="worksheet-section lesion-side-section">
+                    <h4>Lesion Side</h4>
+                    <div className="side-list">
+                      {WORKSHEET_SIDE_OPTIONS.map((option) => (
+                        <label className="checkbox-option" key={option}>
+                          <input
+                            type="checkbox"
+                            checked={worksheetSide.has(option)}
+                            onChange={(event) => {
+                              const next = new Set(worksheetSide);
+                              if (event.target.checked) {
+                                next.add(option);
+                              } else {
+                                next.delete(option);
+                              }
+                              updateWorksheetSelection(index, "worksheetSide", [...next]);
+                            }}
+                          />
+                          <span className="checkbox-option-label">{option}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="form-grid compact-grid">
+                  <label>
+                    Daily Dose (cGy)
+                    <input
+                      type="number"
+                      value={site.dailyDose}
+                      onChange={(event) => updateSite(index, { dailyDose: Number(event.target.value) || 0 })}
+                    />
+                  </label>
+                  <label>
+                    Total Dose (cGy)
+                    <input
+                      type="number"
+                      value={site.totalDose}
+                      onChange={(event) => updateSite(index, { totalDose: Number(event.target.value) || 0 })}
+                    />
+                  </label>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="button-row">
+          <button onClick={props.onClose}>Cancel</button>
+          <button className="primary" disabled={props.busy} onClick={props.onSave}>
+            Save + Generate Worksheet
           </button>
         </div>
       </div>

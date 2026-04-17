@@ -2,6 +2,12 @@ import { useEffect, useRef, useState } from "react";
 
 import { useResolvedAssetUrl } from "./asset-url";
 import {
+  createDefaultDocumentOnlyConsentSigningInput,
+  createDocumentOnlyInputFromDetail,
+  createEmptyDocumentOnlyInput,
+  buildDocumentOnlySyntheticContext
+} from "../../shared/document-only";
+import {
   buildVisitPreviewText,
   createCourseFormFromDetail,
   createEmptyConsentCourseForm,
@@ -14,6 +20,7 @@ import {
   ArchiveScreen,
   CompletedScreen,
   DashboardScreen,
+  DocumentOnlyScreen,
   InstallPromptBanner,
   LockScreen,
   PatientScreen,
@@ -22,7 +29,15 @@ import {
   SettingsScreen,
   WipeLocalDataScreen
 } from "./screen-components";
-import { ConsentSigningModal, CourseConsentModal, PatientModal, CourseModal, PendingCourseIntakeModal } from "./modal-components";
+import {
+  ConsentSigningModal,
+  CourseConsentModal,
+  DocumentOnlyRecordModal,
+  DocumentOnlyWorksheetModal,
+  PatientModal,
+  CourseModal,
+  PendingCourseIntakeModal
+} from "./modal-components";
 import { VisitEditorScreen } from "./visit-editor-screen";
 import brandLogo from "./assets/dermatherapy-note-logo.jpg";
 import brandIcon from "./assets/dermatherapy-icon.png";
@@ -34,6 +49,8 @@ import type {
   ConsentSigningInput,
   CourseInput,
   DashboardSnapshot,
+  DocumentOnlyInput,
+  DocumentOnlySnapshot,
   LaunchReadyScreen,
   PatientRecord,
   PatientDetail,
@@ -52,6 +69,7 @@ type Screen =
   | { name: "visit"; courseId: string; mode: "next_treatment" | "consult_sim"; existingVisitId?: string }
   | { name: "completed" }
   | { name: "archive" }
+  | { name: "documents" }
   | { name: "settings" };
 
 type CourseModalMode = "intake" | "full";
@@ -63,7 +81,17 @@ interface AppProps {
 
 type BrowserRecoveryFlow = "auth" | "recover_pin" | "wipe_data";
 
-type ConsentSigningState = {
+type CourseConsentSigningState = {
+  kind: "course";
+  patient: PatientRecord;
+  course: TreatmentCourseRecord;
+  sites: TreatmentSiteRecord[];
+  input: ConsentSigningInput;
+};
+
+type DocumentOnlyConsentSigningState = {
+  kind: "document-only";
+  recordId: string;
   patient: PatientRecord;
   course: TreatmentCourseRecord;
   sites: TreatmentSiteRecord[];
@@ -205,6 +233,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
   }
   const [screen, setScreen] = useState<Screen>({ name: "dashboard" });
   const [dashboard, setDashboard] = useState<DashboardSnapshot | null>(null);
+  const [documentOnlySnapshot, setDocumentOnlySnapshot] = useState<DocumentOnlySnapshot | null>(null);
   const [patientDetail, setPatientDetail] = useState<PatientDetail | null>(null);
   const [completed, setCompleted] = useState<ArchiveSnapshot | null>(null);
   const [completedSearch, setCompletedSearch] = useState("");
@@ -215,15 +244,18 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
   const [visitEditor, setVisitEditor] = useState<VisitEditorState | null>(null);
   const [patientForm, setPatientForm] = useState<PatientInput | null>(null);
   const [courseForm, setCourseForm] = useState<CourseInput | null>(null);
+  const [documentOnlyForm, setDocumentOnlyForm] = useState<DocumentOnlyInput | null>(null);
+  const [documentOnlyWorksheetForm, setDocumentOnlyWorksheetForm] = useState<DocumentOnlyInput | null>(null);
   const [courseFormMode, setCourseFormMode] = useState<CourseModalMode>("full");
   const [courseCompletionFacePhotoUpload, setCourseCompletionFacePhotoUpload] = useState<StoredAssetUpload | null>(null);
   const [courseCompletionNeedsFacePhoto, setCourseCompletionNeedsFacePhoto] = useState(false);
-  const [consentSigning, setConsentSigning] = useState<ConsentSigningState | null>(null);
+  const [consentSigning, setConsentSigning] = useState<CourseConsentSigningState | DocumentOnlyConsentSigningState | null>(null);
   const [courseConsentActions, setCourseConsentActions] = useState<CourseConsentActionsState | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [templateDraft, setTemplateDraft] = useState("");
   const [textDirty, setTextDirty] = useState(false);
   const [dashboardSearch, setDashboardSearch] = useState("");
+  const [documentOnlySearch, setDocumentOnlySearch] = useState("");
   const [archiveSearch, setArchiveSearch] = useState("");
   const [unlockPin, setUnlockPin] = useState("");
   const [setupPin, setSetupPin] = useState("");
@@ -326,6 +358,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     if (screen.name === "dashboard") void loadDashboard();
     if (screen.name === "completed") void loadCompleted();
     if (screen.name === "archive") void loadArchive();
+    if (screen.name === "documents") void loadDocumentOnly();
     if (screen.name === "patient") void loadPatient(screen.patientId);
     if (screen.name === "visit") void loadVisit(screen.courseId, screen.mode, screen.existingVisitId);
   }, [screen, boot, authGateActive]);
@@ -372,6 +405,11 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
   async function loadDashboard() {
     if (!appClient) return;
     setDashboard(await appClient.getDashboardSnapshot());
+  }
+
+  async function loadDocumentOnly() {
+    if (!appClient) return;
+    setDocumentOnlySnapshot(await appClient.getDocumentOnlySnapshot());
   }
 
   async function loadPatient(patientId: string) {
@@ -667,6 +705,43 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     }
   }
 
+  async function saveDocumentOnlyForm() {
+    if (!documentOnlyForm || !appClient) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const isEditing = Boolean(documentOnlyForm.id);
+      await appClient.saveDocumentOnlyRecord(documentOnlyForm);
+      setDocumentOnlyForm(null);
+      setScreen({ name: "documents" });
+      await loadDocumentOnly();
+      showToast(
+        isEditing
+          ? "Document record updated. Re-sign consent or regenerate the sim worksheet if details changed."
+          : "Document record saved."
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteDocumentOnlyForm(recordId?: string) {
+    if (!recordId || !appClient) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await appClient.deleteDocumentOnlyRecord(recordId);
+      setDocumentOnlyForm(null);
+      setDocumentOnlyWorksheetForm(null);
+      await loadDocumentOnly();
+      showToast("Document record deleted.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function generateConsentFormForCourse(courseId: string) {
     // Kept for compatibility with existing button naming.
     const ownerPatientId =
@@ -739,6 +814,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     }
 
     setConsentSigning({
+      kind: "course",
       patient: detail.patient,
       course: targetCourse.course,
       sites: targetCourse.sites,
@@ -750,17 +826,75 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     });
   }
 
+  async function openConsentSigningForDocumentOnly(recordId: string) {
+    if (!appClient) return;
+    const snapshot = documentOnlySnapshot ?? (await appClient.getDocumentOnlySnapshot());
+    const detail = snapshot.records.find((record) => record.record.id === recordId);
+    if (!detail) {
+      return;
+    }
+
+    const synthetic = buildDocumentOnlySyntheticContext(detail);
+    setConsentSigning({
+      kind: "document-only",
+      recordId,
+      patient: synthetic.patient,
+      course: synthetic.course,
+      sites: synthetic.sites,
+      input: createDefaultDocumentOnlyConsentSigningInput(detail)
+    });
+  }
+
   async function finalizeConsentSigning() {
     if (!consentSigning || !appClient) return;
     setBusy(true);
     try {
-      await appClient.finalizeConsentForm(consentSigning.course.id, consentSigning.input);
+      if (consentSigning.kind === "course") {
+        await appClient.finalizeConsentForm(consentSigning.course.id, consentSigning.input);
+      } else {
+        await appClient.finalizeDocumentOnlyConsent(consentSigning.recordId, consentSigning.input);
+      }
       setConsentSigning(null);
-      await loadDashboard();
-      if (patientDetail?.patient.id === consentSigning.patient.id) {
-        await loadPatient(consentSigning.patient.id);
+      if (consentSigning.kind === "course") {
+        await loadDashboard();
+        if (patientDetail?.patient.id === consentSigning.patient.id) {
+          await loadPatient(consentSigning.patient.id);
+        }
+      } else {
+        await loadDocumentOnly();
       }
       showToast("Consent form signed and saved.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openDocumentOnlyWorksheetSetup(recordId: string) {
+    if (!appClient) {
+      return;
+    }
+
+    const snapshot = documentOnlySnapshot ?? (await appClient.getDocumentOnlySnapshot());
+    const detail = snapshot.records.find((record) => record.record.id === recordId);
+    if (!detail) {
+      return;
+    }
+
+    setDocumentOnlyWorksheetForm(createDocumentOnlyInputFromDetail(detail));
+  }
+
+  async function saveAndGenerateDocumentOnlySimWorksheet() {
+    if (!documentOnlyWorksheetForm || !appClient) {
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const saved = await appClient.saveDocumentOnlyRecord(documentOnlyWorksheetForm);
+      await appClient.generateDocumentOnlySimWorksheet(saved.id);
+      setDocumentOnlyWorksheetForm(null);
+      await loadDocumentOnly();
+      showToast("Sim worksheet generated.");
     } finally {
       setBusy(false);
     }
@@ -1128,6 +1262,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
             <button className={screen.name === "dashboard" ? "nav active" : "nav"} onClick={() => setScreen({ name: "dashboard" })}>Active Workflow</button>
             <button className={screen.name === "completed" ? "nav active" : "nav"} onClick={() => setScreen({ name: "completed" })}>Completed Patients</button>
             <button className={screen.name === "archive" ? "nav active" : "nav"} onClick={() => setScreen({ name: "archive" })}>Archive</button>
+            <button className={screen.name === "documents" ? "nav active" : "nav"} onClick={() => setScreen({ name: "documents" })}>Consent / Sim Docs</button>
             <button className={screen.name === "settings" ? "nav active" : "nav"} onClick={() => setScreen({ name: "settings" })}>Settings</button>
           </nav>
           <button className="ghost" onClick={() => void lockApp()}>Lock App</button>
@@ -1398,6 +1533,38 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
           />
         ) : null}
 
+        {screen.name === "documents" ? (
+          <DocumentOnlyScreen
+            snapshot={documentOnlySnapshot}
+            search={documentOnlySearch}
+            onSearchChange={setDocumentOnlySearch}
+            onAddRecord={() =>
+              setDocumentOnlyForm(
+                createEmptyDocumentOnlyInput(
+                  settingsPayload?.settings.defaultTherapist || boot.settings.defaultTherapist || ""
+                )
+              )
+            }
+            onEditRecord={(recordId) => {
+              const detail = documentOnlySnapshot?.records.find((record) => record.record.id === recordId);
+              if (!detail) {
+                return;
+              }
+              setDocumentOnlyForm(createDocumentOnlyInputFromDetail(detail));
+            }}
+            onDeleteRecord={(recordId) => {
+              if (!window.confirm("Delete this document-only record and its generated files?")) {
+                return;
+              }
+              void deleteDocumentOnlyForm(recordId);
+            }}
+            onReviewConsent={(recordId) => void openConsentSigningForDocumentOnly(recordId)}
+            onGenerateSimWorksheet={(recordId) => void openDocumentOnlyWorksheetSetup(recordId)}
+            onOpenConsent={(asset) => void appClient?.openAsset(asset)}
+            onOpenSimWorksheet={(asset) => void appClient?.openAsset(asset)}
+          />
+        ) : null}
+
         {screen.name === "settings" && settingsPayload ? (
           <SettingsScreen
             appClient={appClient}
@@ -1497,6 +1664,34 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
                 onDelete={() => void deleteCourseForm()}
               />
             )
+          ) : null}
+          {documentOnlyForm ? (
+            <DocumentOnlyRecordModal
+              recordForm={documentOnlyForm}
+              busy={busy}
+              onChange={setDocumentOnlyForm}
+              onClose={() => setDocumentOnlyForm(null)}
+              onSave={() => void saveDocumentOnlyForm()}
+              onDelete={
+                documentOnlyForm.id
+                  ? () => {
+                      if (!window.confirm("Delete this document-only record and its generated files?")) {
+                        return;
+                      }
+                      void deleteDocumentOnlyForm(documentOnlyForm.id);
+                    }
+                  : undefined
+              }
+            />
+          ) : null}
+          {documentOnlyWorksheetForm ? (
+            <DocumentOnlyWorksheetModal
+              recordForm={documentOnlyWorksheetForm}
+              busy={busy}
+              onChange={setDocumentOnlyWorksheetForm}
+              onClose={() => setDocumentOnlyWorksheetForm(null)}
+              onSave={() => void saveAndGenerateDocumentOnlySimWorksheet()}
+            />
           ) : null}
           {courseConsentActions && patientDetail ? (() => {
             const targetCourse = patientDetail.courses.find((courseDetail) => courseDetail.course.id === courseConsentActions.courseId);
