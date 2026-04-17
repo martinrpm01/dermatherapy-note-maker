@@ -28,7 +28,7 @@ function buildActiveSearchMatches(dashboard: DashboardSnapshot | null, search: s
     return [];
   }
 
-  const rows = [...dashboard.activeCourses, ...dashboard.patientsWithoutCourse];
+  const rows = [...dashboard.activeCourses, ...dashboard.pendingCourses, ...dashboard.patientsWithoutCourse];
   const seen = new Set<string>();
 
   return rows.filter((row) => {
@@ -36,7 +36,7 @@ function buildActiveSearchMatches(dashboard: DashboardSnapshot | null, search: s
       return false;
     }
     seen.add(row.patientId);
-    const courseText = isDashboardCourseRow(row) ? `${row.courseName} ${row.siteSummary}` : "";
+    const courseText = "courseId" in row ? `${row.courseName} ${row.siteSummary}` : "";
     return matchesSearch(`${row.patientName} ${row.patientMrn} ${courseText}`, search);
   });
 }
@@ -61,6 +61,10 @@ function getVisitSimWorksheet(visit: PatientDetail["courses"][number]["visits"][
       attachment.originalName.toLowerCase().startsWith("sim worksheet")
     ) ?? null
   );
+}
+
+function getCourseConsentDocument(courseDetail: PatientDetail["courses"][number]) {
+  return courseDetail.documents.find((document) => document.documentType === "consent_form") ?? null;
 }
 
 type BlockedPreflightSection = {
@@ -641,10 +645,16 @@ export function DashboardScreen(props: {
   onAddPatient: () => void;
   onOpenPatient: (patientId: string) => void;
   onArchivePatient: (patientId: string) => void;
-  onOpenVisit: (courseId: string, mode: "next_treatment" | "consult_sim", existingVisitId?: string) => void;
+    onOpenVisit: (courseId: string, mode: "next_treatment" | "consult_sim", existingVisitId?: string) => void;
+  onEditPendingCourse: (patientId: string, courseId: string, mode: "intake" | "full") => void;
+  onGenerateConsentForm: (courseId: string) => void;
+  onUploadConsentForm: (patientId: string, courseId: string) => void;
+  onDeleteConsentForm: (patientId: string, courseId: string) => void;
+  onOpenConsentForm: (patientId: string, courseId: string) => void;
   onRestoreArchivedPatient: (patientId: string) => void;
-}) {
+  }) {
   const allCourseRows = props.dashboard?.activeCourses || [];
+  const pendingRows = props.dashboard?.pendingCourses || [];
   const noCourseRows = props.dashboard?.patientsWithoutCourse || [];
 
   // Collect unique patients (from courses + no-course rows), preserve order
@@ -660,6 +670,14 @@ export function DashboardScreen(props: {
     const noC = noCourseRows.find((r) => r.patientId === id);
     const ref = courses[0] || noC!;
     return matchesSearch(`${ref.patientName} ${ref.patientMrn} ${courses.map((c) => `${c.courseName} ${c.siteSummary}`).join(" ")}`, props.search);
+  });
+  const pendingPatientIds = [...new Set(pendingRows.map((row) => row.patientId))].filter((patientId) => {
+    const patientRows = pendingRows.filter((row) => row.patientId === patientId);
+    const ref = patientRows[0];
+    return matchesSearch(
+      `${ref.patientName} ${ref.patientMrn} ${patientRows.map((row) => `${row.courseName} ${row.siteSummary}`).join(" ")}`,
+      props.search
+    );
   });
 
   return (
@@ -743,6 +761,78 @@ export function DashboardScreen(props: {
           );
         })}
       </div>
+      {pendingPatientIds.length ? (
+        <>
+          <div>
+            <h3 style={{ marginBottom: "0.3rem" }}>Pending Sim / Consent</h3>
+            <p className="muted" style={{ margin: 0 }}>
+              Pathology-driven course intakes waiting for consent generation or full course setup.
+            </p>
+          </div>
+          <div className="patient-list">
+            {pendingPatientIds.map((patientId) => {
+              const patientRows = pendingRows.filter((row) => row.patientId === patientId);
+              const ref = patientRows[0];
+              return (
+                <article className="patient-row-card patient-row-grouped" key={`pending-${patientId}`}>
+                  <div className="patient-row-grouped-header">
+                    <PatientAvatar appClient={props.appClient} asset={ref.patientFacePhoto} />
+                    <div className="patient-row-identity">
+                      <div className="patient-row-name">{ref.patientName}</div>
+                      <div className="muted" style={{ fontSize: "0.85rem" }}>
+                        MRN {ref.patientMrn} · DOB {formatDisplayDate(ref.patientDob)}
+                      </div>
+                    </div>
+                    <div className="patient-row-actions">
+                      <button onClick={() => props.onOpenPatient(patientId)}>Open Patient</button>
+                      <button
+                        style={{ color: "var(--danger)", borderColor: "var(--danger)" }}
+                        onClick={() => {
+                          if (window.confirm(`Move ${ref.patientName} to Archive? You can restore them later from the Archive screen.`)) {
+                            props.onArchivePatient(patientId);
+                          }
+                        }}
+                      >
+                        Archive
+                      </button>
+                    </div>
+                  </div>
+                  {patientRows.map((row) => (
+                    <div className="patient-row-course-sub" key={row.courseId}>
+                      <div className="patient-row-course">
+                        <div className="strong" style={{ fontSize: "0.92rem" }}>{row.courseName || "Pending consent course"}</div>
+                        {row.siteSummary ? <div className="muted" style={{ fontSize: "0.85rem" }}>{row.siteSummary}</div> : null}
+                      </div>
+                      <div className="patient-row-stats">
+                        <span>Consent / Path Intake</span>
+                      </div>
+                      <div className="patient-row-actions">
+                        <button onClick={() => props.onEditPendingCourse(patientId, row.courseId, "intake")}>Edit Intake</button>
+                        {row.hasConsentForm ? (
+                          <>
+                            <button onClick={() => props.onOpenConsentForm(patientId, row.courseId)}>Open Consent Form</button>
+                            <button onClick={() => props.onGenerateConsentForm(row.courseId)}>Re-sign Consent</button>
+                            <button onClick={() => props.onUploadConsentForm(patientId, row.courseId)}>Import Signed Consent</button>
+                            <button onClick={() => props.onDeleteConsentForm(patientId, row.courseId)}>Remove Consent</button>
+                          </>
+                        ) : (
+                          <>
+                            <button onClick={() => props.onGenerateConsentForm(row.courseId)}>Review / Sign Consent</button>
+                            <button onClick={() => props.onUploadConsentForm(patientId, row.courseId)}>Import Signed Consent</button>
+                          </>
+                        )}
+                        <button className="primary" onClick={() => props.onEditPendingCourse(patientId, row.courseId, "full")}>
+                          Complete Course Setup
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </article>
+              );
+            })}
+          </div>
+        </>
+      ) : null}
     </section>
   );
 }
@@ -753,11 +843,16 @@ export function PatientScreen(props: {
   onEditPatient: () => void;
   onAddCourse: () => void;
   onEditCourse: (courseId: string) => void;
+  onEditPathIntake: (courseId: string) => void;
+  onCompleteCourseSetup: (courseId: string) => void;
   onArchivePatient: () => void;
   onOpenVisit: (courseId: string, mode: "next_treatment" | "consult_sim", existingVisitId?: string) => void;
   onCompleteCourse: (courseId: string) => void;
   onRestoreCourse: (courseId: string) => void;
   onOpenPdf: (asset: AssetReference) => void;
+  onGenerateConsentForm: (courseId: string) => void;
+  onUploadConsentForm: (patientId: string, courseId: string) => void;
+  onDeleteConsentForm: (patientId: string, courseId: string) => void;
   onDeleteVisit: (visitId: string) => void;
 }) {
   const detail = props.patientDetail;
@@ -774,6 +869,8 @@ export function PatientScreen(props: {
   const visibleCourses = selectedCourseId === "all"
     ? detail.courses
     : detail.courses.filter((cd) => cd.course.id === selectedCourseId);
+  const pendingCourses = visibleCourses.filter((courseDetail) => courseDetail.course.status === "pending");
+  const regularCourses = visibleCourses.filter((courseDetail) => courseDetail.course.status !== "pending");
   return (
     <section className="screen">
       <div className="screen-header">
@@ -802,7 +899,59 @@ export function PatientScreen(props: {
           {facePhotoSrc ? <img className="face-photo" src={facePhotoSrc} alt="" /> : null}
         </div>
       ) : null}
-      {visibleCourses.map((courseDetail) => (
+      {pendingCourses.length ? (
+        <>
+          <div>
+            <h3 style={{ marginBottom: "0.3rem" }}>Pending Sim / Consent</h3>
+            <p className="muted" style={{ margin: 0 }}>
+              Generate consent from pathology first, then complete the full course setup after the sim / consult.
+            </p>
+          </div>
+          {pendingCourses.map((courseDetail) => {
+            const consentDocument = getCourseConsentDocument(courseDetail);
+            return (
+              <section className="panel" key={courseDetail.course.id}>
+                <div className="section-header">
+                  <div>
+                    <h3>{courseDetail.course.courseName || "Pending consent course"}</h3>
+                    <p>{courseDetail.course.courseType === "one_site" ? "1-lesion course" : "2-lesion course"} · pending</p>
+                  </div>
+                  <div className="button-row">
+                    <button onClick={() => props.onEditCourse(courseDetail.course.id)}>Edit Intake</button>
+                    {consentDocument ? (
+                      <>
+                        <button onClick={() => props.onOpenPdf(consentDocument.fileAsset)}>Open Consent Form</button>
+                        <button onClick={() => props.onGenerateConsentForm(courseDetail.course.id)}>Re-sign Consent</button>
+                        <button onClick={() => props.onUploadConsentForm(courseDetail.course.patientId, courseDetail.course.id)}>Import Signed Consent</button>
+                        <button onClick={() => props.onDeleteConsentForm(courseDetail.course.patientId, courseDetail.course.id)}>Remove Consent</button>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={() => props.onGenerateConsentForm(courseDetail.course.id)}>Review / Sign Consent</button>
+                        <button onClick={() => props.onUploadConsentForm(courseDetail.course.patientId, courseDetail.course.id)}>Import Signed Consent</button>
+                      </>
+                    )}
+                    <button className="primary" onClick={() => props.onCompleteCourseSetup(courseDetail.course.id)}>
+                      Complete Course Setup
+                    </button>
+                  </div>
+                </div>
+                <div className="site-grid">
+                  {courseDetail.sites.map((site) => (
+                    <div className="subpanel" key={site.id}>
+                      <h4>Lesion {site.siteNumber}</h4>
+                      <p>{site.bodyLocation || "Treatment site pending"}</p>
+                      <p>{site.diagnosisText || "Diagnosis pending"}</p>
+                      <p>{site.icd10 || "ICD10 pending"}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+        </>
+      ) : null}
+      {regularCourses.map((courseDetail) => (
         <section className="panel" key={courseDetail.course.id}>
           <div className="section-header">
             <div>
@@ -813,6 +962,7 @@ export function PatientScreen(props: {
               </p>
             </div>
             <div className="button-row">
+              <button onClick={() => props.onEditPathIntake(courseDetail.course.id)}>Consent</button>
               <button onClick={() => props.onEditCourse(courseDetail.course.id)}>Edit Course</button>
               <button className="primary" onClick={() => props.onOpenVisit(courseDetail.course.id, "next_treatment")}>
                 Start Today's Note
@@ -839,6 +989,7 @@ export function PatientScreen(props: {
           <div className="visit-list">
             {courseDetail.visits.map((visit) => {
               const simWorksheet = getVisitSimWorksheet(visit);
+              const consentDocument = getCourseConsentDocument(courseDetail);
               return (
                 <div className="visit-row" key={visit.note.id}>
                 <div>
@@ -848,6 +999,9 @@ export function PatientScreen(props: {
                 </div>
                 <div className="button-row">
                   <button onClick={() => props.onOpenVisit(courseDetail.course.id, "next_treatment", visit.note.id)}>Open Note</button>
+                  {visit.note.noteType === "consult_sim" && consentDocument ? (
+                    <button onClick={() => props.onOpenPdf(consentDocument.fileAsset)}>Open Consent Form</button>
+                  ) : null}
                   {simWorksheet ? <button onClick={() => props.onOpenPdf(simWorksheet.fileAsset)}>Open Sim Worksheet</button> : null}
                   {visit.note.pdfAsset ? <button onClick={() => props.onOpenPdf(visit.note.pdfAsset!)}>Open PDF</button> : null}
                   <button

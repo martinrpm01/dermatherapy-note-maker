@@ -219,6 +219,10 @@ function registerIpc() {
   ipcMain.handle("visit:delete", (_, visitId: string) => service.deleteVisit(visitId));
   ipcMain.handle("visit:generatePdf", (_, visitId: string) => service.generatePdf(visitId));
   ipcMain.handle("visit:generateSimWorksheet", (_, visitId: string) => service.generateSimWorksheet(visitId));
+  ipcMain.handle("course:generateConsentForm", (_, courseId: string) => service.generateConsentForm(courseId));
+  ipcMain.handle("course:finalizeConsentForm", (_, courseId: string, input) => service.finalizeConsentForm(courseId, input));
+  ipcMain.handle("course:uploadConsentForm", (_, courseId: string, upload) => service.uploadConsentForm(courseId, upload));
+  ipcMain.handle("course:deleteConsentForm", (_, courseId: string) => service.deleteConsentForm(courseId));
   ipcMain.handle("visit:removePhoto", (_, photoId: string) => service.removeVisitPhoto(photoId));
   ipcMain.handle("visit:removeAttachment", (_, attachmentId: string) => service.removeVisitAttachment(attachmentId));
 

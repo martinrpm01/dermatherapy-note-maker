@@ -237,7 +237,7 @@ function fillSite(
   fieldMap: SiteFieldMap,
   site: SiteSnapshot | null,
   additionalNotes: string,
-  projectedFractions: number | null
+  fractions: number | null
 ) {
   if (!site) {
     return;
@@ -248,7 +248,7 @@ function fillSite(
   setRadioYes(form, fieldMap.bcc, pathology.bcc);
   setRadioYes(form, fieldMap.sccis, pathology.sccis);
   setRadioYes(form, fieldMap.scc, pathology.scc);
-  setDropdown(form, fieldMap.fractions, String(projectedFractions ?? site.prescribedFractions ?? ""));
+  setDropdown(form, fieldMap.fractions, String(fractions ?? site.prescribedFractions ?? ""));
   setDropdown(form, fieldMap.depth, toTreatmentDepthOption(site.treatmentDepth));
   setText(form, fieldMap.icd10, site.icd10);
   setDropdown(form, fieldMap.cone, site.coneSize);
@@ -314,20 +314,22 @@ export async function buildSimWorksheetPdfFromTemplateBytes(
   const sites = input.visit.structuredFields.siteSnapshots
     .slice()
     .sort((left, right) => left.siteNumber - right.siteNumber);
-  const projectedFractions = input.visit.structuredFields.projectedFractionsInput ?? null;
+  const overallProjectedFractions = input.visit.structuredFields.projectedFractionsInput ?? null;
+  const site1 = sites.find((site) => site.siteNumber === 1) ?? null;
+  const site2 = sites.find((site) => site.siteNumber === 2) ?? null;
   fillSite(
     form,
     SITE_1_FIELDS,
-    sites.find((site) => site.siteNumber === 1) ?? null,
+    site1,
     input.visit.structuredFields.additionalNotes,
-    projectedFractions
+    site1?.prescribedFractions ?? overallProjectedFractions
   );
   fillSite(
     form,
     SITE_2_FIELDS,
-    sites.find((site) => site.siteNumber === 2) ?? null,
+    site2,
     input.visit.structuredFields.additionalNotes,
-    projectedFractions
+    site2?.prescribedFractions ?? overallProjectedFractions
   );
 
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);

@@ -11,6 +11,7 @@ import type {
   PreparedPatientArchiveDescription
 } from "../shared/archive";
 import { buildVisitPdf } from "./pdf";
+import { buildConsentFormPdf, buildSignedConsentFormPdf, buildUploadedConsentPdf } from "./consent-form";
 import { buildSimWorksheetPdf } from "./sim-worksheet";
 import { PatientArchivePreparationService } from "./archive-preparation";
 import { DesktopPatientArchiveExportService } from "./archive-export";
@@ -25,12 +26,14 @@ import {
   calculateAgeAtDate,
   buildSiteSnapshots,
   createEmptyVitals,
+  fillMissingSitePrescribedFractions,
   formatAdditionalDevicesForSite,
   formatDisplayDate,
   formatVitals,
   getAutoNumberOfBlocks,
   getCurrentFraction,
   getDefaultPhysicsComment,
+  getMaxSitePrescribedFractions,
   getNextTreatmentNumber,
   getSuggestedNoteType,
   getTemplateKey,
@@ -54,6 +57,7 @@ import type {
   AssetReference,
   ArchiveSnapshot,
   BootstrapPayload,
+  ConsentSigningInput,
   CourseInput,
   DashboardSnapshot,
   PatientDetail,
@@ -62,6 +66,7 @@ import type {
   PdfGenerationResult,
   SettingsPayload,
   SiteSnapshot,
+  StoredAssetUpload,
   TreatmentCourseRecord,
   VisitEditorState,
   VisitInput,
@@ -421,6 +426,7 @@ export class RadiationNoteService {
 
     const activePatients = this.repository.fetchPatients("status = ?", ["active"]);
     const activeCourses = this.repository.fetchCourses("status = ?", ["active"]);
+    const pendingCourses = this.repository.fetchCourses("status = ?", ["pending"]);
     const courseIds = activeCourses.map((course) => course.id);
     const courseSites = this.repository.fetchSites(courseIds);
     const visits = this.repository.fetchVisitsByCourseIds(courseIds);
@@ -493,6 +499,29 @@ export class RadiationNoteService {
           };
         })
         .filter(Boolean) as DashboardSnapshot["activeCourses"],
+      pendingCourses: pendingCourses
+        .map((course) => {
+          const patient = patientMap.get(course.patientId);
+          if (!patient) {
+            return null;
+          }
+
+          const sitesForCourse = this.repository.fetchSites([course.id]);
+          const documentsForCourse = this.repository.fetchCourseDocuments(course.id);
+          return {
+            patientId: patient.id,
+            patientName: `${patient.lastName}, ${patient.firstName}`,
+            patientMrn: patient.mrn,
+            patientDob: patient.dob,
+            patientFacePhoto: patient.facePhoto,
+            courseId: course.id,
+            courseName: course.courseName,
+            courseType: course.courseType,
+            siteSummary: sitesForCourse.map((site) => site.bodyLocation).join(" + "),
+            hasConsentForm: documentsForCourse.some((document) => document.documentType === "consent_form")
+          };
+        })
+        .filter(Boolean) as DashboardSnapshot["pendingCourses"],
       patientsWithoutCourse,
       archivedPatients: this.repository.countPatients("status != 'active'"),
       archivedCourses: this.repository.countCourses("status != 'active'")
@@ -570,12 +599,16 @@ export class RadiationNoteService {
     const photoPaths = assetSet.courses.flatMap((course) =>
       course.visits.flatMap((visit) => visit.photos.map((photo) => this.resolveAssetPath(photo.imageAsset)).filter(Boolean) as string[])
     );
+    const documentPaths = assetSet.courses.flatMap((course) =>
+      course.documents.map((document) => this.resolveAssetPath(document.fileAsset)).filter(Boolean) as string[]
+    );
 
     this.repository.hardDeletePatientRecords(patientId);
 
     this.assetStore.deleteFiles(pdfPaths);
     this.assetStore.deleteFiles(attachmentPaths);
     this.assetStore.deleteFiles(photoPaths);
+    this.assetStore.deleteFiles(documentPaths);
     const facePhotoPath = this.resolveAssetPath(assetSet.patient?.facePhoto ?? null);
     if (facePhotoPath) {
       this.assetStore.deleteFile(facePhotoPath);
@@ -587,7 +620,7 @@ export class RadiationNoteService {
     for (const pdfPath of pdfPaths) {
       this.assetStore.cleanupEmptyDirectoryChain(path.dirname(pdfPath), path.dirname(path.dirname(pdfPath)));
     }
-    for (const assetPath of [...attachmentPaths, ...photoPaths]) {
+    for (const assetPath of [...attachmentPaths, ...photoPaths, ...documentPaths]) {
       this.assetStore.cleanupEmptyDirectoryChain(path.dirname(assetPath), this.assetStore.rootDir);
     }
   }
@@ -645,16 +678,20 @@ export class RadiationNoteService {
     const photoPaths = assetSet.visits.flatMap((visit) =>
       visit.photos.map((photo) => this.resolveAssetPath(photo.imageAsset)).filter(Boolean) as string[]
     );
+    const documentPaths = assetSet.documents
+      .map((document) => this.resolveAssetPath(document.fileAsset))
+      .filter(Boolean) as string[];
     this.assetStore.deleteFiles(pdfPaths);
     this.assetStore.deleteFiles(attachmentPaths);
     this.assetStore.deleteFiles(photoPaths);
+    this.assetStore.deleteFiles(documentPaths);
 
     const courseFolder = path.join(this.assetStore.rootDir, "patients", assetSet.course.patientId, "courses", courseId);
     this.assetStore.removeDirectory(courseFolder);
     for (const pdfPath of pdfPaths) {
       this.assetStore.cleanupEmptyDirectoryChain(path.dirname(pdfPath), path.dirname(path.dirname(pdfPath)));
     }
-    for (const assetPath of [...attachmentPaths, ...photoPaths]) {
+    for (const assetPath of [...attachmentPaths, ...photoPaths, ...documentPaths]) {
       this.assetStore.cleanupEmptyDirectoryChain(path.dirname(assetPath), this.assetStore.rootDir);
     }
     this.assetStore.cleanupEmptyDirectoryChain(path.dirname(courseFolder), this.assetStore.rootDir);
@@ -670,6 +707,9 @@ export class RadiationNoteService {
     if (!course) {
       throw new Error("Course not found.");
     }
+    if (course.status === "pending") {
+      throw new Error("Finish course setup before starting the sim / consult note.");
+    }
 
     const patient = this.repository.fetchPatient(course.patientId);
     if (!patient) {
@@ -677,6 +717,7 @@ export class RadiationNoteService {
     }
 
     const sites = this.repository.fetchSites([courseId]);
+    const courseDocuments = this.repository.fetchCourseDocuments(courseId);
     const visits = this.repository.fetchVisitsByCourseIds([courseId]);
     const hasConsultVisit = visits.some((visit) => visit.note.noteType === "consult_sim");
     const shouldStartWithConsult = mode === "next_treatment" && !hasConsultVisit && course.prescribedFractions <= 0;
@@ -688,12 +729,13 @@ export class RadiationNoteService {
     }
 
     const noteType = mode === "consult_sim" || shouldStartWithConsult ? "consult_sim" : getSuggestedNoteType(treatmentNumber);
-      const siteSnapshots = applyAutoNumberOfBlocks(noteType, buildSiteSnapshots(sites, treatmentNumber));
+      let siteSnapshots = applyAutoNumberOfBlocks(noteType, buildSiteSnapshots(sites, treatmentNumber));
       const settings = this.repository.getSettingsRecord();
       const latestConsultVisit = visits
         .filter((visit) => visit.note.noteType === "consult_sim")
         .sort((left, right) => right.note.updatedAt.localeCompare(left.note.updatedAt))[0];
       const projectedFractionsFromConsult = latestConsultVisit?.note.structuredFields.projectedFractionsInput ?? null;
+      const projectedFractionsBySiteFromConsult = latestConsultVisit?.note.structuredFields.siteSnapshots ?? [];
       const mostRecentVisitDate =
         visits
           .map((visit) => visit.note.visitDate)
@@ -709,20 +751,38 @@ export class RadiationNoteService {
       biopsyDate: site.biopsyDate || course.startDate || ""
     }));
       if (noteType !== "consult_sim") {
-        if (treatmentNumber === 1 && projectedFractionsFromConsult && projectedFractionsFromConsult > 0) {
-          structuredFields.prescribedFractionsInput = projectedFractionsFromConsult;
+        if (treatmentNumber === 1) {
+          siteSnapshots = fillMissingSitePrescribedFractions(
+            siteSnapshots.map((site) => {
+              const projectedSite = projectedFractionsBySiteFromConsult.find(
+                (snapshot) => snapshot.siteNumber === site.siteNumber
+              );
+              return {
+                ...site,
+                prescribedFractions:
+                  projectedSite?.prescribedFractions ??
+                  site.prescribedFractions
+              };
+            }),
+            projectedFractionsFromConsult
+          );
+          structuredFields.siteSnapshots = siteSnapshots.map((site) => ({
+            ...site,
+            biopsyDate: site.biopsyDate || course.startDate || ""
+          }));
+          structuredFields.prescribedFractionsInput = getMaxSitePrescribedFractions(structuredFields.siteSnapshots);
         } else if (course.prescribedFractions <= 0) {
           structuredFields.prescribedFractionsInput = course.prescribedFractions > 0 ? course.prescribedFractions : null;
         }
       }
 
-    const note: VisitInput = {
-      patientId: patient.id,
-      courseId: course.id,
-      visitDate: todayIso(),
-      noteType,
-      treatmentNumber,
-      status: "draft",
+      const note: VisitInput = {
+        patientId: patient.id,
+        courseId: course.id,
+        visitDate: noteType === "consult_sim" ? course.simConsultDate || todayIso() : todayIso(),
+        noteType,
+        treatmentNumber,
+        status: "draft",
       therapistName: settings.defaultTherapist,
       vitals: createEmptyVitals(),
       structuredFields,
@@ -739,6 +799,7 @@ export class RadiationNoteService {
       patient,
       course,
       sites,
+      courseDocuments,
       note,
       existingPhotos: [],
       existingAttachments: [],
@@ -755,35 +816,76 @@ export class RadiationNoteService {
       throw new Error("Visit context is incomplete.");
     }
 
-      const prescribedFractionsInput =
-        input.noteType !== "consult_sim" ? input.structuredFields.prescribedFractionsInput ?? null : null;
+    const normalizedSiteSnapshots = (
+      input.structuredFields.siteSnapshots.length === 1
+        ? input.structuredFields.siteSnapshots.map((site) => ({
+            ...site,
+            prescribedFractions:
+              input.noteType === "consult_sim"
+                ? input.structuredFields.projectedFractionsInput ?? site.prescribedFractions ?? undefined
+                : input.structuredFields.prescribedFractionsInput ?? site.prescribedFractions ?? undefined
+          }))
+        : input.structuredFields.siteSnapshots
+    );
+
+    const prescribedFractionsInput =
+      input.noteType !== "consult_sim"
+        ? input.structuredFields.prescribedFractionsInput ??
+          getMaxSitePrescribedFractions(normalizedSiteSnapshots)
+        : null;
+    const projectedFractionsInput =
+      input.noteType === "consult_sim"
+        ? input.structuredFields.projectedFractionsInput ??
+          getMaxSitePrescribedFractions(normalizedSiteSnapshots)
+        : input.structuredFields.projectedFractionsInput ?? null;
+
+    let courseSites = this.repository.fetchSites([course.id]);
+    let courseUpdated = false;
     if (prescribedFractionsInput && prescribedFractionsInput > 0 && prescribedFractionsInput !== course.prescribedFractions) {
       this.repository.updateCoursePrescribedFractions(course.id, prescribedFractionsInput);
+      courseUpdated = true;
+    }
+    if (input.noteType !== "consult_sim") {
+      for (const siteSnapshot of normalizedSiteSnapshots) {
+        const sitePrescribedFractions = siteSnapshot.prescribedFractions ?? null;
+        if (!(sitePrescribedFractions && sitePrescribedFractions > 0)) {
+          continue;
+        }
+
+        const storedSite = courseSites.find((site) => site.siteNumber === siteSnapshot.siteNumber);
+        if ((storedSite?.prescribedFractions ?? null) !== sitePrescribedFractions) {
+          this.repository.updateCourseSitePrescribedFractions(course.id, siteSnapshot.siteNumber, sitePrescribedFractions);
+          courseUpdated = true;
+        }
+      }
+    }
+    if (courseUpdated) {
       course = this.repository.fetchCourse(input.courseId);
       if (!course) {
         throw new Error("Visit context is incomplete.");
       }
+      courseSites = this.repository.fetchSites([course.id]);
     }
 
       const structuredFields = {
         ...input.structuredFields,
           additionalNotes: input.structuredFields.additionalNotes ?? "",
           finalTreatment: Boolean(input.structuredFields.finalTreatment),
-          prescribedFractionsInput: input.structuredFields.prescribedFractionsInput ?? null,
-          projectedFractionsInput: input.structuredFields.projectedFractionsInput ?? null,
-          biopsyDate: input.structuredFields.siteSnapshots[0]?.biopsyDate || input.structuredFields.biopsyDate || "",
+          prescribedFractionsInput,
+          projectedFractionsInput,
+          biopsyDate: normalizedSiteSnapshots[0]?.biopsyDate || input.structuredFields.biopsyDate || "",
         lastTreatmentDate: input.structuredFields.lastTreatmentDate ?? "",
         physicsComment:
           input.structuredFields.physicsComment?.trim() ||
           getDefaultPhysicsComment(input.noteType),
         siteSnapshots: refreshVisitSiteSnapshots(
           input.noteType,
-          this.repository.fetchSites([course.id]).map((site) => ({
+          courseSites.map((site) => ({
             ...site,
             cutoutSize: normalizeCutoutSizeLabel(site.cutoutSize)
           })),
           input.treatmentNumber,
-          input.structuredFields.siteSnapshots.map((snapshot) => ({
+          normalizedSiteSnapshots.map((snapshot) => ({
             ...snapshot,
             cutoutSize: normalizeCutoutSizeLabel(snapshot.cutoutSize)
           })),
@@ -892,6 +994,7 @@ export class RadiationNoteService {
 
     const photos = this.repository.fetchVisitPhotos(visitId);
     const attachments = this.repository.fetchVisitAttachments(visitId);
+    const linkedCourseDocuments = visit.noteType === "consult_sim" ? this.repository.fetchCourseDocuments(course.id) : [];
     const existingPdfs = this.repository.fetchGeneratedPdfs(visitId);
     const versionNumber = existingPdfs.length + 1;
     const pdfBaseName = this.buildPdfBaseName(patient, visit);
@@ -911,12 +1014,20 @@ export class RadiationNoteService {
         image: this.readPdfAssetInput(photo.imageAsset, `visit photo ${photo.id}`),
         caption: photo.caption || `Treatment Photo ${photo.sortOrder}`
       })),
-      attachmentInputs: attachments.map((attachment) => ({
-        file: this.readPdfAssetInput(attachment.fileAsset, `visit attachment ${attachment.id}`, attachment.originalName),
-        caption: attachment.caption || attachment.originalName,
-        mimeType: attachment.mimeType,
-        originalName: attachment.originalName
-      })),
+      attachmentInputs: [
+        ...attachments.map((attachment) => ({
+          file: this.readPdfAssetInput(attachment.fileAsset, `visit attachment ${attachment.id}`, attachment.originalName),
+          caption: attachment.caption || attachment.originalName,
+          mimeType: attachment.mimeType,
+          originalName: attachment.originalName
+        })),
+        ...linkedCourseDocuments.map((document) => ({
+          file: this.readPdfAssetInput(document.fileAsset, `course document ${document.id}`, document.originalName),
+          caption: document.caption || document.originalName,
+          mimeType: document.mimeType,
+          originalName: document.originalName
+        }))
+      ],
       logoInput: this.readPdfOptionalPathInput(this.getCurrentNoteLogoPath(), "note logo")
     });
 
@@ -954,16 +1065,20 @@ export class RadiationNoteService {
       }
 
       const currentCourseSites = this.repository.fetchSites([course.id]);
-      const latestSnapshots = applyAutoNumberOfBlocks(
-        visit.noteType,
-        buildSiteSnapshots(currentCourseSites, visit.treatmentNumber)
-      ).map((site) => {
-        const existingSnapshot = visit.structuredFields.siteSnapshots.find((snapshot) => snapshot.siteNumber === site.siteNumber);
-        return {
-          ...site,
-          biopsyDate: existingSnapshot?.biopsyDate || visit.structuredFields.biopsyDate || course.startDate || ""
-        };
-      });
+        const latestSnapshots = fillMissingSitePrescribedFractions(
+          applyAutoNumberOfBlocks(
+            visit.noteType,
+            buildSiteSnapshots(currentCourseSites, visit.treatmentNumber)
+          ).map((site) => {
+            const existingSnapshot = visit.structuredFields.siteSnapshots.find((snapshot) => snapshot.siteNumber === site.siteNumber);
+            return {
+              ...site,
+              biopsyDate: existingSnapshot?.biopsyDate || visit.structuredFields.biopsyDate || course.startDate || "",
+              prescribedFractions: existingSnapshot?.prescribedFractions ?? site.prescribedFractions
+            };
+          }),
+          visit.structuredFields.projectedFractionsInput ?? null
+        );
 
       const worksheet = await buildSimWorksheetPdf({
         patient,
@@ -1011,6 +1126,159 @@ export class RadiationNoteService {
     }
 
     return created;
+  }
+
+  async generateConsentForm(courseId: string) {
+    this.assertUnlocked();
+    const course = this.repository.fetchCourse(courseId);
+    if (!course) {
+      throw new Error("Course not found.");
+    }
+
+    const patient = this.repository.fetchPatient(course.patientId);
+    if (!patient) {
+      throw new Error("Patient not found.");
+    }
+
+    const sites = this.repository.fetchSites([course.id]);
+    const existingDocument = this.repository
+      .fetchCourseDocuments(course.id)
+      .find((document) => document.documentType === "consent_form") ?? null;
+    const documentsDir = this.assetStore.getCourseDocumentsDir(patient.id, course.id);
+    this.assetStore.ensureDirectory(documentsDir);
+
+    const consentForm = await buildConsentFormPdf({
+      patient,
+      course,
+      sites
+    });
+    const outputPath = path.join(documentsDir, consentForm.fileName);
+    this.assetStore.writeBinaryFile(outputPath, consentForm.bytes);
+
+    const persistedDocument = (this.repository as AssetAwareStructuredDataStore).upsertCourseDocument(
+      course.id,
+      "consent_form",
+      this.assetStore.createAssetReference(outputPath, "course_document")!,
+      consentForm.caption,
+      "application/pdf",
+      consentForm.fileName
+    );
+
+    const previousPath = existingDocument ? this.resolveAssetPath(existingDocument.fileAsset) : null;
+    if (previousPath && previousPath !== outputPath) {
+      this.assetStore.deleteFile(previousPath);
+      this.assetStore.cleanupEmptyDirectoryChain(path.dirname(previousPath), this.assetStore.rootDir);
+    }
+
+      return persistedDocument;
+    }
+
+  async finalizeConsentForm(courseId: string, signing: ConsentSigningInput) {
+    this.assertUnlocked();
+    const course = this.repository.fetchCourse(courseId);
+    if (!course) {
+      throw new Error("Course not found.");
+    }
+
+    const patient = this.repository.fetchPatient(course.patientId);
+    if (!patient) {
+      throw new Error("Patient not found.");
+    }
+
+    const sites = this.repository.fetchSites([course.id]);
+    const existingDocument = this.repository
+      .fetchCourseDocuments(course.id)
+      .find((document) => document.documentType === "consent_form") ?? null;
+    const documentsDir = this.assetStore.getCourseDocumentsDir(patient.id, course.id);
+    this.assetStore.ensureDirectory(documentsDir);
+
+    const consentForm = await buildSignedConsentFormPdf({
+      patient,
+      course,
+      sites,
+      signing
+    });
+    const outputPath = path.join(documentsDir, consentForm.fileName);
+    this.assetStore.writeBinaryFile(outputPath, consentForm.bytes);
+
+    const persistedDocument = (this.repository as AssetAwareStructuredDataStore).upsertCourseDocument(
+      course.id,
+      "consent_form",
+      this.assetStore.createAssetReference(outputPath, "course_document")!,
+      consentForm.caption,
+      "application/pdf",
+      consentForm.fileName
+    );
+
+    const previousPath = existingDocument ? this.resolveAssetPath(existingDocument.fileAsset) : null;
+    if (previousPath && previousPath !== outputPath) {
+      this.assetStore.deleteFile(previousPath);
+      this.assetStore.cleanupEmptyDirectoryChain(path.dirname(previousPath), this.assetStore.rootDir);
+    }
+
+    return persistedDocument;
+  }
+
+  async uploadConsentForm(courseId: string, upload: StoredAssetUpload) {
+    this.assertUnlocked();
+    const course = this.repository.fetchCourse(courseId);
+    if (!course) {
+      throw new Error("Course not found.");
+    }
+
+    const patient = this.repository.fetchPatient(course.patientId);
+    if (!patient) {
+      throw new Error("Patient not found.");
+    }
+
+    const existingDocument = this.repository
+      .fetchCourseDocuments(course.id)
+      .find((document) => document.documentType === "consent_form") ?? null;
+    const documentsDir = this.assetStore.getCourseDocumentsDir(patient.id, course.id);
+    this.assetStore.ensureDirectory(documentsDir);
+
+    const consentForm = await buildUploadedConsentPdf(upload, patient);
+    const outputPath = path.join(documentsDir, consentForm.fileName);
+    this.assetStore.writeBinaryFile(outputPath, consentForm.bytes);
+
+    const persistedDocument = (this.repository as AssetAwareStructuredDataStore).upsertCourseDocument(
+      course.id,
+      "consent_form",
+      this.assetStore.createAssetReference(outputPath, "course_document")!,
+      consentForm.caption,
+      "application/pdf",
+      consentForm.fileName
+    );
+
+    const previousPath = existingDocument ? this.resolveAssetPath(existingDocument.fileAsset) : null;
+    if (previousPath && previousPath !== outputPath) {
+      this.assetStore.deleteFile(previousPath);
+      this.assetStore.cleanupEmptyDirectoryChain(path.dirname(previousPath), this.assetStore.rootDir);
+    }
+
+    return persistedDocument;
+  }
+
+  deleteConsentForm(courseId: string) {
+    this.assertUnlocked();
+    const course = this.repository.fetchCourse(courseId);
+    if (!course) {
+      throw new Error("Course not found.");
+    }
+
+    const document = this.repository
+      .fetchCourseDocuments(course.id)
+      .find((item) => item.documentType === "consent_form");
+    if (!document) {
+      return;
+    }
+
+    this.repository.deleteCourseDocumentRecord(document.id);
+    const documentPath = this.resolveAssetPath(document.fileAsset);
+    if (documentPath) {
+      this.assetStore.deleteFile(documentPath);
+      this.assetStore.cleanupEmptyDirectoryChain(path.dirname(documentPath), this.assetStore.rootDir);
+    }
   }
 
   getVisitFolder(visitId: string): string {
@@ -1158,12 +1426,20 @@ export class RadiationNoteService {
       }
 
       const sites = this.repository.fetchSites([course.id]);
+      const courseDocuments = this.repository.fetchCourseDocuments(course.id);
       const refreshedSiteSnapshots = refreshVisitSiteSnapshots(
         visit.noteType,
         sites,
         visit.treatmentNumber,
         visit.structuredFields.siteSnapshots,
         visit.structuredFields.biopsyDate || course.startDate || ""
+      );
+      const resolvedSiteSnapshots = fillMissingSitePrescribedFractions(
+        refreshedSiteSnapshots,
+        visit.noteType === "consult_sim"
+          ? visit.structuredFields.projectedFractionsInput ?? null
+          : visit.structuredFields.prescribedFractionsInput ??
+              (course.prescribedFractions > 0 ? course.prescribedFractions : null)
       );
       const refreshedNote: VisitInput = {
         id: visit.id,
@@ -1181,14 +1457,19 @@ export class RadiationNoteService {
           finalTreatment: Boolean(visit.structuredFields.finalTreatment),
           prescribedFractionsInput:
             visit.structuredFields.prescribedFractionsInput ??
-            (visit.noteType !== "consult_sim" && course.prescribedFractions > 0 ? course.prescribedFractions : null),
-          projectedFractionsInput: visit.structuredFields.projectedFractionsInput ?? null,
+            (visit.noteType !== "consult_sim"
+              ? getMaxSitePrescribedFractions(resolvedSiteSnapshots) ??
+                (course.prescribedFractions > 0 ? course.prescribedFractions : null)
+              : null),
+          projectedFractionsInput:
+            visit.structuredFields.projectedFractionsInput ??
+            (visit.noteType === "consult_sim" ? getMaxSitePrescribedFractions(resolvedSiteSnapshots) : null),
           biopsyDate: visit.structuredFields.biopsyDate ?? course.startDate ?? "",
           lastTreatmentDate: visit.structuredFields.lastTreatmentDate ?? course.startDate ?? "",
           physicsComment:
             visit.structuredFields.physicsComment?.trim() ||
             getDefaultPhysicsComment(visit.noteType),
-          siteSnapshots: refreshedSiteSnapshots
+          siteSnapshots: resolvedSiteSnapshots
         },
         generatedText: visit.generatedText,
         editedText: visit.editedText,
@@ -1202,6 +1483,7 @@ export class RadiationNoteService {
         patient,
         course,
         sites,
+        courseDocuments,
         note: {
           ...refreshedNote,
           generatedText,

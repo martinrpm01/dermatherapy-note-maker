@@ -8,10 +8,17 @@ import type {
 export type CourseType = "one_site" | "two_site" | "consult";
 export type NoteType = "consult_sim" | "first_fraction" | "standard_treatment" | "otv";
 export type PatientStatus = "active" | "archived" | "deleted";
-export type CourseStatus = "active" | "completed" | "archived";
+export type CourseStatus = "pending" | "active" | "completed" | "archived";
 export type VisitStatus = "draft" | "finalized" | "archived";
 export type LaunchReadyScreen = "loading" | "pin_setup" | "unlock" | "dashboard";
-export type AssetKind = "patient_face_photo" | "visit_photo" | "visit_attachment" | "generated_pdf" | "settings_logo";
+export type AssetKind =
+  | "patient_face_photo"
+  | "visit_photo"
+  | "visit_attachment"
+  | "generated_pdf"
+  | "course_document"
+  | "settings_logo";
+export type CourseDocumentType = "consent_form";
 
 export interface AssetReference {
   assetId: string;
@@ -84,6 +91,7 @@ export interface TreatmentCourseRecord {
   prescribedFractions: number;
   status: CourseStatus;
   startDate: string;
+  simConsultDate: string | null;
   endDate: string | null;
   createdAt: string;
   updatedAt: string;
@@ -148,6 +156,18 @@ export interface GeneratedPdfRecord {
   fileAsset: AssetReference;
   versionNumber: number;
   createdAt: string;
+}
+
+export interface CourseDocumentRecord {
+  id: string;
+  courseId: string;
+  documentType: CourseDocumentType;
+  fileAsset: AssetReference;
+  caption: string;
+  mimeType: string;
+  originalName: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Vitals {
@@ -296,6 +316,7 @@ export interface CourseInput {
   courseType: CourseType;
   prescribedFractions: number;
   startDate: string;
+  simConsultDate?: string;
   endDate?: string | null;
   status?: CourseStatus;
   sites: TreatmentSiteInput[];
@@ -307,6 +328,17 @@ export interface StoredAssetUpload {
   dataUrl: string;
   caption?: string;
   siteNumber?: 1 | 2;
+}
+
+export interface ConsentSigningInput {
+  signDate: string;
+  patientInitials: string;
+  patientPrintedName: string;
+  formerRadiationAcknowledged: boolean;
+  medicalDevicesAcknowledged: boolean;
+  patientSignatureDataUrl: string;
+  witnessPrintedName: string;
+  witnessSignatureDataUrl: string;
 }
 
 export interface VisitInput {
@@ -345,6 +377,19 @@ export interface DashboardCourseRow {
   latestDraftUpdatedAt: string | null;
 }
 
+export interface DashboardPendingCourseRow {
+  patientId: string;
+  patientName: string;
+  patientMrn: string;
+  patientDob: string;
+  patientFacePhoto: AssetReference | null;
+  courseId: string;
+  courseName: string;
+  courseType: CourseType;
+  siteSummary: string;
+  hasConsentForm: boolean;
+}
+
 export interface VisitNoteBundle {
   note: VisitNoteRecord;
   photos: VisitPhotoRecord[];
@@ -355,6 +400,7 @@ export interface VisitNoteBundle {
 export interface CourseDetail {
   course: TreatmentCourseRecord;
   sites: TreatmentSiteRecord[];
+  documents: CourseDocumentRecord[];
   visits: VisitNoteBundle[];
 }
 
@@ -371,6 +417,7 @@ export interface VisitEditorState {
   patient: PatientRecord;
   course: TreatmentCourseRecord;
   sites: TreatmentSiteRecord[];
+  courseDocuments: CourseDocumentRecord[];
   note: VisitInput;
   existingPhotos: VisitPhotoRecord[];
   existingAttachments: VisitAttachmentRecord[];
@@ -394,6 +441,7 @@ export interface DashboardPatientRow {
 
 export interface DashboardSnapshot {
   activeCourses: DashboardCourseRow[];
+  pendingCourses: DashboardPendingCourseRow[];
   patientsWithoutCourse: DashboardPatientRow[];
   archivedPatients: number;
   archivedCourses: number;
@@ -451,6 +499,10 @@ export interface AppClient {
   deleteVisit: (visitId: string) => Promise<void>;
   generatePdf: (visitId: string) => Promise<PdfGenerationResult>;
   generateSimWorksheet: (visitId: string) => Promise<VisitAttachmentRecord>;
+  generateConsentForm: (courseId: string) => Promise<CourseDocumentRecord>;
+  finalizeConsentForm: (courseId: string, input: ConsentSigningInput) => Promise<CourseDocumentRecord>;
+  uploadConsentForm: (courseId: string, upload: StoredAssetUpload) => Promise<CourseDocumentRecord>;
+  deleteConsentForm: (courseId: string) => Promise<void>;
   // Desktop-first helper that returns the local visit workspace path.
   // A future browser client can map this to a virtual folder or download flow.
   getVisitFolder: (visitId: string) => Promise<string>;

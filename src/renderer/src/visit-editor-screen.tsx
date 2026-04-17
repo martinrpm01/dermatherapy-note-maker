@@ -7,6 +7,7 @@ import {
   formatOxygenSaturation,
   formatWeight,
   getDefaultPhysicsComment,
+  getMaxSitePrescribedFractions,
   getSuggestedNoteType,
   isOtvTreatmentNumber
 } from "../../shared/note-rules";
@@ -50,6 +51,7 @@ export function VisitEditorScreen(props: {
   onRemoveExistingPhoto: (photoId: string) => void;
   onRemoveExistingAttachment: (attachmentId: string) => void;
   onOpenExistingAttachment: (asset: VisitEditorState["existingAttachments"][number]["fileAsset"]) => void;
+  onOpenCourseDocument: (asset: VisitEditorState["courseDocuments"][number]["fileAsset"]) => void;
   onVisitPhotoAdd: (files: FileList | null, siteNumber: 1 | 2) => void;
   onVisitAttachmentAdd: (files: FileList | null) => void;
   onUpdate: (
@@ -71,6 +73,13 @@ export function VisitEditorScreen(props: {
   const showProjectedFractionsInput = editor.note.noteType === "consult_sim";
   const otvEligible = editor.note.noteType !== "consult_sim" && isOtvTreatmentNumber(editor.note.treatmentNumber);
   const isTwoLesionLayout = editor.note.structuredFields.siteSnapshots.length > 1;
+  const sortedSiteSnapshots = [...editor.note.structuredFields.siteSnapshots].sort(
+    (left, right) => left.siteNumber - right.siteNumber
+  );
+  const formatFractionLabel = (prefix: string, siteNumber: 1 | 2, bodyLocation: string, index: number) =>
+    isTwoLesionLayout
+      ? `${prefix} Lesion ${index + 1}${bodyLocation ? ` (${bodyLocation})` : ""}`
+      : prefix;
   return (
     <section className={`screen visit-screen${isTwoLesionLayout ? " two-lesion-screen" : ""}`}>
       <div className="screen-header">
@@ -145,7 +154,10 @@ export function VisitEditorScreen(props: {
                     }
 
                     const nextTreatmentNumber = current.note.treatmentNumber ?? 1;
-                    const projectedFractions = current.note.structuredFields.projectedFractionsInput ?? null;
+                    const projectedFractions =
+                      getMaxSitePrescribedFractions(current.note.structuredFields.siteSnapshots) ??
+                      current.note.structuredFields.projectedFractionsInput ??
+                      null;
                     return {
                       ...current,
                       note: {
@@ -198,58 +210,88 @@ export function VisitEditorScreen(props: {
                 <input value={editor.note.therapistName} list="therapists" onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, therapistName: event.target.value } }), { regenerate: true, overwriteEdited: !props.textDirty })} />
               </label>
             ) : null}
-            {showProjectedFractionsInput ? (
-              <label>
-                Projected Fractions
-                <input
-                  type="number"
-                  min={1}
-                  max={15}
-                  value={editor.note.structuredFields.projectedFractionsInput ?? ""}
-                  onChange={(event) => {
-                    const projectedFractions = event.target.value ? Number(event.target.value) : null;
-                    props.onUpdate((current) => ({
-                      ...current,
-                      note: {
-                        ...current.note,
-                        structuredFields: {
-                          ...current.note.structuredFields,
-                          projectedFractionsInput: projectedFractions
-                        }
+            {showProjectedFractionsInput
+              ? sortedSiteSnapshots.map((site, index) => (
+                  <label key={`projected-fractions-${site.siteNumber}`}>
+                    {formatFractionLabel("Projected Fractions", site.siteNumber, site.bodyLocation, index)}
+                    <input
+                      type="number"
+                      min={1}
+                      max={15}
+                      value={
+                        isTwoLesionLayout
+                          ? site.prescribedFractions ?? ""
+                          : editor.note.structuredFields.projectedFractionsInput ?? site.prescribedFractions ?? ""
                       }
-                    }), { regenerate: true, overwriteEdited: !props.textDirty });
-                  }}
-                />
-              </label>
-            ) : null}
-            {showPrescribedFractionsInput ? (
-              <label>
-                Prescribed Fractions
-                <input
-                  type="number"
-                  min={1}
-                  max={15}
-                  value={editor.note.structuredFields.prescribedFractionsInput ?? ""}
-                  onChange={(event) => {
-                    const prescribedFractions = event.target.value ? Number(event.target.value) : null;
-                    props.onUpdate((current) => ({
-                      ...current,
-                      course: {
-                        ...current.course,
-                        prescribedFractions: prescribedFractions ?? 0
-                      },
-                      note: {
-                        ...current.note,
-                        structuredFields: {
-                          ...current.note.structuredFields,
-                          prescribedFractionsInput: prescribedFractions
-                        }
+                      onChange={(event) => {
+                        const projectedFractions = event.target.value ? Number(event.target.value) : null;
+                        props.onUpdate((current) => {
+                          const nextSiteSnapshots = current.note.structuredFields.siteSnapshots.map((snapshot) =>
+                            snapshot.siteNumber === site.siteNumber
+                              ? { ...snapshot, prescribedFractions: projectedFractions ?? undefined }
+                              : snapshot
+                          );
+                          const overallProjectedFractions = getMaxSitePrescribedFractions(nextSiteSnapshots);
+                          return {
+                            ...current,
+                            note: {
+                              ...current.note,
+                              structuredFields: {
+                                ...current.note.structuredFields,
+                                projectedFractionsInput: overallProjectedFractions,
+                                siteSnapshots: nextSiteSnapshots
+                              }
+                            }
+                          };
+                        }, { regenerate: true, overwriteEdited: !props.textDirty });
+                      }}
+                    />
+                  </label>
+                ))
+              : null}
+            {showPrescribedFractionsInput
+              ? sortedSiteSnapshots.map((site, index) => (
+                  <label key={`prescribed-fractions-${site.siteNumber}`}>
+                    {formatFractionLabel("Prescribed Fractions", site.siteNumber, site.bodyLocation, index)}
+                    <input
+                      type="number"
+                      min={1}
+                      max={15}
+                      value={
+                        isTwoLesionLayout
+                          ? site.prescribedFractions ?? ""
+                          : editor.note.structuredFields.prescribedFractionsInput ?? site.prescribedFractions ?? ""
                       }
-                    }), { regenerate: true, overwriteEdited: !props.textDirty });
-                  }}
-                />
-              </label>
-            ) : null}
+                      onChange={(event) => {
+                        const prescribedFractions = event.target.value ? Number(event.target.value) : null;
+                        props.onUpdate((current) => {
+                          const nextSiteSnapshots = current.note.structuredFields.siteSnapshots.map((snapshot) =>
+                            snapshot.siteNumber === site.siteNumber
+                              ? { ...snapshot, prescribedFractions: prescribedFractions ?? undefined }
+                              : snapshot
+                          );
+                          const overallPrescribedFractions = getMaxSitePrescribedFractions(nextSiteSnapshots);
+                          return {
+                            ...current,
+                            course: {
+                              ...current.course,
+                              prescribedFractions: overallPrescribedFractions ?? 0
+                            },
+                            note: {
+                              ...current.note,
+                              structuredFields: {
+                                ...current.note.structuredFields,
+                                prescribedFractionsInput: overallPrescribedFractions,
+                                siteSnapshots: nextSiteSnapshots
+                              }
+                            }
+                          };
+                        }, { regenerate: true, overwriteEdited: !props.textDirty });
+                      }}
+                    />
+                  </label>
+                ))
+              : null}
             {editor.note.noteType !== "consult_sim" ? (
               <label>
                 Therapist
@@ -583,6 +625,21 @@ export function VisitEditorScreen(props: {
               onChange={(event) => props.onVisitAttachmentAdd(event.target.files)}
             />
           </label>
+            {editor.courseDocuments.length ? (
+              <div className="attachment-list">
+                {editor.courseDocuments.map((document) => (
+                  <div className="attachment-row" key={document.id}>
+                    <div>
+                      <div className="attachment-name">{document.originalName || document.caption || "Course document"}</div>
+                      <div className="muted">Linked course document</div>
+                    </div>
+                    <div className="button-row">
+                      <button onClick={() => props.onOpenCourseDocument(document.fileAsset)}>Open</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             <div className="attachment-list">
               {editor.existingAttachments.map((attachment) => (
                 <div className="attachment-row" key={attachment.id}>

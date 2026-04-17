@@ -10,6 +10,7 @@ import type {
   AssetReference,
   AppSettingsRecord,
   AppSettingsView,
+  CourseDocumentRecord,
   CourseInput,
   GeneratedPdfRecord,
   PatientInput,
@@ -186,6 +187,15 @@ export class RadiationNoteRepository implements StructuredDataStore {
     return {
       ...row,
       fileAsset: this.toAssetReference(row.filePath, "generated_pdf", row.fileAssetId)!
+    };
+  }
+
+  private toCourseDocumentRecord(
+    row: Omit<CourseDocumentRecord, "fileAsset"> & { filePath: string; fileAssetId?: string | null }
+  ): CourseDocumentRecord {
+    return {
+      ...row,
+      fileAsset: this.toAssetReference(row.filePath, "course_document", row.fileAssetId)!
     };
   }
 
@@ -417,7 +427,7 @@ export class RadiationNoteRepository implements StructuredDataStore {
         this.run(
           `UPDATE treatment_courses
            SET status = 'archived', archived_at = ?, updated_at = ?
-           WHERE patient_id = ? AND status = 'active'`,
+           WHERE patient_id = ? AND status IN ('active', 'pending')`,
           [timestamp, timestamp, patientId]
         );
       }
@@ -446,6 +456,7 @@ export class RadiationNoteRepository implements StructuredDataStore {
           this.run(`DELETE FROM visit_notes WHERE id IN (${vph})`, visitIds);
         }
 
+        this.run(`DELETE FROM course_documents WHERE course_id IN (${ph})`, courseIds);
         this.run(`DELETE FROM treatment_sites WHERE course_id IN (${ph})`, courseIds);
         this.run(`DELETE FROM treatment_courses WHERE id IN (${ph})`, courseIds);
       }
@@ -462,6 +473,7 @@ export class RadiationNoteRepository implements StructuredDataStore {
 
     const visits = this.fetchVisitsByCourseIds([courseId]);
     const sites = this.fetchSites([courseId]);
+    const documents = this.fetchCourseDocuments(courseId);
 
     this.mutate(() => {
       const visitIds = visits.map((visit) => visit.note.id);
@@ -477,51 +489,57 @@ export class RadiationNoteRepository implements StructuredDataStore {
         this.run(`DELETE FROM treatment_sites WHERE course_id = ?`, [courseId]);
       }
 
+      if (documents.length) {
+        this.run(`DELETE FROM course_documents WHERE course_id = ?`, [courseId]);
+      }
+
       this.run(`DELETE FROM treatment_courses WHERE id = ?`, [courseId]);
     });
   }
 
-  saveCourse(input: CourseInput) {
+    saveCourse(input: CourseInput) {
     const courseId = input.id ?? makeId("course");
     const existing = input.id ? this.fetchCourse(input.id) : null;
     const timestamp = nowIso();
     const status = input.status ?? existing?.status ?? "active";
 
     this.mutate(() => {
-      if (existing) {
-        this.run(
-          `UPDATE treatment_courses
-           SET course_name = ?, course_type = ?, prescribed_fractions = ?, status = ?, start_date = ?, end_date = ?, updated_at = ?
-           WHERE id = ?`,
-          [
-            input.courseName.trim(),
-            input.courseType,
-            input.prescribedFractions,
-            status,
-            input.startDate,
-            input.endDate ?? null,
-            timestamp,
-            courseId
-          ]
-        );
-      } else {
-        this.run(
-          `INSERT INTO treatment_courses (
-            id, patient_id, course_name, course_type, prescribed_fractions, status, start_date, end_date, created_at, updated_at, archived_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
-          [
-            courseId,
-            input.patientId,
-            input.courseName.trim(),
-            input.courseType,
-            input.prescribedFractions,
-            status,
-            input.startDate,
-            input.endDate ?? null,
-            timestamp,
-            timestamp
-          ]
-        );
+        if (existing) {
+          this.run(
+            `UPDATE treatment_courses
+             SET course_name = ?, course_type = ?, prescribed_fractions = ?, status = ?, start_date = ?, sim_consult_date = ?, end_date = ?, updated_at = ?
+             WHERE id = ?`,
+            [
+              input.courseName.trim(),
+              input.courseType,
+              input.prescribedFractions,
+              status,
+              input.startDate,
+              input.simConsultDate?.trim() || null,
+              input.endDate ?? null,
+              timestamp,
+              courseId
+            ]
+          );
+        } else {
+          this.run(
+            `INSERT INTO treatment_courses (
+              id, patient_id, course_name, course_type, prescribed_fractions, status, start_date, sim_consult_date, end_date, created_at, updated_at, archived_at
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+            [
+              courseId,
+              input.patientId,
+              input.courseName.trim(),
+              input.courseType,
+              input.prescribedFractions,
+              status,
+              input.startDate,
+              input.simConsultDate?.trim() || null,
+              input.endDate ?? null,
+              timestamp,
+              timestamp
+            ]
+          );
       }
 
       this.run(`DELETE FROM treatment_sites WHERE course_id = ?`, [courseId]);
@@ -540,6 +558,17 @@ export class RadiationNoteRepository implements StructuredDataStore {
          SET prescribed_fractions = ?, updated_at = ?
          WHERE id = ?`,
         [prescribedFractions, nowIso(), courseId]
+      );
+    });
+  }
+
+  updateCourseSitePrescribedFractions(courseId: string, siteNumber: 1 | 2, prescribedFractions: number) {
+    this.mutate(() => {
+      this.run(
+        `UPDATE treatment_sites
+         SET prescribed_fractions = ?, updated_at = ?
+         WHERE course_id = ? AND site_number = ?`,
+        [prescribedFractions, nowIso(), courseId, siteNumber]
       );
     });
   }
@@ -685,6 +714,70 @@ export class RadiationNoteRepository implements StructuredDataStore {
     });
   }
 
+  upsertCourseDocument(
+    courseId: string,
+    documentType: CourseDocumentRecord["documentType"],
+    file: AssetReference | string,
+    caption: string,
+    mimeType: string,
+    originalName: string
+  ) {
+    const filePath = typeof file === "string" ? file : this.assetStore.resolveAssetPath(file);
+    const existing = this.queryOne<{ id: string; filePath: string | null; fileAssetId: string | null; createdAt: string }>(
+      `SELECT
+         id,
+         file_path AS filePath,
+         file_asset_id AS fileAssetId,
+         created_at AS createdAt
+       FROM course_documents
+       WHERE course_id = ?
+         AND document_type = ?
+       LIMIT 1`,
+      [courseId, documentType]
+    );
+    const fileAssetId =
+      typeof file === "string"
+        ? this.resolveNextAssetId(existing?.filePath ?? null, existing?.fileAssetId ?? null, filePath)
+        : file.assetId;
+    const timestamp = nowIso();
+
+    this.mutate(() => {
+      if (existing) {
+        this.run(
+          `UPDATE course_documents
+           SET file_path = ?, file_asset_id = ?, caption = ?, mime_type = ?, original_name = ?, updated_at = ?
+           WHERE id = ?`,
+          [filePath, fileAssetId, caption, mimeType, originalName, timestamp, existing.id]
+        );
+        return;
+      }
+
+      this.run(
+        `INSERT INTO course_documents (
+           id,
+           course_id,
+           document_type,
+           file_path,
+           file_asset_id,
+           caption,
+           mime_type,
+           original_name,
+           created_at,
+           updated_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [makeId("course-document"), courseId, documentType, filePath, fileAssetId, caption, mimeType, originalName, timestamp, timestamp]
+      );
+    });
+
+    return this.fetchCourseDocuments(courseId).find((document) => document.documentType === documentType)!;
+  }
+
+  deleteCourseDocumentRecord(documentId: string) {
+    this.mutate(() => {
+      this.run(`DELETE FROM course_documents WHERE id = ?`, [documentId]);
+    });
+  }
+
   deleteVisitRecords(visitId: string) {
     const visit = this.fetchVisit(visitId);
     if (!visit) {
@@ -818,6 +911,12 @@ export class RadiationNoteRepository implements StructuredDataStore {
         [fromPrefix, toPrefix, likePattern]
       );
       this.run(
+        `UPDATE course_documents
+         SET file_path = REPLACE(file_path, ?, ?)
+         WHERE file_path LIKE ?`,
+        [fromPrefix, toPrefix, likePattern]
+      );
+      this.run(
         `UPDATE visit_notes
          SET pdf_path = REPLACE(pdf_path, ?, ?)
          WHERE pdf_path LIKE ?`,
@@ -882,6 +981,7 @@ export class RadiationNoteRepository implements StructuredDataStore {
          prescribed_fractions AS prescribedFractions,
          status,
          start_date AS startDate,
+         sim_consult_date AS simConsultDate,
          end_date AS endDate,
          created_at AS createdAt,
          updated_at AS updatedAt,
@@ -899,14 +999,15 @@ export class RadiationNoteRepository implements StructuredDataStore {
          id,
          patient_id AS patientId,
          course_name AS courseName,
-         course_type AS courseType,
-         prescribed_fractions AS prescribedFractions,
-         status,
-         start_date AS startDate,
-         end_date AS endDate,
-         created_at AS createdAt,
-         updated_at AS updatedAt,
-         archived_at AS archivedAt
+           course_type AS courseType,
+           prescribed_fractions AS prescribedFractions,
+           status,
+           start_date AS startDate,
+           sim_consult_date AS simConsultDate,
+           end_date AS endDate,
+           created_at AS createdAt,
+           updated_at AS updatedAt,
+           archived_at AS archivedAt
        FROM treatment_courses
        WHERE id = ?`,
       [courseId]
@@ -945,6 +1046,7 @@ export class RadiationNoteRepository implements StructuredDataStore {
          worksheet_lip_shield_position AS worksheetLipShieldPosition,
          daily_dose AS dailyDose,
          total_dose AS totalDose,
+         prescribed_fractions AS prescribedFractions,
          created_at AS createdAt,
          updated_at AS updatedAt
        FROM treatment_sites
@@ -952,6 +1054,57 @@ export class RadiationNoteRepository implements StructuredDataStore {
        ORDER BY site_number ASC`,
       courseIds
     );
+  }
+
+  fetchCourseDocuments(courseId: string) {
+    return this.queryAll<
+      Omit<CourseDocumentRecord, "fileAsset"> & {
+        filePath: string;
+        fileAssetId: string | null;
+      }
+    >(
+      `SELECT
+         id,
+         course_id AS courseId,
+         document_type AS documentType,
+         file_path AS filePath,
+         file_asset_id AS fileAssetId,
+         caption,
+         mime_type AS mimeType,
+         original_name AS originalName,
+         created_at AS createdAt,
+         updated_at AS updatedAt
+       FROM course_documents
+       WHERE course_id = ?
+       ORDER BY created_at ASC`,
+      [courseId]
+    ).map((row) => this.toCourseDocumentRecord(row));
+  }
+
+  fetchCourseDocument(documentId: string) {
+    const row = this.queryOne<
+      Omit<CourseDocumentRecord, "fileAsset"> & {
+        filePath: string;
+        fileAssetId: string | null;
+      }
+    >(
+      `SELECT
+         id,
+         course_id AS courseId,
+         document_type AS documentType,
+         file_path AS filePath,
+         file_asset_id AS fileAssetId,
+         caption,
+         mime_type AS mimeType,
+         original_name AS originalName,
+         created_at AS createdAt,
+         updated_at AS updatedAt
+       FROM course_documents
+       WHERE id = ?`,
+      [documentId]
+    );
+
+    return row ? this.toCourseDocumentRecord(row) : null;
   }
 
   fetchVisit(visitId: string) {
@@ -1206,6 +1359,7 @@ export class RadiationNoteRepository implements StructuredDataStore {
 
     return {
       course,
+      documents: this.fetchCourseDocuments(courseId),
       visits: this.fetchVisitsByCourseIds([courseId])
     };
   }
@@ -1214,6 +1368,7 @@ export class RadiationNoteRepository implements StructuredDataStore {
     const patient = this.fetchPatient(patientId);
     const courses = this.fetchCourses("patient_id = ?", [patientId]).map((course) => ({
       course,
+      documents: this.fetchCourseDocuments(course.id),
       visits: this.fetchVisitsByCourseIds([course.id])
     }));
 
@@ -1239,7 +1394,7 @@ export class RadiationNoteRepository implements StructuredDataStore {
            SELECT 1
            FROM treatment_courses active_course
            WHERE active_course.patient_id = p.id
-             AND active_course.status = 'active'
+             AND active_course.status IN ('active', 'pending')
          )
        ORDER BY p.last_name, p.first_name`
     ).map((row) => row.id);
@@ -1266,18 +1421,25 @@ export class RadiationNoteRepository implements StructuredDataStore {
     if (!patientIds.length) {
       return [] as Array<{
         patient: PatientRecord;
-        courses: Array<{ course: TreatmentCourseRecord; sites: TreatmentSiteRecord[]; visits: Array<{ note: VisitNoteRecord; photos: VisitPhotoRecord[]; attachments: VisitAttachmentRecord[]; pdfs: GeneratedPdfRecord[] }> }>;
+        courses: Array<{
+          course: TreatmentCourseRecord;
+          sites: TreatmentSiteRecord[];
+          documents: CourseDocumentRecord[];
+          visits: Array<{ note: VisitNoteRecord; photos: VisitPhotoRecord[]; attachments: VisitAttachmentRecord[]; pdfs: GeneratedPdfRecord[] }>;
+        }>;
       }>;
     }
 
     const patients = this.fetchPatients(`id IN (${this.placeholders(patientIds.length)})`, patientIds);
     const courses = this.fetchCourses(`patient_id IN (${this.placeholders(patientIds.length)})`, patientIds);
     const sites = this.fetchSites(courses.map((course) => course.id));
+    const documents = courses.flatMap((course) => this.fetchCourseDocuments(course.id));
     const visits = this.fetchVisitsByPatientIds(patientIds);
 
     const patientMap = new Map(patients.map((patient) => [patient.id, patient]));
     const coursesByPatient = new Map<string, TreatmentCourseRecord[]>();
     const sitesByCourse = new Map<string, TreatmentSiteRecord[]>();
+    const documentsByCourse = new Map<string, CourseDocumentRecord[]>();
     const visitsByCourse = new Map<
       string,
       Array<{ note: VisitNoteRecord; photos: VisitPhotoRecord[]; attachments: VisitAttachmentRecord[]; pdfs: GeneratedPdfRecord[] }>
@@ -1295,6 +1457,13 @@ export class RadiationNoteRepository implements StructuredDataStore {
       list.push(site);
       list.sort((left, right) => left.siteNumber - right.siteNumber);
       sitesByCourse.set(site.courseId, list);
+    }
+
+    for (const document of documents) {
+      const list = documentsByCourse.get(document.courseId) || [];
+      list.push(document);
+      list.sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+      documentsByCourse.set(document.courseId, list);
     }
 
     for (const visit of visits) {
@@ -1316,6 +1485,7 @@ export class RadiationNoteRepository implements StructuredDataStore {
           courses: (coursesByPatient.get(patient.id) || []).map((course) => ({
             course,
             sites: sitesByCourse.get(course.id) || [],
+            documents: documentsByCourse.get(course.id) || [],
             visits: visitsByCourse.get(course.id) || []
           }))
         };
@@ -1325,6 +1495,7 @@ export class RadiationNoteRepository implements StructuredDataStore {
       courses: Array<{
         course: TreatmentCourseRecord;
         sites: TreatmentSiteRecord[];
+        documents: CourseDocumentRecord[];
         visits: Array<{ note: VisitNoteRecord; photos: VisitPhotoRecord[]; attachments: VisitAttachmentRecord[]; pdfs: GeneratedPdfRecord[] }>;
       }>;
     }>;
@@ -1481,8 +1652,8 @@ export class RadiationNoteRepository implements StructuredDataStore {
          id, course_id, site_number, body_location, treatment_location_text, diagnosis_text, icd10,
          number_of_blocks, lesion_size, treatment_depth, cone_size, cutout_size, shields, machine, energy_kv, treatment_interval,
          additional_devices, worksheet_side, worksheet_positioning, worksheet_vac_lok_area, worksheet_eye_shield_type,
-         worksheet_gum_shield_position, worksheet_lip_shield_position, daily_dose, total_dose, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
+         worksheet_gum_shield_position, worksheet_lip_shield_position, daily_dose, total_dose, prescribed_fractions, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
         [
         site.id ?? makeId("site"),
         courseId,
@@ -1509,6 +1680,7 @@ export class RadiationNoteRepository implements StructuredDataStore {
           site.worksheetLipShieldPosition ?? "",
           site.dailyDose,
           site.totalDose,
+          site.prescribedFractions ?? null,
           timestamp,
         timestamp
       ]
@@ -1562,19 +1734,20 @@ export class RadiationNoteRepository implements StructuredDataStore {
         archived_at TEXT
       );
 
-      CREATE TABLE IF NOT EXISTS treatment_courses (
-        id TEXT PRIMARY KEY,
-        patient_id TEXT NOT NULL,
-        course_name TEXT NOT NULL,
-        course_type TEXT NOT NULL,
-        prescribed_fractions INTEGER NOT NULL,
-        status TEXT NOT NULL,
-        start_date TEXT NOT NULL,
-        end_date TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        archived_at TEXT,
-        FOREIGN KEY(patient_id) REFERENCES patients(id)
+        CREATE TABLE IF NOT EXISTS treatment_courses (
+          id TEXT PRIMARY KEY,
+          patient_id TEXT NOT NULL,
+          course_name TEXT NOT NULL,
+          course_type TEXT NOT NULL,
+          prescribed_fractions INTEGER NOT NULL,
+          status TEXT NOT NULL,
+          start_date TEXT NOT NULL,
+          sim_consult_date TEXT,
+          end_date TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          archived_at TEXT,
+          FOREIGN KEY(patient_id) REFERENCES patients(id)
       );
 
       CREATE TABLE IF NOT EXISTS treatment_sites (
@@ -1663,6 +1836,20 @@ export class RadiationNoteRepository implements StructuredDataStore {
         FOREIGN KEY(visit_note_id) REFERENCES visit_notes(id)
       );
 
+      CREATE TABLE IF NOT EXISTS course_documents (
+        id TEXT PRIMARY KEY,
+        course_id TEXT NOT NULL,
+        document_type TEXT NOT NULL,
+        file_path TEXT NOT NULL,
+        file_asset_id TEXT,
+        caption TEXT NOT NULL DEFAULT '',
+        mime_type TEXT NOT NULL DEFAULT '',
+        original_name TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(course_id) REFERENCES treatment_courses(id)
+      );
+
       CREATE TABLE IF NOT EXISTS template_definitions (
         id TEXT PRIMARY KEY,
         key TEXT NOT NULL UNIQUE,
@@ -1736,6 +1923,8 @@ export class RadiationNoteRepository implements StructuredDataStore {
     try { this.run(`ALTER TABLE visit_photos ADD COLUMN image_asset_id TEXT`); } catch { /* already exists */ }
     try { this.run(`ALTER TABLE visit_attachments ADD COLUMN file_asset_id TEXT`); } catch { /* already exists */ }
     try { this.run(`ALTER TABLE generated_pdfs ADD COLUMN file_asset_id TEXT`); } catch { /* already exists */ }
+    try { this.run(`ALTER TABLE treatment_sites ADD COLUMN prescribed_fractions INTEGER`); } catch { /* already exists */ }
+    try { this.run(`ALTER TABLE treatment_courses ADD COLUMN sim_consult_date TEXT`); } catch { /* already exists */ }
 
     this.backfillMissingAssetIds();
 
@@ -1889,6 +2078,12 @@ export class RadiationNoteRepository implements StructuredDataStore {
         this.run(`UPDATE generated_pdfs SET file_asset_id = ? WHERE id = ?`, [makeAssetId(), row.id]);
       });
 
+      this.queryAll<{ id: string }>(
+        `SELECT id FROM course_documents WHERE file_path IS NOT NULL AND (file_asset_id IS NULL OR file_asset_id = '')`
+      ).forEach((row) => {
+        this.run(`UPDATE course_documents SET file_asset_id = ? WHERE id = ?`, [makeAssetId(), row.id]);
+      });
+
       this.queryAll<{ id: string; pdfPath: string }>(
         `SELECT id, pdf_path AS pdfPath
          FROM visit_notes
@@ -1948,6 +2143,10 @@ export class RadiationNoteRepository implements StructuredDataStore {
     this.queryAll<{ assetId: string | null; filePath: string | null }>(
       `SELECT file_asset_id AS assetId, file_path AS filePath FROM generated_pdfs WHERE file_path IS NOT NULL`
     ).forEach((row) => register(row.assetId, row.filePath, "generated_pdf"));
+
+    this.queryAll<{ assetId: string | null; filePath: string | null }>(
+      `SELECT file_asset_id AS assetId, file_path AS filePath FROM course_documents WHERE file_path IS NOT NULL`
+    ).forEach((row) => register(row.assetId, row.filePath, "course_document"));
   }
 
   private run(sql: string, params: SqlValue[] = []) {

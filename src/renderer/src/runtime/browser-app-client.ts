@@ -21,9 +21,11 @@ import {
   buildDefaultStructuredFields,
   buildSiteSnapshots,
   createEmptyVitals,
+  fillMissingSitePrescribedFractions,
   formatVitals,
   getCurrentFraction,
   getAutoNumberOfBlocks,
+  getMaxSitePrescribedFractions,
   getNextTreatmentNumber,
   getSuggestedNoteType,
   getTemplateKey,
@@ -41,11 +43,17 @@ import {
 import { preflightBrowserArchiveRestore, restoreBrowserArchive } from "./browser-archive-restore";
 import { buildVisitPreviewText } from "../helpers";
 import { buildVisitPdf, type PdfBinaryAssetInput } from "../../../main/pdf";
+import {
+  buildConsentFormPdfFromTemplateBytes,
+  buildConsentUploadPdf,
+  buildSignedConsentFormPdfFromTemplateBytes
+} from "../../../shared/consent-form-pdf";
 import { buildSimWorksheetPdfFromTemplateBytes } from "../../../shared/sim-worksheet-pdf";
 import { validateTemplate } from "../../../shared/template-engine";
 import { BrowserBinaryAssetStore } from "../storage/browser-binary-asset-store";
 import { BrowserStructuredDataStore } from "../storage/browser-structured-data-store";
 import brandLogo from "../assets/dermatherapy-note-logo.jpg";
+import consentFormTemplateUrl from "../../../../assets/templates/radiation-therapy-consent-form.pdf";
 import simWorksheetTemplateUrl from "../../../../assets/templates/radiation-therapy-sim-worksheet.pdf";
 
 export interface BrowserArchiveClientDependencies {
@@ -76,6 +84,7 @@ export class BrowserAppClient implements AppClient {
   private readonly archiveBlobByHandle = new WeakMap<PatientArchiveIoHandle, Blob>();
   private readonly structuredDataStore: BrowserStructuredDataStore;
   private readonly binaryAssetStore: BrowserBinaryAssetStore;
+  private consentFormTemplateBytesPromise: Promise<Uint8Array> | null = null;
   private simWorksheetTemplateBytesPromise: Promise<Uint8Array> | null = null;
   private isLocked = false;
   private hasBootstrapped = false;
@@ -230,6 +239,21 @@ export class BrowserAppClient implements AppClient {
     return this.simWorksheetTemplateBytesPromise;
   }
 
+  private async readConsentFormTemplateBytes() {
+    if (!this.consentFormTemplateBytesPromise) {
+      this.consentFormTemplateBytesPromise = (async () => {
+        const response = await fetch(consentFormTemplateUrl);
+        if (!response.ok) {
+          throw new Error("Could not resolve consent form template.");
+        }
+
+        return new Uint8Array(await response.arrayBuffer());
+      })();
+    }
+
+    return this.consentFormTemplateBytesPromise;
+  }
+
   private async bytesToDataUrl(bytes: Uint8Array, mimeType: string) {
     const blob = new Blob([Uint8Array.from(bytes)], { type: mimeType });
     return new Promise<string>((resolve, reject) => {
@@ -254,12 +278,20 @@ export class BrowserAppClient implements AppClient {
     }
 
     const sites = structuredDataStore.fetchSites([course.id]);
+    const courseDocuments = structuredDataStore.fetchCourseDocuments(course.id);
     const refreshedSiteSnapshots = refreshVisitSiteSnapshots(
       visit.noteType,
       sites,
       visit.treatmentNumber,
       visit.structuredFields.siteSnapshots,
       visit.structuredFields.biopsyDate || course.startDate || ""
+    );
+    const resolvedSiteSnapshots = fillMissingSitePrescribedFractions(
+      refreshedSiteSnapshots,
+      visit.noteType === "consult_sim"
+        ? visit.structuredFields.projectedFractionsInput ?? null
+        : visit.structuredFields.prescribedFractionsInput ??
+            (course.prescribedFractions > 0 ? course.prescribedFractions : null)
     );
     const refreshedNote: VisitInput = {
       id: visit.id,
@@ -276,11 +308,16 @@ export class BrowserAppClient implements AppClient {
         additionalNotes: visit.structuredFields.additionalNotes ?? "",
         prescribedFractionsInput:
           visit.structuredFields.prescribedFractionsInput ??
-          (visit.noteType !== "consult_sim" && course.prescribedFractions > 0 ? course.prescribedFractions : null),
-        projectedFractionsInput: visit.structuredFields.projectedFractionsInput ?? null,
+          (visit.noteType !== "consult_sim"
+            ? getMaxSitePrescribedFractions(resolvedSiteSnapshots) ??
+              (course.prescribedFractions > 0 ? course.prescribedFractions : null)
+            : null),
+        projectedFractionsInput:
+          visit.structuredFields.projectedFractionsInput ??
+          (visit.noteType === "consult_sim" ? getMaxSitePrescribedFractions(resolvedSiteSnapshots) : null),
         biopsyDate: visit.structuredFields.biopsyDate || course.startDate || "",
         lastTreatmentDate: visit.structuredFields.lastTreatmentDate ?? course.startDate ?? "",
-        siteSnapshots: refreshedSiteSnapshots
+        siteSnapshots: resolvedSiteSnapshots
       },
       generatedText: visit.generatedText,
       editedText: visit.editedText,
@@ -300,6 +337,7 @@ export class BrowserAppClient implements AppClient {
       patient,
       course,
       sites,
+      courseDocuments,
       note: {
         ...refreshedNote,
         generatedText,
@@ -514,6 +552,7 @@ export class BrowserAppClient implements AppClient {
     const structuredDataStore = await this.getStructuredDataStore();
     const activePatients = structuredDataStore.fetchPatients("status = ?", ["active"]);
     const activeCourses = structuredDataStore.fetchCourses("status = ?", ["active"]);
+    const pendingCourses = structuredDataStore.fetchCourses("status = ?", ["pending"]);
     const courseIds = activeCourses.map((course) => course.id);
     const courseSites = structuredDataStore.fetchSites(courseIds);
     const visits = structuredDataStore.fetchVisitsByCourseIds(courseIds);
@@ -587,6 +626,29 @@ export class BrowserAppClient implements AppClient {
           };
         })
         .filter((course): course is DashboardSnapshot["activeCourses"][number] => Boolean(course)),
+      pendingCourses: pendingCourses
+        .map((course) => {
+          const patient = patientMap.get(course.patientId);
+          if (!patient) {
+            return null;
+          }
+
+          const sitesForCourse = structuredDataStore.fetchSites([course.id]);
+          const documentsForCourse = structuredDataStore.fetchCourseDocuments(course.id);
+          return {
+            patientId: patient.id,
+            patientName: `${patient.lastName}, ${patient.firstName}`,
+            patientMrn: patient.mrn,
+            patientDob: patient.dob,
+            patientFacePhoto: patient.facePhoto,
+            courseId: course.id,
+            courseName: course.courseName,
+            courseType: course.courseType,
+            siteSummary: sitesForCourse.map((site) => site.bodyLocation).join(" + "),
+            hasConsentForm: documentsForCourse.some((document) => document.documentType === "consent_form")
+          };
+        })
+        .filter((course): course is DashboardSnapshot["pendingCourses"][number] => Boolean(course)),
       patientsWithoutCourse,
       archivedPatients: structuredDataStore.fetchPatients("1 = 1", []).filter((patient) => patient.status !== "active").length,
       archivedCourses: structuredDataStore.fetchCourses("1 = 1", []).filter((course) => course.status !== "active").length
@@ -713,9 +775,12 @@ export class BrowserAppClient implements AppClient {
         visitSet.photos.map((photo) => this.getStoredAssetPath(binaryAssetStore, photo.imageAsset))
       )
     );
+    const documentPaths = assetSet.courses.flatMap((courseSet) =>
+      courseSet.documents.map((document) => this.getStoredAssetPath(binaryAssetStore, document.fileAsset))
+    );
 
     structuredDataStore.hardDeletePatientRecords(patientId);
-    this.deleteStoredFiles(binaryAssetStore, [...pdfPaths, ...attachmentPaths, ...photoPaths, facePhotoPath]);
+    this.deleteStoredFiles(binaryAssetStore, [...pdfPaths, ...attachmentPaths, ...photoPaths, ...documentPaths, facePhotoPath]);
     this.removeDirectory(binaryAssetStore, `${binaryAssetStore.rootDir}/patients/${encodeURIComponent(patientId)}`);
     await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
   }
@@ -853,9 +918,12 @@ export class BrowserAppClient implements AppClient {
     const photoPaths = assetSet.visits.flatMap((visitSet) =>
       visitSet.photos.map((photo) => this.getStoredAssetPath(binaryAssetStore, photo.imageAsset))
     );
+    const documentPaths = assetSet.documents.map((document) =>
+      this.getStoredAssetPath(binaryAssetStore, document.fileAsset)
+    );
 
     structuredDataStore.deleteCourseRecords(courseId);
-    this.deleteStoredFiles(binaryAssetStore, [...pdfPaths, ...attachmentPaths, ...photoPaths]);
+    this.deleteStoredFiles(binaryAssetStore, [...pdfPaths, ...attachmentPaths, ...photoPaths, ...documentPaths]);
     this.removeDirectory(
       binaryAssetStore,
       `${binaryAssetStore.rootDir}/patients/${encodeURIComponent(patientId)}/courses/${encodeURIComponent(courseId)}`
@@ -880,6 +948,9 @@ export class BrowserAppClient implements AppClient {
     if (!course) {
       throw new Error("Course not found.");
     }
+    if (course.status === "pending") {
+      throw new Error("Finish course setup before starting the sim / consult note.");
+    }
 
     const patient = structuredDataStore.fetchPatient(course.patientId);
     if (!patient) {
@@ -887,6 +958,7 @@ export class BrowserAppClient implements AppClient {
     }
 
     const sites = structuredDataStore.fetchSites([courseId]);
+    const courseDocuments = structuredDataStore.fetchCourseDocuments(course.id);
     const visits = structuredDataStore.fetchVisitsByCourseIds([courseId]);
     const hasConsultVisit = visits.some((visit) => visit.note.noteType === "consult_sim");
     const shouldStartWithConsult = mode === "next_treatment" && !hasConsultVisit && course.prescribedFractions <= 0;
@@ -896,12 +968,13 @@ export class BrowserAppClient implements AppClient {
     }
 
     const noteType = mode === "consult_sim" || shouldStartWithConsult ? "consult_sim" : getSuggestedNoteType(treatmentNumber);
-      const siteSnapshots = applyAutoNumberOfBlocks(noteType, buildSiteSnapshots(sites, treatmentNumber));
+      let siteSnapshots = applyAutoNumberOfBlocks(noteType, buildSiteSnapshots(sites, treatmentNumber));
       const settings = structuredDataStore.getSettingsRecord();
       const latestConsultVisit = visits
         .filter((visit) => visit.note.noteType === "consult_sim")
         .sort((left, right) => right.note.updatedAt.localeCompare(left.note.updatedAt))[0];
       const projectedFractionsFromConsult = latestConsultVisit?.note.structuredFields.projectedFractionsInput ?? null;
+      const projectedFractionsBySiteFromConsult = latestConsultVisit?.note.structuredFields.siteSnapshots ?? [];
       const mostRecentVisitDate =
         visits
           .map((visit) => visit.note.visitDate)
@@ -917,20 +990,36 @@ export class BrowserAppClient implements AppClient {
       biopsyDate: site.biopsyDate || course.startDate || ""
     }));
       if (noteType !== "consult_sim") {
-        if (treatmentNumber === 1 && projectedFractionsFromConsult && projectedFractionsFromConsult > 0) {
-          structuredFields.prescribedFractionsInput = projectedFractionsFromConsult;
+        if (treatmentNumber === 1) {
+          siteSnapshots = fillMissingSitePrescribedFractions(
+            siteSnapshots.map((site) => {
+              const projectedSite = projectedFractionsBySiteFromConsult.find(
+                (snapshot) => snapshot.siteNumber === site.siteNumber
+              );
+              return {
+                ...site,
+                prescribedFractions: projectedSite?.prescribedFractions ?? site.prescribedFractions
+              };
+            }),
+            projectedFractionsFromConsult
+          );
+          structuredFields.siteSnapshots = siteSnapshots.map((site) => ({
+            ...site,
+            biopsyDate: site.biopsyDate || course.startDate || ""
+          }));
+          structuredFields.prescribedFractionsInput = getMaxSitePrescribedFractions(structuredFields.siteSnapshots);
         } else if (course.prescribedFractions <= 0) {
           structuredFields.prescribedFractionsInput = course.prescribedFractions > 0 ? course.prescribedFractions : null;
         }
       }
 
-    const note: VisitInput = {
-      patientId: patient.id,
-      courseId: course.id,
-      visitDate: todayIso(),
-      noteType,
-      treatmentNumber,
-      status: "draft",
+      const note: VisitInput = {
+        patientId: patient.id,
+        courseId: course.id,
+        visitDate: noteType === "consult_sim" ? course.simConsultDate || todayIso() : todayIso(),
+        noteType,
+        treatmentNumber,
+        status: "draft",
       therapistName: settings.defaultTherapist,
       vitals: createEmptyVitals(),
       structuredFields,
@@ -948,6 +1037,7 @@ export class BrowserAppClient implements AppClient {
       patient,
       course,
       sites,
+      courseDocuments,
       note,
       existingPhotos: [],
       existingAttachments: [],
@@ -968,31 +1058,72 @@ export class BrowserAppClient implements AppClient {
       throw new Error("Visit context is incomplete.");
     }
 
+    const normalizedSiteSnapshots = (
+      input.structuredFields.siteSnapshots.length === 1
+        ? input.structuredFields.siteSnapshots.map((site) => ({
+            ...site,
+            prescribedFractions:
+              input.noteType === "consult_sim"
+                ? input.structuredFields.projectedFractionsInput ?? site.prescribedFractions ?? undefined
+                : input.structuredFields.prescribedFractionsInput ?? site.prescribedFractions ?? undefined
+          }))
+        : input.structuredFields.siteSnapshots
+    );
+
     const prescribedFractionsInput =
-      input.noteType !== "consult_sim" ? input.structuredFields.prescribedFractionsInput ?? null : null;
+      input.noteType !== "consult_sim"
+        ? input.structuredFields.prescribedFractionsInput ??
+          getMaxSitePrescribedFractions(normalizedSiteSnapshots)
+        : null;
+    const projectedFractionsInput =
+      input.noteType === "consult_sim"
+        ? input.structuredFields.projectedFractionsInput ??
+          getMaxSitePrescribedFractions(normalizedSiteSnapshots)
+        : input.structuredFields.projectedFractionsInput ?? null;
+
+    let courseSites = structuredDataStore.fetchSites([course.id]);
+    let courseUpdated = false;
     if (prescribedFractionsInput && prescribedFractionsInput > 0 && prescribedFractionsInput !== course.prescribedFractions) {
       structuredDataStore.updateCoursePrescribedFractions(course.id, prescribedFractionsInput);
+      courseUpdated = true;
+    }
+    if (input.noteType !== "consult_sim") {
+      for (const siteSnapshot of normalizedSiteSnapshots) {
+        const sitePrescribedFractions = siteSnapshot.prescribedFractions ?? null;
+        if (!(sitePrescribedFractions && sitePrescribedFractions > 0)) {
+          continue;
+        }
+
+        const storedSite = courseSites.find((site) => site.siteNumber === siteSnapshot.siteNumber);
+        if ((storedSite?.prescribedFractions ?? null) !== sitePrescribedFractions) {
+          structuredDataStore.updateCourseSitePrescribedFractions(course.id, siteSnapshot.siteNumber, sitePrescribedFractions);
+          courseUpdated = true;
+        }
+      }
+    }
+    if (courseUpdated) {
       course = structuredDataStore.fetchCourse(input.courseId);
       if (!course) {
         throw new Error("Visit context is incomplete.");
       }
+      courseSites = structuredDataStore.fetchSites([course.id]);
     }
 
       const structuredFields = {
         ...input.structuredFields,
         additionalNotes: input.structuredFields.additionalNotes ?? "",
-        prescribedFractionsInput: input.structuredFields.prescribedFractionsInput ?? null,
-        projectedFractionsInput: input.structuredFields.projectedFractionsInput ?? null,
-        biopsyDate: input.structuredFields.siteSnapshots[0]?.biopsyDate || input.structuredFields.biopsyDate || "",
+        prescribedFractionsInput,
+        projectedFractionsInput,
+        biopsyDate: normalizedSiteSnapshots[0]?.biopsyDate || input.structuredFields.biopsyDate || "",
         lastTreatmentDate: input.structuredFields.lastTreatmentDate ?? "",
       siteSnapshots: refreshVisitSiteSnapshots(
         input.noteType,
-        structuredDataStore.fetchSites([course.id]).map((site) => ({
+        courseSites.map((site) => ({
           ...site,
           cutoutSize: normalizeCutoutSizeLabel(site.cutoutSize)
         })),
         input.treatmentNumber,
-        input.structuredFields.siteSnapshots.map((snapshot) => ({
+        normalizedSiteSnapshots.map((snapshot) => ({
           ...snapshot,
           cutoutSize: normalizeCutoutSizeLabel(snapshot.cutoutSize)
         })),
@@ -1121,6 +1252,7 @@ export class BrowserAppClient implements AppClient {
 
     const photos = structuredDataStore.fetchVisitPhotos(visitId);
     const attachments = structuredDataStore.fetchVisitAttachments(visitId);
+    const linkedCourseDocuments = visit.noteType === "consult_sim" ? structuredDataStore.fetchCourseDocuments(course.id) : [];
     const existingPdfs = structuredDataStore.fetchGeneratedPdfs(visitId);
     const versionNumber = existingPdfs.length + 1;
     const pdfBaseName = this.buildPdfBaseName(patient, visit);
@@ -1136,9 +1268,24 @@ export class BrowserAppClient implements AppClient {
         }))
       ),
       attachmentInputs: await Promise.all(
-        attachments.map(async (attachment) => ({
-          file: await this.readStoredAssetInput(attachment.fileAsset, `visit attachment ${attachment.id}`, attachment.originalName),
-          caption: attachment.caption || attachment.originalName,
+        [
+          ...attachments.map((attachment) => ({
+            asset: attachment.fileAsset,
+            assetLabel: `visit attachment ${attachment.id}`,
+            caption: attachment.caption || attachment.originalName,
+            mimeType: attachment.mimeType,
+            originalName: attachment.originalName
+          })),
+          ...linkedCourseDocuments.map((document) => ({
+            asset: document.fileAsset,
+            assetLabel: `course document ${document.id}`,
+            caption: document.caption || document.originalName,
+            mimeType: document.mimeType,
+            originalName: document.originalName
+          }))
+        ].map(async (attachment) => ({
+          file: await this.readStoredAssetInput(attachment.asset, attachment.assetLabel, attachment.originalName),
+          caption: attachment.caption,
           mimeType: attachment.mimeType,
           originalName: attachment.originalName
         }))
@@ -1193,16 +1340,20 @@ export class BrowserAppClient implements AppClient {
     }
 
     const currentCourseSites = structuredDataStore.fetchSites([course.id]);
-    const latestSnapshots = applyAutoNumberOfBlocks(
+    const latestSnapshots = fillMissingSitePrescribedFractions(
+      applyAutoNumberOfBlocks(
       visit.noteType,
       buildSiteSnapshots(currentCourseSites, visit.treatmentNumber)
     ).map((site) => {
       const existingSnapshot = visit.structuredFields.siteSnapshots.find((snapshot) => snapshot.siteNumber === site.siteNumber);
       return {
         ...site,
-        biopsyDate: existingSnapshot?.biopsyDate || visit.structuredFields.biopsyDate || course.startDate || ""
+        biopsyDate: existingSnapshot?.biopsyDate || visit.structuredFields.biopsyDate || course.startDate || "",
+        prescribedFractions: existingSnapshot?.prescribedFractions ?? site.prescribedFractions
       };
-    });
+      }),
+      visit.structuredFields.projectedFractionsInput ?? null
+    );
 
     const worksheet = await buildSimWorksheetPdfFromTemplateBytes(await this.readSimWorksheetTemplateBytes(), {
       patient,
@@ -1254,6 +1405,180 @@ export class BrowserAppClient implements AppClient {
     }
 
     return created;
+  }
+
+  async generateConsentForm(courseId: string) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    const course = structuredDataStore.fetchCourse(courseId);
+    if (!course) {
+      throw new Error("Course not found.");
+    }
+
+    const patient = structuredDataStore.fetchPatient(course.patientId);
+    if (!patient) {
+      throw new Error("Patient not found.");
+    }
+
+    const sites = structuredDataStore.fetchSites([course.id]);
+    const existingDocument = structuredDataStore
+      .fetchCourseDocuments(course.id)
+      .find((document) => document.documentType === "consent_form") ?? null;
+    const consentForm = await buildConsentFormPdfFromTemplateBytes(await this.readConsentFormTemplateBytes(), {
+      patient,
+      course,
+      sites
+    });
+
+    const filePath = binaryAssetStore.saveUpload(
+      {
+        name: consentForm.fileName,
+        mimeType: "application/pdf",
+        dataUrl: await this.bytesToDataUrl(consentForm.bytes, "application/pdf")
+      },
+      binaryAssetStore.getCourseDocumentsDir(patient.id, course.id),
+      consentForm.caption
+    );
+
+    const persistedDocument = structuredDataStore.upsertCourseDocument(
+      course.id,
+      "consent_form",
+      filePath,
+      consentForm.caption,
+      "application/pdf",
+      consentForm.fileName
+    );
+
+    const previousPath = existingDocument ? this.getStoredAssetPath(binaryAssetStore, existingDocument.fileAsset) : null;
+    if (previousPath && previousPath !== filePath) {
+      this.deleteStoredFiles(binaryAssetStore, [previousPath]);
+    }
+
+      await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
+      return persistedDocument;
+    }
+
+  async finalizeConsentForm(courseId: string, input: Parameters<AppClient["finalizeConsentForm"]>[1]) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    const course = structuredDataStore.fetchCourse(courseId);
+    if (!course) {
+      throw new Error("Course not found.");
+    }
+
+    const patient = structuredDataStore.fetchPatient(course.patientId);
+    if (!patient) {
+      throw new Error("Patient not found.");
+    }
+
+    const sites = structuredDataStore.fetchSites([course.id]);
+    const existingDocument = structuredDataStore
+      .fetchCourseDocuments(course.id)
+      .find((document) => document.documentType === "consent_form") ?? null;
+    const consentForm = await buildSignedConsentFormPdfFromTemplateBytes(await this.readConsentFormTemplateBytes(), {
+      patient,
+      course,
+      sites,
+      signing: input
+    });
+
+    const filePath = binaryAssetStore.saveUpload(
+      {
+        name: consentForm.fileName,
+        mimeType: "application/pdf",
+        dataUrl: await this.bytesToDataUrl(consentForm.bytes, "application/pdf")
+      },
+      binaryAssetStore.getCourseDocumentsDir(patient.id, course.id),
+      consentForm.caption
+    );
+
+    const persistedDocument = structuredDataStore.upsertCourseDocument(
+      course.id,
+      "consent_form",
+      filePath,
+      consentForm.caption,
+      "application/pdf",
+      consentForm.fileName
+    );
+
+    const previousPath = existingDocument ? this.getStoredAssetPath(binaryAssetStore, existingDocument.fileAsset) : null;
+    if (previousPath && previousPath !== filePath) {
+      this.deleteStoredFiles(binaryAssetStore, [previousPath]);
+    }
+
+    await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
+    return persistedDocument;
+  }
+
+  async uploadConsentForm(courseId: string, upload: Parameters<AppClient["uploadConsentForm"]>[1]) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    const course = structuredDataStore.fetchCourse(courseId);
+    if (!course) {
+      throw new Error("Course not found.");
+    }
+
+    const patient = structuredDataStore.fetchPatient(course.patientId);
+    if (!patient) {
+      throw new Error("Patient not found.");
+    }
+
+    const existingDocument = structuredDataStore
+      .fetchCourseDocuments(course.id)
+      .find((document) => document.documentType === "consent_form") ?? null;
+    const consentForm = await buildConsentUploadPdf(upload, patient);
+
+    const filePath = binaryAssetStore.saveUpload(
+      {
+        name: consentForm.fileName,
+        mimeType: "application/pdf",
+        dataUrl: await this.bytesToDataUrl(consentForm.bytes, "application/pdf")
+      },
+      binaryAssetStore.getCourseDocumentsDir(patient.id, course.id),
+      consentForm.caption
+    );
+
+    const persistedDocument = structuredDataStore.upsertCourseDocument(
+      course.id,
+      "consent_form",
+      filePath,
+      consentForm.caption,
+      "application/pdf",
+      consentForm.fileName
+    );
+
+    const previousPath = existingDocument ? this.getStoredAssetPath(binaryAssetStore, existingDocument.fileAsset) : null;
+    if (previousPath && previousPath !== filePath) {
+      this.deleteStoredFiles(binaryAssetStore, [previousPath]);
+    }
+
+    await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
+    return persistedDocument;
+  }
+
+  async deleteConsentForm(courseId: string) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    const course = structuredDataStore.fetchCourse(courseId);
+    if (!course) {
+      throw new Error("Course not found.");
+    }
+
+    const document = structuredDataStore
+      .fetchCourseDocuments(course.id)
+      .find((item) => item.documentType === "consent_form");
+    if (!document) {
+      return;
+    }
+
+    const documentPath = this.getStoredAssetPath(binaryAssetStore, document.fileAsset);
+    structuredDataStore.deleteCourseDocumentRecord(document.id);
+    this.deleteStoredFiles(binaryAssetStore, [documentPath]);
+    await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
   }
 
   // desktop-only-no-op: desktop returns a real local workspace folder path.

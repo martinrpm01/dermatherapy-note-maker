@@ -481,6 +481,36 @@ export function buildSiteSnapshots(
   }));
 }
 
+export function getMaxSitePrescribedFractions(
+  siteSnapshots: Array<{ prescribedFractions?: number | null }>
+): number | null {
+  const values = siteSnapshots
+    .map((site) => site.prescribedFractions ?? null)
+    .filter((value): value is number => typeof value === "number" && value > 0);
+
+  return values.length > 0 ? Math.max(...values) : null;
+}
+
+export function fillMissingSitePrescribedFractions<
+  T extends { prescribedFractions?: number | null }
+>(
+  siteSnapshots: T[],
+  fallbackPrescribedFractions: number | null
+): T[] {
+  if (!(fallbackPrescribedFractions && fallbackPrescribedFractions > 0)) {
+    return siteSnapshots;
+  }
+
+  return siteSnapshots.map((site) =>
+    site.prescribedFractions && site.prescribedFractions > 0
+      ? site
+      : {
+          ...site,
+          prescribedFractions: fallbackPrescribedFractions
+        }
+  );
+}
+
 export function refreshVisitSiteSnapshots(
   noteType: NoteType,
   sites: Array<{
@@ -520,7 +550,8 @@ export function refreshVisitSiteSnapshots(
       const existingSnapshot = existingSiteSnapshots.find((snapshot) => snapshot.siteNumber === site.siteNumber);
       return {
         ...site,
-        biopsyDate: existingSnapshot?.biopsyDate || fallbackBiopsyDate || ""
+        biopsyDate: existingSnapshot?.biopsyDate || fallbackBiopsyDate || "",
+        prescribedFractions: existingSnapshot?.prescribedFractions ?? site.prescribedFractions
       };
     })
   );

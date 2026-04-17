@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useResolvedAssetUrl } from "./asset-url";
-import { buildVisitPreviewText, createCourseFormFromDetail, createEmptyCourseForm, createEmptyPatientForm, fileToCompressedUpload, fileToUpload } from "./helpers";
+import {
+  buildVisitPreviewText,
+  createCourseFormFromDetail,
+  createEmptyConsentCourseForm,
+  createEmptyCourseForm,
+  createEmptyPatientForm,
+  fileToCompressedUpload,
+  fileToUpload
+} from "./helpers";
 import {
   ArchiveScreen,
   CompletedScreen,
@@ -14,7 +22,7 @@ import {
   SettingsScreen,
   WipeLocalDataScreen
 } from "./screen-components";
-import { PatientModal, CourseModal } from "./modal-components";
+import { ConsentSigningModal, CourseConsentModal, PatientModal, CourseModal, PendingCourseIntakeModal } from "./modal-components";
 import { VisitEditorScreen } from "./visit-editor-screen";
 import brandLogo from "./assets/dermatherapy-note-logo.jpg";
 import brandIcon from "./assets/dermatherapy-icon.png";
@@ -23,13 +31,18 @@ import type {
   AppClient,
   ArchiveSnapshot,
   BootstrapPayload,
+  ConsentSigningInput,
   CourseInput,
   DashboardSnapshot,
   LaunchReadyScreen,
+  PatientRecord,
   PatientDetail,
   PatientInput,
   SettingsPayload,
+  StoredAssetUpload,
   TemplateDefinitionRecord,
+  TreatmentCourseRecord,
+  TreatmentSiteRecord,
   VisitEditorState
 } from "../../shared/types";
 
@@ -41,12 +54,26 @@ type Screen =
   | { name: "archive" }
   | { name: "settings" };
 
+type CourseModalMode = "intake" | "full";
+
 interface AppProps {
   appClient: AppClient | null;
   initialClientError?: string;
 }
 
 type BrowserRecoveryFlow = "auth" | "recover_pin" | "wipe_data";
+
+type ConsentSigningState = {
+  patient: PatientRecord;
+  course: TreatmentCourseRecord;
+  sites: TreatmentSiteRecord[];
+  input: ConsentSigningInput;
+};
+
+type CourseConsentActionsState = {
+  patientId: string;
+  courseId: string;
+};
 
 type InstallAwareNavigator = Navigator & {
   standalone?: boolean;
@@ -86,6 +113,87 @@ function buildAutosaveVisitInput(note: VisitEditorState["note"]) {
   };
 }
 
+async function pickConsentUploadFile() {
+  return new Promise<StoredAssetUpload | null>((resolve, reject) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".pdf,application/pdf,image/*";
+    input.style.display = "none";
+
+    let settled = false;
+    const finish = (upload: StoredAssetUpload | null) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      input.remove();
+      resolve(upload);
+    };
+
+    input.addEventListener("change", () => {
+      const file = input.files?.[0];
+      if (!file) {
+        finish(null);
+        return;
+      }
+
+      void (async () => {
+        try {
+          const upload = file.type.startsWith("image/")
+            ? await fileToCompressedUpload(file, 2400, undefined, "image/jpeg")
+            : await fileToUpload(file);
+          finish(upload);
+        } catch (error) {
+          input.remove();
+          reject(error);
+        }
+      })();
+    }, { once: true });
+    input.addEventListener("cancel", () => finish(null), { once: true });
+    document.body.appendChild(input);
+    input.click();
+  });
+}
+
+function toPatientFormInput(detail: PatientDetail["patient"]): PatientInput {
+  return {
+    id: detail.id,
+    firstName: detail.firstName,
+    lastName: detail.lastName,
+    mrn: detail.mrn,
+    dob: detail.dob,
+    sex: detail.sex,
+    notes: detail.notes
+  };
+}
+
+function ensureTherapistCredentials(value: string) {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  if (!normalized) {
+    return "";
+  }
+  return /RT\(T\)\s*$/i.test(normalized) ? normalized : `${normalized} RT(T)`;
+}
+
+function buildDefaultConsentSigningInput(
+  patient: PatientRecord,
+  course: TreatmentCourseRecord,
+  defaultWitnessName: string
+): ConsentSigningInput {
+  const isFemale = patient.sex.trim().toLowerCase() === "female";
+  const initials = `${patient.firstName.trim().charAt(0)}${patient.lastName.trim().charAt(0)}`.toUpperCase();
+  return {
+    signDate: course.simConsultDate || new Date().toISOString().slice(0, 10),
+    patientInitials: isFemale ? initials : "",
+    patientPrintedName: `${patient.firstName} ${patient.lastName}`.trim(),
+    formerRadiationAcknowledged: false,
+    medicalDevicesAcknowledged: false,
+    patientSignatureDataUrl: "",
+    witnessPrintedName: ensureTherapistCredentials(defaultWitnessName),
+    witnessSignatureDataUrl: ""
+  };
+}
+
 export default function App({ appClient, initialClientError = "" }: AppProps) {
   const [boot, setBoot] = useState<BootstrapPayload | null>(null);
   const [bootError, setBootError] = useState(initialClientError);
@@ -93,7 +201,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
   function showToast(message: string) {
     setStatusMessage(message);
     setToastKey((k) => k + 1);
-    window.setTimeout(() => setStatusMessage(""), 3000);
+    window.setTimeout(() => setStatusMessage(""), 6500);
   }
   const [screen, setScreen] = useState<Screen>({ name: "dashboard" });
   const [dashboard, setDashboard] = useState<DashboardSnapshot | null>(null);
@@ -107,6 +215,11 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
   const [visitEditor, setVisitEditor] = useState<VisitEditorState | null>(null);
   const [patientForm, setPatientForm] = useState<PatientInput | null>(null);
   const [courseForm, setCourseForm] = useState<CourseInput | null>(null);
+  const [courseFormMode, setCourseFormMode] = useState<CourseModalMode>("full");
+  const [courseCompletionFacePhotoUpload, setCourseCompletionFacePhotoUpload] = useState<StoredAssetUpload | null>(null);
+  const [courseCompletionNeedsFacePhoto, setCourseCompletionNeedsFacePhoto] = useState(false);
+  const [consentSigning, setConsentSigning] = useState<ConsentSigningState | null>(null);
+  const [courseConsentActions, setCourseConsentActions] = useState<CourseConsentActionsState | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [templateDraft, setTemplateDraft] = useState("");
   const [textDirty, setTextDirty] = useState(false);
@@ -485,12 +598,42 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     try {
       const isEditing = Boolean(courseForm.id);
       if (!appClient) return;
-      const course = await appClient.saveCourse(courseForm);
-      setCourseForm(null);
-      setScreen({ name: "patient", patientId: course.patientId });
-      await loadDashboard();
-      await loadPatient(course.patientId);
-      showToast(isEditing ? "Treatment course updated." : "Treatment course saved.");
+        const nextCourseForm =
+          courseFormMode === "full" && courseForm.status === "pending"
+            ? { ...courseForm, status: "active" as const }
+            : courseForm;
+        const course = await appClient.saveCourse(nextCourseForm);
+        const shouldAttachFacePhoto =
+          courseFormMode === "full" &&
+          courseForm.status === "pending" &&
+          courseCompletionNeedsFacePhoto &&
+          courseCompletionFacePhotoUpload;
+        if (shouldAttachFacePhoto) {
+          const detail =
+            patientDetail?.patient.id === course.patientId
+              ? patientDetail
+              : await appClient.getPatientDetail(course.patientId);
+          if (!detail.patient.facePhoto) {
+            await appClient.savePatient({
+              ...toPatientFormInput(detail.patient),
+              facePhotoUpload: courseCompletionFacePhotoUpload
+            });
+          }
+        }
+        setCourseForm(null);
+        setCourseFormMode("full");
+        setCourseCompletionFacePhotoUpload(null);
+        setCourseCompletionNeedsFacePhoto(false);
+        setScreen({ name: "patient", patientId: course.patientId });
+        await loadDashboard();
+        await loadPatient(course.patientId);
+        if (courseFormMode === "intake") {
+          showToast(isEditing ? "Path intake updated. Re-sign consent if details changed." : "Consent intake saved.");
+      } else if (courseForm.status === "pending") {
+        showToast("Course setup completed.");
+      } else {
+        showToast(isEditing ? "Treatment course updated." : "Treatment course saved.");
+      }
     } finally {
       setBusy(false);
     }
@@ -503,10 +646,13 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     setBusy(true);
     try {
       const patientId = courseForm.patientId;
-      if (!appClient) return;
-      await appClient.deleteCourse(courseForm.id);
-      setCourseForm(null);
-      await loadDashboard();
+        if (!appClient) return;
+        await appClient.deleteCourse(courseForm.id);
+        setCourseForm(null);
+        setCourseFormMode("full");
+        setCourseCompletionNeedsFacePhoto(false);
+        setCourseCompletionFacePhotoUpload(null);
+        await loadDashboard();
       const refreshed = await appClient.getPatientDetail(patientId).catch(() => null);
       if (!refreshed) {
         setScreen({ name: "dashboard" });
@@ -516,6 +662,105 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
       setPatientDetail(refreshed);
       setScreen({ name: "patient", patientId });
       showToast("Course removed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function generateConsentFormForCourse(courseId: string) {
+    // Kept for compatibility with existing button naming.
+    const ownerPatientId =
+      dashboard?.pendingCourses.find((course) => course.courseId === courseId)?.patientId ??
+      dashboard?.activeCourses.find((course) => course.courseId === courseId)?.patientId ??
+      patientDetail?.courses.find((courseDetail) => courseDetail.course.id === courseId)?.course.patientId ??
+      null;
+    if (ownerPatientId) {
+      await openConsentSigningForCourse(ownerPatientId, courseId);
+    }
+  }
+
+  async function uploadConsentFormForCourse(patientId: string, courseId: string) {
+    if (!appClient) return;
+    let upload: StoredAssetUpload | null = null;
+    try {
+      upload = await pickConsentUploadFile();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not read the consent file.";
+      showToast(message);
+      return;
+    }
+    if (!upload) {
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await appClient.uploadConsentForm(courseId, upload);
+      await loadDashboard();
+      await loadPatient(patientId);
+      showToast("Signed consent imported and linked to the sim / consult note.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not import the signed consent.";
+      showToast(message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteConsentFormForCourse(patientId: string, courseId: string) {
+    if (!appClient) return;
+    if (!window.confirm("Remove the current consent form for this course? This is useful if the wrong consent was imported.")) {
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await appClient.deleteConsentForm(courseId);
+      if (consentSigning?.course.id === courseId) {
+        setConsentSigning(null);
+      }
+      await loadDashboard();
+      await loadPatient(patientId);
+      showToast("Consent form removed.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not remove the consent form.";
+      showToast(message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openConsentSigningForCourse(patientId: string, courseId: string) {
+    if (!appClient) return;
+    const detail = patientDetail?.patient.id === patientId ? patientDetail : await appClient.getPatientDetail(patientId);
+    const targetCourse = detail?.courses.find((courseDetail) => courseDetail.course.id === courseId);
+    if (!detail || !targetCourse) {
+      return;
+    }
+
+    setConsentSigning({
+      patient: detail.patient,
+      course: targetCourse.course,
+      sites: targetCourse.sites,
+      input: buildDefaultConsentSigningInput(
+        detail.patient,
+        targetCourse.course,
+        settingsPayload?.settings.defaultTherapist || ""
+      )
+    });
+  }
+
+  async function finalizeConsentSigning() {
+    if (!consentSigning || !appClient) return;
+    setBusy(true);
+    try {
+      await appClient.finalizeConsentForm(consentSigning.course.id, consentSigning.input);
+      setConsentSigning(null);
+      await loadDashboard();
+      if (patientDetail?.patient.id === consentSigning.patient.id) {
+        await loadPatient(consentSigning.patient.id);
+      }
+      showToast("Consent form signed and saved.");
     } finally {
       setBusy(false);
     }
@@ -891,7 +1136,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
         <main className="content-shell">
           {statusMessage ? <div key={toastKey} className="toast">{statusMessage}</div> : null}
 
-      {screen.name === "dashboard" ? (
+        {screen.name === "dashboard" ? (
           <DashboardScreen
             appClient={appClient}
             dashboard={dashboard}
@@ -907,7 +1152,31 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
               await refreshWorkflowSnapshots();
               showToast("Patient moved to Archive.");
             })()}
-            onOpenVisit={(courseId, mode, existingVisitId) => setScreen({ name: "visit", courseId, mode, existingVisitId })}
+              onOpenVisit={(courseId, mode, existingVisitId) => setScreen({ name: "visit", courseId, mode, existingVisitId })}
+              onEditPendingCourse={(patientId, courseId, mode) => void (async () => {
+                if (!appClient) return;
+                const detail = await appClient.getPatientDetail(patientId);
+                const targetCourse = detail.courses.find((courseDetail) => courseDetail.course.id === courseId);
+                if (!targetCourse) {
+                  return;
+                }
+                setCourseForm(createCourseFormFromDetail(targetCourse));
+                setCourseFormMode(mode);
+                setCourseCompletionNeedsFacePhoto(mode === "full" && !detail.patient.facePhoto);
+                setCourseCompletionFacePhotoUpload(null);
+              })()}
+              onGenerateConsentForm={(courseId) => void generateConsentFormForCourse(courseId)}
+              onUploadConsentForm={(patientId, courseId) => void uploadConsentFormForCourse(patientId, courseId)}
+              onDeleteConsentForm={(patientId, courseId) => void deleteConsentFormForCourse(patientId, courseId)}
+              onOpenConsentForm={(patientId, courseId) => void (async () => {
+                if (!appClient) return;
+              const detail = await appClient.getPatientDetail(patientId);
+              const targetCourse = detail.courses.find((courseDetail) => courseDetail.course.id === courseId);
+              const consentDocument = targetCourse?.documents.find((document) => document.documentType === "consent_form");
+              if (consentDocument) {
+                await appClient.openAsset(consentDocument.fileAsset);
+              }
+            })()}
             onRestoreArchivedPatient={(patientId) => void (async () => {
               if (!appClient) return;
               await appClient.restorePatient(patientId);
@@ -921,14 +1190,42 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
           <PatientScreen
             appClient={appClient}
             patientDetail={patientDetail}
-            onEditPatient={() => setPatientForm({ ...patientDetail.patient })}
-            onAddCourse={() => setCourseForm(createEmptyCourseForm(patientDetail.patient.id))}
+              onEditPatient={() => setPatientForm(toPatientFormInput(patientDetail.patient))}
+            onAddCourse={() => {
+              setCourseForm(createEmptyConsentCourseForm(patientDetail.patient.id));
+              setCourseFormMode("intake");
+              setCourseCompletionNeedsFacePhoto(false);
+              setCourseCompletionFacePhotoUpload(null);
+            }}
             onEditCourse={(courseId) => {
               const targetCourse = patientDetail.courses.find((courseDetail) => courseDetail.course.id === courseId);
               if (!targetCourse) {
                 return;
               }
               setCourseForm(createCourseFormFromDetail(targetCourse));
+              setCourseFormMode(targetCourse.course.status === "pending" ? "intake" : "full");
+              setCourseCompletionNeedsFacePhoto(false);
+              setCourseCompletionFacePhotoUpload(null);
+            }}
+            onEditPathIntake={(courseId) => {
+              const targetCourse = patientDetail.courses.find((courseDetail) => courseDetail.course.id === courseId);
+              if (!targetCourse) {
+                return;
+              }
+              setCourseConsentActions({
+                patientId: patientDetail.patient.id,
+                courseId: targetCourse.course.id
+              });
+            }}
+            onCompleteCourseSetup={(courseId) => {
+              const targetCourse = patientDetail.courses.find((courseDetail) => courseDetail.course.id === courseId);
+              if (!targetCourse) {
+                return;
+              }
+              setCourseForm(createCourseFormFromDetail(targetCourse));
+              setCourseFormMode("full");
+              setCourseCompletionNeedsFacePhoto(!patientDetail.patient.facePhoto);
+              setCourseCompletionFacePhotoUpload(null);
             }}
             onArchivePatient={() => void (async () => {
               if (!appClient) return;
@@ -947,8 +1244,11 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
               await appClient.restoreCourse(courseId);
               await loadPatient(patientDetail.patient.id);
             })()}
-            onOpenPdf={(asset) => void appClient?.openAsset(asset)}
-            onDeleteVisit={(visitId) => void (async () => {
+              onOpenPdf={(asset) => void appClient?.openAsset(asset)}
+              onGenerateConsentForm={(courseId) => void generateConsentFormForCourse(courseId)}
+              onUploadConsentForm={(patientId, courseId) => void uploadConsentFormForCourse(patientId, courseId)}
+              onDeleteConsentForm={(patientId, courseId) => void deleteConsentFormForCourse(patientId, courseId)}
+              onDeleteVisit={(visitId) => void (async () => {
               if (!appClient) return;
               await appClient.deleteVisit(visitId);
               await loadPatient(patientDetail.patient.id);
@@ -984,6 +1284,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
               await loadVisit(visitEditor.course.id, "next_treatment", visitEditor.note.id);
             })()}
             onOpenExistingAttachment={(asset) => void appClient?.openAsset(asset)}
+            onOpenCourseDocument={(asset) => void appClient?.openAsset(asset)}
             onVisitPhotoAdd={(files, siteNumber) => {
               void (async () => {
                 if (!files || !visitEditor) return;
@@ -1041,7 +1342,10 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
             onOpenPatient={(patientId) => setScreen({ name: "patient", patientId })}
             onAddCourse={(patientId) => {
               setScreen({ name: "patient", patientId });
-              setCourseForm(createEmptyCourseForm(patientId));
+              setCourseForm(createEmptyConsentCourseForm(patientId));
+              setCourseFormMode("intake");
+              setCourseCompletionNeedsFacePhoto(false);
+              setCourseCompletionFacePhotoUpload(null);
             }}
             onOpenVisit={(courseId, existingVisitId) => setScreen({ name: "visit", courseId, mode: "next_treatment", existingVisitId })}
             onOpenPdf={(asset) => void appClient?.openAsset(asset)}
@@ -1134,34 +1438,105 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
         ) : null}
         </main>
 
-        {patientForm ? (
-          <PatientModal
-            patientForm={patientForm}
-            busy={busy}
-            onChange={setPatientForm}
-            onClose={() => setPatientForm(null)}
-            onSave={() => void savePatientForm()}
-            onFacePhotoSelected={(file) => {
-              void (async () => {
-                if (!file || !patientForm) return;
-                const upload = await fileToCompressedUpload(file, 900);
-                setPatientForm({ ...patientForm, facePhotoUpload: upload });
-              })();
-            }}
-          />
-        ) : null}
+          {patientForm ? (
+            <PatientModal
+              patientForm={patientForm}
+              busy={busy}
+              onChange={setPatientForm}
+              onClose={() => setPatientForm(null)}
+              onSave={() => void savePatientForm()}
+              onFacePhotoSelected={(file) => {
+                void (async () => {
+                  if (!file || !patientForm) return;
+                  const upload = await fileToCompressedUpload(file, 900);
+                  setPatientForm({ ...patientForm, facePhotoUpload: upload });
+                })();
+              }}
+            />
+          ) : null}
 
-        {courseForm ? (
-          <CourseModal
-            courseForm={courseForm}
-            busy={busy}
-            onChange={setCourseForm}
-            onClose={() => setCourseForm(null)}
-            onSave={() => void saveCourseForm()}
-            onDelete={() => void deleteCourseForm()}
-          />
-        ) : null}
-      </div>
+          {courseForm ? (
+          courseFormMode === "intake" ? (
+              <PendingCourseIntakeModal
+                courseForm={courseForm}
+                busy={busy}
+                onChange={setCourseForm}
+                onClose={() => {
+                  setCourseForm(null);
+                  setCourseFormMode("full");
+                  setCourseCompletionNeedsFacePhoto(false);
+                  setCourseCompletionFacePhotoUpload(null);
+                }}
+                onSave={() => void saveCourseForm()}
+                onDelete={() => void deleteCourseForm()}
+              />
+            ) : (
+              <CourseModal
+                courseForm={courseForm}
+                busy={busy}
+                showFacePhotoPicker={courseForm.status === "pending" && courseCompletionNeedsFacePhoto}
+                facePhotoUploadName={courseCompletionFacePhotoUpload?.name}
+                onChange={setCourseForm}
+                onClose={() => {
+                  setCourseForm(null);
+                  setCourseFormMode("full");
+                  setCourseCompletionNeedsFacePhoto(false);
+                  setCourseCompletionFacePhotoUpload(null);
+                }}
+                onFacePhotoSelected={(file) => {
+                  void (async () => {
+                    if (!file) {
+                      setCourseCompletionFacePhotoUpload(null);
+                      return;
+                    }
+                    const upload = await fileToCompressedUpload(file, 900);
+                    setCourseCompletionFacePhotoUpload(upload);
+                  })();
+                }}
+                onSave={() => void saveCourseForm()}
+                onDelete={() => void deleteCourseForm()}
+              />
+            )
+          ) : null}
+          {courseConsentActions && patientDetail ? (() => {
+            const targetCourse = patientDetail.courses.find((courseDetail) => courseDetail.course.id === courseConsentActions.courseId);
+            if (!targetCourse) {
+              return null;
+            }
+            const consentDocument = targetCourse.documents.find((document) => document.documentType === "consent_form") ?? null;
+            return (
+              <CourseConsentModal
+                courseName={targetCourse.course.courseName || "this course"}
+                hasConsentForm={Boolean(consentDocument)}
+                busy={busy}
+                onClose={() => setCourseConsentActions(null)}
+                onOpenConsentForm={() => {
+                  if (consentDocument) {
+                    void appClient?.openAsset(consentDocument.fileAsset);
+                  }
+                }}
+                onGenerateConsentForm={() => {
+                  setCourseConsentActions(null);
+                  void generateConsentFormForCourse(targetCourse.course.id);
+                }}
+                onUploadConsentForm={() => void uploadConsentFormForCourse(targetCourse.course.patientId, targetCourse.course.id)}
+                onDeleteConsentForm={() => void deleteConsentFormForCourse(targetCourse.course.patientId, targetCourse.course.id)}
+              />
+            );
+          })() : null}
+          {consentSigning ? (
+            <ConsentSigningModal
+              patient={consentSigning.patient}
+              course={consentSigning.course}
+              sites={consentSigning.sites}
+              signingInput={consentSigning.input}
+              busy={busy}
+              onChange={(next) => setConsentSigning((current) => (current ? { ...current, input: next } : current))}
+              onClose={() => setConsentSigning(null)}
+              onSave={() => void finalizeConsentSigning()}
+            />
+          ) : null}
+        </div>
       {updateReady ? (
         <div className="update-banner">
           <span>A new version is available.</span>

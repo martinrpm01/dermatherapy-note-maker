@@ -196,6 +196,17 @@ textarea {
   color: var(--muted);
 }
 
+.pending-course-intro {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0 0 0.75rem;
+}
+
+.pending-course-intro p {
+  margin: 0;
+  line-height: 1.35;
+}
+
 .status-banner {
   background: rgba(64, 103, 130, 0.08);
   border: 1px solid rgba(64, 103, 130, 0.18);
@@ -314,6 +325,7 @@ label select {
 
 .checkbox-option {
   display: flex;
+  flex-direction: row;
   align-items: flex-start;
   gap: 0.38rem;
   min-width: 0;
@@ -1107,49 +1119,55 @@ input.search {
 .two-site-course-modal {
   width: min(1120px, calc(100vw - 1.25rem));
   max-height: calc(100dvh - 1rem);
+  overflow-y: hidden;
   overflow-x: hidden;
-  padding: 0.8rem 0.95rem;
-  gap: 0.4rem;
+  padding: 0.68rem 0.82rem;
+  gap: 0.28rem;
 }
 
 .two-site-course-modal > h3 {
-  margin: 0 0 0.15rem;
+  margin: 0 0 0.08rem;
 }
 
 .two-site-course-modal .form-grid {
-  gap: 0.32rem 0.55rem;
+  gap: 0.22rem 0.45rem;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.two-site-course-modal .course-top-grid.with-face-photo {
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr) minmax(0, 1fr);
+  align-items: end;
 }
 
 .two-site-course-modal .site-grid.two-site-course-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.45rem;
+  gap: 0.32rem;
   min-width: 0;
 }
 
 .two-site-course-modal .compact-course-subpanel {
-  padding: 0.65rem 0.72rem;
+  padding: 0.52rem 0.6rem;
   min-width: 0;
 }
 
 .two-site-course-modal .compact-course-subpanel > h4 {
-  margin: 0 0 0.22rem;
+  margin: 0 0 0.14rem;
 }
 
 .two-site-course-modal label {
-  font-size: 0.9rem;
+  font-size: 0.87rem;
 }
 
 .two-site-course-modal input,
 .two-site-course-modal select,
 .two-site-course-modal textarea {
-  padding: 0.44rem 0.72rem;
+  padding: 0.38rem 0.62rem;
 }
 
 .two-site-course-modal .worksheet-setup-grid {
   grid-template-columns: minmax(0, 1.4fr) minmax(210px, 1fr);
   grid-template-rows: auto auto;
-  gap: 0.38rem;
+  gap: 0.28rem;
 }
 
 .two-site-course-modal .worksheet-setup-grid > .worksheet-section:first-child {
@@ -1157,33 +1175,108 @@ input.search {
 }
 
 .two-site-course-modal .worksheet-section {
-  padding: 0.48rem 0.55rem;
+  padding: 0.4rem 0.46rem;
   border-radius: 12px;
 }
 
 .two-site-course-modal .checkbox-group.compact {
   grid-template-columns: repeat(2, minmax(120px, 1fr));
-  gap: 0.14rem 0.42rem;
+  gap: 0.08rem 0.32rem;
 }
 
 .two-site-course-modal .compact-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin-top: 0.25rem;
+  margin-top: 0.18rem;
 }
 
 .two-site-course-modal .checkbox-label {
-  gap: 0.38rem;
-  font-size: 0.89rem;
-  line-height: 1.24;
+  gap: 0.32rem;
+  font-size: 0.86rem;
+  line-height: 1.14;
 }
 
 .two-site-course-modal .button-row {
-  gap: 0.45rem;
-  flex-wrap: wrap;
+  gap: 0.4rem;
+  flex-wrap: nowrap;
+}
+
+.two-site-course-modal .course-face-photo-picker {
+  padding: 0.16rem 0.4rem;
+  align-self: end;
+}
+
+.two-site-course-modal .course-face-photo-picker input {
+  padding: 0.05rem 0;
+}
+
+.two-site-course-modal .course-face-photo-picker .muted {
+  margin-top: 0.08rem;
+  font-size: 0.68rem;
+  line-height: 1.2;
 }
 
 .two-site-course-modal button {
-  padding: 0.55rem 0.9rem;
+  padding: 0.48rem 0.82rem;
+}
+
+.consent-signing-modal {
+  width: min(1100px, calc(100vw - 1.25rem));
+  max-height: calc(100dvh - 1rem);
+  gap: 0.6rem;
+}
+
+.consent-signing-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.signature-pad-shell {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.signature-pad {
+  width: 100%;
+  height: 150px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.signature-pad-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.signature-pad-actions button {
+  padding: 0.45rem 0.8rem;
+}
+
+.consent-acknowledgment-list {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.consent-review-copy {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.consent-review-copy p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.consent-review-confirm {
+  align-items: center;
+}
+
+.consent-pregnancy-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 0.9rem;
+  align-items: start;
 }
 
 .positioning-section,
@@ -1202,6 +1295,10 @@ input.search {
   }
 
   .editor-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .consent-pregnancy-grid {
     grid-template-columns: 1fr;
   }
 

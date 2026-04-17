@@ -53,6 +53,10 @@ export class DesktopBinaryAssetStore implements BinaryAssetStore {
     return path.join(this.rootDir, "patients", patientId, "profile");
   }
 
+  getCourseDocumentsDir(patientId: string, courseId: string) {
+    return path.join(this.rootDir, "patients", patientId, "courses", courseId, "documents");
+  }
+
   getVisitPhotosDir(patientId: string, courseId: string, visitId: string) {
     return path.join(this.getVisitWorkspaceDir(patientId, courseId, visitId), "photos");
   }

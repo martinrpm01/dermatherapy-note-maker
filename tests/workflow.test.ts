@@ -510,6 +510,59 @@ describe("RadiationNoteService workflow", () => {
     expect(nextDraft.note.treatmentNumber).toBe(2);
   });
 
+  it("keeps separate per-lesion projected and prescribed fractions for a two-site course", async () => {
+    const { patient, course } = await createTwoSitePatientAndCourse();
+
+    const consultDraft = service.buildVisitDraft(course.id, "consult_sim");
+    consultDraft.note.structuredFields.siteSnapshots = consultDraft.note.structuredFields.siteSnapshots.map((site) => ({
+      ...site,
+      prescribedFractions: site.siteNumber === 1 ? 8 : 12
+    }));
+    consultDraft.note.structuredFields.projectedFractionsInput = 12;
+    const savedConsult = service.saveVisit(consultDraft.note);
+
+    const reopenedConsult = service.buildVisitDraft(course.id, "consult_sim", savedConsult.id);
+    expect(
+      reopenedConsult.note.structuredFields.siteSnapshots.find((site) => site.siteNumber === 1)?.prescribedFractions
+    ).toBe(8);
+    expect(
+      reopenedConsult.note.structuredFields.siteSnapshots.find((site) => site.siteNumber === 2)?.prescribedFractions
+    ).toBe(12);
+
+    const firstDraft = service.buildVisitDraft(course.id, "next_treatment");
+    expect(firstDraft.note.noteType).toBe("first_fraction");
+    expect(
+      firstDraft.note.structuredFields.siteSnapshots.find((site) => site.siteNumber === 1)?.prescribedFractions
+    ).toBe(8);
+    expect(
+      firstDraft.note.structuredFields.siteSnapshots.find((site) => site.siteNumber === 2)?.prescribedFractions
+    ).toBe(12);
+    expect(firstDraft.note.structuredFields.prescribedFractionsInput).toBe(12);
+
+    firstDraft.note.structuredFields.siteSnapshots = firstDraft.note.structuredFields.siteSnapshots.map((site) => ({
+      ...site,
+      prescribedFractions: site.siteNumber === 1 ? 9 : 14
+    }));
+    firstDraft.note.structuredFields.prescribedFractionsInput = 14;
+    const savedFirst = service.saveVisit(firstDraft.note);
+    expect(savedFirst.generatedText).toContain("Total Treatments: 9");
+    expect(savedFirst.generatedText).toContain("Total Treatments: 14");
+
+    const detail = service.getPatientDetail(patient.id).courses[0];
+    expect(detail.course.prescribedFractions).toBe(14);
+    expect(detail.sites.find((site) => site.siteNumber === 1)?.prescribedFractions).toBe(9);
+    expect(detail.sites.find((site) => site.siteNumber === 2)?.prescribedFractions).toBe(14);
+
+    const secondDraft = service.buildVisitDraft(course.id, "next_treatment");
+    expect(secondDraft.note.treatmentNumber).toBe(2);
+    expect(
+      secondDraft.note.structuredFields.siteSnapshots.find((site) => site.siteNumber === 1)?.prescribedFractions
+    ).toBe(9);
+    expect(
+      secondDraft.note.structuredFields.siteSnapshots.find((site) => site.siteNumber === 2)?.prescribedFractions
+    ).toBe(14);
+  });
+
   it("shows prescribed fractions on treatment 2+ only when the course still has none, then hides it after save", async () => {
     const patient = service.savePatient({
       firstName: "Later",

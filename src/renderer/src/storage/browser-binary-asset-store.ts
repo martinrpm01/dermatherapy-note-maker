@@ -88,6 +88,10 @@ export class BrowserBinaryAssetStore implements BinaryAssetStore {
     return `${this.rootDir}/patients/${encodeURIComponent(patientId)}/profile`;
   }
 
+  getCourseDocumentsDir(patientId: string, courseId: string) {
+    return `${this.rootDir}/patients/${encodeURIComponent(patientId)}/courses/${encodeURIComponent(courseId)}/documents`;
+  }
+
   getVisitPhotosDir(patientId: string, courseId: string, visitId: string) {
     return `${this.getVisitWorkspaceDir(patientId, courseId, visitId)}/photos`;
   }

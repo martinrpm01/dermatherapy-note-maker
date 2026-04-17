@@ -3,6 +3,7 @@ import type {
   AssetReference,
   AppSettingsRecord,
   AppSettingsView,
+  CourseDocumentRecord,
   CourseInput,
   GeneratedPdfRecord,
   PatientInput,
@@ -34,6 +35,7 @@ export interface VisitAssetRecordSet {
 
 export interface CourseAssetRecordSet {
   course: TreatmentCourseRecord;
+  documents: CourseDocumentRecord[];
   visits: VisitAssetRecordSet[];
 }
 
@@ -64,8 +66,11 @@ export interface StructuredDataStore {
   fetchCourse(courseId: string): TreatmentCourseRecord | null;
   saveCourse(input: CourseInput): TreatmentCourseRecord;
   updateCoursePrescribedFractions(courseId: string, prescribedFractions: number): void;
+  updateCourseSitePrescribedFractions(courseId: string, siteNumber: 1 | 2, prescribedFractions: number): void;
   setCourseStatus(courseId: string, status: TreatmentCourseRecord["status"], endDate?: string | null): void;
   fetchSites(courseIds: string[]): TreatmentSiteRecord[];
+  fetchCourseDocuments(courseId: string): CourseDocumentRecord[];
+  fetchCourseDocument(documentId: string): CourseDocumentRecord | null;
   fetchVisit(visitId: string): VisitNoteRecord | null;
   fetchVisitsByCourseIds(courseIds: string[]): VisitAssetRecordSet[];
   fetchVisitPhotos(visitId: string): VisitPhotoRecord[];
@@ -87,6 +92,15 @@ export interface StructuredDataStore {
   restoreVisitAttachmentRecord(record: VisitAttachmentRecord, filePath: string): void;
   deleteVisitPhotoRecord(photoId: string): void;
   deleteVisitAttachmentRecord(attachmentId: string): void;
+  upsertCourseDocument(
+    courseId: string,
+    documentType: CourseDocumentRecord["documentType"],
+    filePath: string,
+    caption: string,
+    mimeType: string,
+    originalName: string
+  ): CourseDocumentRecord;
+  deleteCourseDocumentRecord(documentId: string): void;
   deleteVisitRecords(visitId: string): void;
   deleteCourseRecords(courseId: string): void;
   hardDeletePatientRecords(patientId: string): void;
@@ -106,6 +120,7 @@ export interface StructuredDataStore {
     courses: Array<{
       course: TreatmentCourseRecord;
       sites: TreatmentSiteRecord[];
+      documents: CourseDocumentRecord[];
       visits: VisitAssetRecordSet[];
     }>;
   }>;
@@ -119,6 +134,7 @@ export interface BinaryAssetStore {
 
   initialize(): void;
   getPatientProfileDir(patientId: string): string;
+  getCourseDocumentsDir(patientId: string, courseId: string): string;
   getVisitPhotosDir(patientId: string, courseId: string, visitId: string): string;
   getVisitAttachmentsDir(patientId: string, courseId: string, visitId: string): string;
   getVisitWorkspaceDir(patientId: string, courseId: string, visitId: string): string;

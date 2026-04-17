@@ -335,6 +335,7 @@ export function createEmptyCourseForm(patientId: string): CourseInput {
     courseType: "one_site",
     prescribedFractions: 0,
     startDate: new Date().toISOString().slice(0, 10),
+    simConsultDate: "",
     sites: [
       {
         siteNumber: 1,
@@ -362,6 +363,14 @@ export function createEmptyCourseForm(patientId: string): CourseInput {
             totalDose: 4000
         }
       ]
+  };
+}
+
+export function createEmptyConsentCourseForm(patientId: string): CourseInput {
+  return {
+    ...createEmptyCourseForm(patientId),
+    simConsultDate: new Date().toISOString().slice(0, 10),
+    status: "pending"
   };
 }
 
@@ -407,13 +416,14 @@ export function createCourseFormFromDetail(courseDetail: CourseDetail): CourseIn
     courseType: courseDetail.course.courseType,
     prescribedFractions: courseDetail.course.prescribedFractions > 0 ? courseDetail.course.prescribedFractions : 0,
     startDate: courseDetail.course.startDate,
+    simConsultDate: courseDetail.course.simConsultDate ?? "",
     endDate: courseDetail.course.endDate,
     status: courseDetail.course.status,
     sites
   };
 }
 
-export async function fileToCompressedUpload(file: File, maxDimension: number, caption?: string) {
+export async function fileToCompressedUpload(file: File, maxDimension: number, caption?: string, preferredMimeType?: string) {
   const imageBitmap = await createImageBitmap(file);
   const scale = Math.min(1, maxDimension / Math.max(imageBitmap.width, imageBitmap.height));
   const canvas = document.createElement("canvas");
@@ -425,7 +435,7 @@ export async function fileToCompressedUpload(file: File, maxDimension: number, c
   }
 
   context.drawImage(imageBitmap, 0, 0, canvas.width, canvas.height);
-  const mimeType = file.type || "image/jpeg";
+  const mimeType = preferredMimeType || file.type || "image/jpeg";
   const quality = mimeType === "image/png" ? undefined : 0.86;
   const dataUrl = canvas.toDataURL(mimeType, quality);
   return {

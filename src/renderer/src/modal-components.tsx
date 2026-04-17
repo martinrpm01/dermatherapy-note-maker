@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import {
   ADDITIONAL_DEVICE_OPTIONS,
   DEVICE_OPTIONS,
@@ -18,12 +18,57 @@ import {
   parseAdditionalDevices,
   parseWorksheetSelection
 } from "../../shared/note-rules";
-import type { CourseInput, PatientInput } from "../../shared/types";
+import type {
+  ConsentSigningInput,
+  CourseInput,
+  PatientInput,
+  PatientRecord,
+  TreatmentCourseRecord,
+  TreatmentSiteRecord
+} from "../../shared/types";
 
 const FRACTION_PRESETS = [8, 10, 12, 15];
 const DAILY_DOSE_PRESETS = [350, 400, 500];
 const TOTAL_DOSE_PRESETS = [4000, 4200];
 const DEPTH_OPTIONS = ["3", "4", "5"];
+const DIAGNOSIS_OPTIONS = [
+  "Basal Cell Carcinoma",
+  "Squamous Cell Carcinoma",
+  "Squamous Cell Carcinoma in-situ"
+] as const;
+
+const CONSENT_REVIEW_SECTIONS = [
+  {
+    title: "Permission Granted:",
+    body:
+      "I agree to undergo radiation therapy for the treatment of my skin cancer. I am aware of alternative medical and surgical treatments, as well as the risks and benefits of radiation therapy."
+  },
+  {
+    title: "Acknowledgment Necessity to Complete Course of Treatment:",
+    body:
+      "I understand that the effectiveness and potential cure rate of my prescribed radiation treatment depends on my full participation in the treatment plan. This includes attending all scheduled appointments and receiving each required dose of radiation as prescribed by my provider. I acknowledge that missed or delayed treatments may reduce the likelihood of achieving the intended therapeutic outcome."
+  },
+  {
+    title: "Immobilization and Photographs:",
+    body:
+      "The use of photographs for treatment purposes has been explained to me. I give permission, as part of my treatment, to have photographs taken as needed. Treatments may require the use of temporary immobilization. I give permission to use such devices as needed."
+  },
+  {
+    title: "Risks & Complications Explained:",
+    body:
+      "I have been made aware of risks, such as but not limited to redness, dryness, peeling of skin, possible bleeding, risks of infection, scarring, radiation dermatitis, prolonged wound healing, nerve injury, inability to clear the tumor, possible permanent hypo/hyper pigmentation, telangiectasia, and possible permanent hair loss in immediate treatment area. I have been informed there is a remote possibility of secondary cancers developing in the treated area in the future."
+  },
+  {
+    title: "No Guarantee:",
+    body:
+      "I acknowledge that no guarantee of complete success has been made to me concerning the result intended from the therapy."
+  },
+  {
+    title: "Understanding This Form:",
+    body:
+      "I confirm that I have read and fully understand this form and that all blank spaces have been completed or crossed off prior to my signing. I have been given an opportunity to ask questions, and all my questions have been answered fully and to my satisfaction."
+  }
+] as const;
 
 function normalizeIcd10Input(value: string) {
   const trimmedStart = value.replace(/^\s+/, "");
@@ -54,6 +99,14 @@ function normalizeMeasurementInput(value: string) {
   return normalized;
 }
 
+function ensureTherapistCredentials(value: string) {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  if (!normalized) {
+    return "";
+  }
+  return /RT\(T\)\s*$/i.test(normalized) ? normalized : `${normalized} RT(T)`;
+}
+
 function selectValue(value: number, presets: number[]): string {
   return presets.includes(value) ? String(value) : "other";
 }
@@ -70,7 +123,7 @@ export function PatientModal(props: {
     <div className="modal-backdrop">
       <div className="modal-card">
         <h3>{props.patientForm.id ? "Edit Patient" : "Add Patient"}</h3>
-        <div className="form-grid patient-form-grid">
+          <div className="form-grid patient-form-grid">
           <label>
             First Name
             <input value={props.patientForm.firstName} onChange={(event) => props.onChange({ ...props.patientForm, firstName: event.target.value })} />
@@ -87,24 +140,671 @@ export function PatientModal(props: {
             DOB
             <input type="date" value={props.patientForm.dob} onChange={(event) => props.onChange({ ...props.patientForm, dob: event.target.value })} />
           </label>
-          <label>
-            Sex
-            <select value={props.patientForm.sex ?? ""} onChange={(event) => props.onChange({ ...props.patientForm, sex: event.target.value })}>
-              <option value="">Select Sex</option>
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-            </select>
-          </label>
+            <label>
+              Sex
+              <select value={props.patientForm.sex ?? ""} onChange={(event) => props.onChange({ ...props.patientForm, sex: event.target.value })}>
+                <option value="">Select Sex</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+            </label>
+          </div>
+          {props.patientForm.id ? (
+            <label className="file-picker">
+              Face Photo
+              <input type="file" accept="image/*" onChange={(event) => props.onFacePhotoSelected(event.target.files?.[0])} />
+            </label>
+          ) : null}
+          <div className="button-row">
+            <button onClick={props.onClose}>Cancel</button>
+            <button className="primary" disabled={props.busy} onClick={props.onSave}>
+              Save Patient
+            </button>
         </div>
-        <label className="file-picker">
-          Face Photo
-          <input type="file" accept="image/*" onChange={(event) => props.onFacePhotoSelected(event.target.files?.[0])} />
-        </label>
+      </div>
+    </div>
+  );
+}
+
+function SignaturePad(props: {
+  value: string;
+  onChange: (next: string) => void;
+  height?: number;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const drawingRef = useRef(false);
+  const boundsRef = useRef<{ minX: number; minY: number; maxX: number; maxY: number } | null>(null);
+  const movedRef = useRef(false);
+  const suppressExternalSyncRef = useRef(false);
+
+  useEffect(() => {
+    if (suppressExternalSyncRef.current) {
+      suppressExternalSyncRef.current = false;
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      return;
+    }
+
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return;
+    }
+
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    boundsRef.current = null;
+
+    if (!props.value) {
+      return;
+    }
+
+    const image = new Image();
+    image.onload = () => {
+      const scale = Math.min((canvas.width - 24) / image.width, (canvas.height - 24) / image.height);
+      const width = image.width * scale;
+      const height = image.height * scale;
+      const x = (canvas.width - width) / 2;
+      const y = (canvas.height - height) / 2;
+      context.drawImage(image, x, y, width, height);
+    };
+    image.src = props.value;
+  }, [props.value]);
+
+  function updateBounds(x: number, y: number) {
+    const current = boundsRef.current;
+    if (!current) {
+      boundsRef.current = { minX: x, minY: y, maxX: x, maxY: y };
+      return;
+    }
+
+    current.minX = Math.min(current.minX, x);
+    current.minY = Math.min(current.minY, y);
+    current.maxX = Math.max(current.maxX, x);
+    current.maxY = Math.max(current.maxY, y);
+  }
+
+  function exportSignature() {
+    const canvas = canvasRef.current;
+    const bounds = boundsRef.current;
+    if (!canvas || !bounds) {
+      return "";
+    }
+
+    const padding = 18;
+    const cropX = Math.max(0, Math.floor(bounds.minX - padding));
+    const cropY = Math.max(0, Math.floor(bounds.minY - padding));
+    const cropWidth = Math.min(canvas.width - cropX, Math.ceil(bounds.maxX - bounds.minX + padding * 2));
+    const cropHeight = Math.min(canvas.height - cropY, Math.ceil(bounds.maxY - bounds.minY + padding * 2));
+    const exportCanvas = document.createElement("canvas");
+    exportCanvas.width = Math.max(1, cropWidth);
+    exportCanvas.height = Math.max(1, cropHeight);
+    const exportContext = exportCanvas.getContext("2d");
+    if (!exportContext) {
+      return "";
+    }
+
+    exportContext.clearRect(0, 0, exportCanvas.width, exportCanvas.height);
+    exportContext.drawImage(
+      canvas,
+      cropX,
+      cropY,
+      cropWidth,
+      cropHeight,
+      0,
+      0,
+      exportCanvas.width,
+      exportCanvas.height
+    );
+
+    return exportCanvas.toDataURL("image/png");
+  }
+
+  function getPoint(event: ReactPointerEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      return { x: 0, y: 0 };
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+      x: (event.clientX - rect.left) * scaleX,
+      y: (event.clientY - rect.top) * scaleY
+    };
+  }
+
+  function startDrawing(event: ReactPointerEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext("2d");
+    if (!canvas || !context) {
+      return;
+    }
+
+    drawingRef.current = true;
+    movedRef.current = false;
+    const point = getPoint(event);
+    context.strokeStyle = "#17324a";
+    context.lineWidth = 2.2;
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    context.beginPath();
+    context.moveTo(point.x, point.y);
+    updateBounds(point.x, point.y);
+    canvas.setPointerCapture(event.pointerId);
+  }
+
+  function continueDrawing(event: ReactPointerEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext("2d");
+    if (!drawingRef.current || !canvas || !context) {
+      return;
+    }
+
+    const point = getPoint(event);
+    context.lineTo(point.x, point.y);
+    context.stroke();
+    movedRef.current = true;
+    updateBounds(point.x, point.y);
+  }
+
+  function stopDrawing(event?: ReactPointerEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext("2d");
+    if (!drawingRef.current || !canvas || !context) {
+      return;
+    }
+
+    if (!movedRef.current) {
+      const point = event ? getPoint(event) : { x: canvas.width / 2, y: canvas.height / 2 };
+      context.beginPath();
+      context.arc(point.x, point.y, 1.6, 0, Math.PI * 2);
+      context.fillStyle = "#17324a";
+      context.fill();
+      updateBounds(point.x - 2, point.y - 2);
+      updateBounds(point.x + 2, point.y + 2);
+    }
+
+    drawingRef.current = false;
+    if (event) {
+      canvas.releasePointerCapture(event.pointerId);
+    }
+    suppressExternalSyncRef.current = true;
+    props.onChange(exportSignature());
+  }
+
+  function clear() {
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext("2d");
+    if (!canvas || !context) {
+      return;
+    }
+
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    boundsRef.current = null;
+    suppressExternalSyncRef.current = true;
+    props.onChange("");
+  }
+
+  return (
+    <div className="signature-pad-shell">
+      <canvas
+        ref={canvasRef}
+        className="signature-pad"
+        width={520}
+        height={props.height ?? 150}
+        onPointerDown={startDrawing}
+        onPointerMove={continueDrawing}
+        onPointerUp={stopDrawing}
+        onPointerLeave={(event) => stopDrawing(event)}
+      />
+      <div className="signature-pad-actions">
+        <button type="button" onClick={clear}>Clear</button>
+      </div>
+    </div>
+  );
+}
+
+export function ConsentSigningModal(props: {
+  patient: PatientRecord;
+  course: TreatmentCourseRecord;
+  sites: TreatmentSiteRecord[];
+  signingInput: ConsentSigningInput;
+  busy: boolean;
+  onChange: (next: ConsentSigningInput) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const isFemalePatient = props.patient.sex.trim().toLowerCase() === "female";
+  const [reviewAcknowledged, setReviewAcknowledged] = useState(false);
+  const [showSignatureStep, setShowSignatureStep] = useState(false);
+  const canSave =
+    props.signingInput.patientPrintedName.trim().length > 0 &&
+    (!isFemalePatient || props.signingInput.patientInitials.trim().length > 0) &&
+    props.signingInput.formerRadiationAcknowledged &&
+    props.signingInput.medicalDevicesAcknowledged &&
+    props.signingInput.witnessPrintedName.trim().length > 0 &&
+    Boolean(props.signingInput.patientSignatureDataUrl) &&
+    Boolean(props.signingInput.witnessSignatureDataUrl);
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal-card wide consent-signing-modal">
+        <h3>{showSignatureStep ? "Sign Consent Form" : "Review Consent Form"}</h3>
+        {!showSignatureStep ? (
+          <>
+            <p className="muted" style={{ margin: 0 }}>
+              Review the full consent wording with the patient before moving into the signature step.
+            </p>
+            <div className="site-grid">
+              <div className="subpanel">
+                <h4>{props.patient.lastName}, {props.patient.firstName}</h4>
+                <p>MRN {props.patient.mrn} · DOB {props.patient.dob}</p>
+                <p>{props.course.courseType === "one_site" ? "1-lesion course" : "2-lesion course"}</p>
+              </div>
+              <div className="subpanel">
+                <h4>Sites</h4>
+                {props.sites
+                  .slice()
+                  .sort((left, right) => left.siteNumber - right.siteNumber)
+                  .map((site) => (
+                    <p key={site.id}>
+                      Lesion {site.siteNumber}: {site.treatmentLocationText || site.bodyLocation || "Pending site"} · {site.diagnosisText || "Pending diagnosis"}
+                    </p>
+                  ))}
+              </div>
+            </div>
+            <div className="subpanel consent-review-copy">
+              {CONSENT_REVIEW_SECTIONS.map((section) => (
+                <p key={section.title}>
+                  <strong>{section.title}</strong> {section.body}
+                </p>
+              ))}
+            </div>
+            <div className="subpanel">
+              <label className="checkbox-option consent-review-confirm">
+                <input
+                  type="checkbox"
+                  checked={reviewAcknowledged}
+                  onChange={(event) => setReviewAcknowledged(event.target.checked)}
+                />
+                <span className="checkbox-option-label">
+                  I have reviewed this consent form with the patient and am ready to proceed to signatures.
+                </span>
+              </label>
+            </div>
+            <div className="button-row">
+              <button onClick={props.onClose}>Cancel</button>
+              <button className="primary" disabled={!reviewAcknowledged} onClick={() => setShowSignatureStep(true)}>
+                Continue To Signature
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="muted" style={{ margin: 0 }}>
+              Collect initials and signatures inside the app, then finalize the signed consent PDF.
+            </p>
+            <div className="site-grid">
+              <div className="subpanel">
+                <h4>{props.patient.lastName}, {props.patient.firstName}</h4>
+                <p>MRN {props.patient.mrn} · DOB {props.patient.dob}</p>
+                <p>{props.course.courseType === "one_site" ? "1-lesion course" : "2-lesion course"}</p>
+              </div>
+              <div className="subpanel">
+                <h4>Sites</h4>
+                {props.sites
+                  .slice()
+                  .sort((left, right) => left.siteNumber - right.siteNumber)
+                  .map((site) => (
+                    <p key={site.id}>
+                      Lesion {site.siteNumber}: {site.treatmentLocationText || site.bodyLocation || "Pending site"} · {site.diagnosisText || "Pending diagnosis"}
+                    </p>
+                  ))}
+              </div>
+            </div>
+            <div className="form-grid consent-signing-grid">
+              <label>
+                Sign Date
+                <input
+                  type="date"
+                  value={props.signingInput.signDate}
+                  onChange={(event) => props.onChange({ ...props.signingInput, signDate: event.target.value })}
+                />
+              </label>
+              <label>
+                Patient Printed Name
+                <input
+                  value={props.signingInput.patientPrintedName}
+                  onChange={(event) => props.onChange({ ...props.signingInput, patientPrintedName: event.target.value })}
+                />
+              </label>
+              <label>
+                Witness Name
+                <input
+              value={props.signingInput.witnessPrintedName}
+              onChange={(event) => props.onChange({ ...props.signingInput, witnessPrintedName: event.target.value })}
+              onBlur={(event) =>
+                props.onChange({
+                  ...props.signingInput,
+                  witnessPrintedName: ensureTherapistCredentials(event.target.value)
+                })
+              }
+            />
+          </label>
+            </div>
+            {isFemalePatient ? (
+              <div className="subpanel">
+                <h4>Female Pregnancy Statement</h4>
+                <div className="consent-pregnancy-grid">
+                  <p className="checkbox-option-label" style={{ margin: 0 }}>
+                    Females: Regarding Possibility of Pregnancy: This is to certify that, to the best of my knowledge, I am not pregnant, I have been advised that procedures involving x-rays, particularly those involving the pelvis, can be hazardous to an unborn child.
+                  </p>
+                  <label>
+                    Initials
+                    <input
+                      value={props.signingInput.patientInitials}
+                      onChange={(event) => props.onChange({ ...props.signingInput, patientInitials: event.target.value.toUpperCase() })}
+                    />
+                  </label>
+                </div>
+              </div>
+            ) : null}
+            <div className="subpanel">
+              <h4>Patient Acknowledgment</h4>
+              <div className="consent-acknowledgment-list">
+                <label className="checkbox-option">
+                  <input
+                    type="checkbox"
+                    checked={props.signingInput.formerRadiationAcknowledged}
+                    onChange={(event) =>
+                      props.onChange({ ...props.signingInput, formerRadiationAcknowledged: event.target.checked })
+                    }
+                  />
+                  <span className="checkbox-option-label">
+                    I have informed this provider about any former therapeutic radiation I have received in the past.
+                  </span>
+                </label>
+                <label className="checkbox-option">
+                  <input
+                    type="checkbox"
+                    checked={props.signingInput.medicalDevicesAcknowledged}
+                    onChange={(event) =>
+                      props.onChange({ ...props.signingInput, medicalDevicesAcknowledged: event.target.checked })
+                    }
+                  />
+                  <span className="checkbox-option-label">
+                    I have informed this provider about any medical devices in or near the treatment area.
+                  </span>
+                </label>
+              </div>
+            </div>
+            <div className="site-grid">
+              <div className="subpanel">
+                <h4>Patient Signature</h4>
+                <SignaturePad
+                  value={props.signingInput.patientSignatureDataUrl}
+                  onChange={(next) => props.onChange({ ...props.signingInput, patientSignatureDataUrl: next })}
+                />
+              </div>
+              <div className="subpanel">
+                <h4>Witness Signature</h4>
+                <SignaturePad
+                  value={props.signingInput.witnessSignatureDataUrl}
+                  onChange={(next) => props.onChange({ ...props.signingInput, witnessSignatureDataUrl: next })}
+                />
+              </div>
+            </div>
+            <div className="button-row">
+              <button onClick={props.onClose}>Cancel</button>
+              <button onClick={() => setShowSignatureStep(false)}>Back To Consent Text</button>
+              <button className="primary" disabled={props.busy || !canSave} onClick={props.onSave}>
+                Finalize Consent
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function buildIntakeCourseName(sites: CourseInput["sites"]) {
+  return sites.map((site) => site.treatmentLocationText.trim()).filter(Boolean).join(" + ");
+}
+
+function createIntakeSite(siteNumber: 1 | 2, source?: CourseInput["sites"][number]): CourseInput["sites"][number] {
+  return {
+    ...(source ?? {
+      bodyLocation: "",
+      treatmentLocationText: "",
+      diagnosisText: "",
+      icd10: "",
+      numberOfBlocks: 0,
+      lesionSize: "",
+      treatmentDepth: "3",
+      coneSize: "",
+      cutoutSize: "",
+      shields: "",
+      machine: "Xoft Elekta 1200 SPX",
+      energyKv: "50kV",
+      treatmentInterval: "bi-weekly",
+      additionalDevices: "None",
+      worksheetSide: "",
+      worksheetPositioning: "",
+      worksheetVacLokArea: "",
+      worksheetEyeShieldType: "",
+      worksheetGumShieldPosition: "",
+      worksheetLipShieldPosition: "",
+      dailyDose: 400,
+      totalDose: 4000
+    }),
+    id: source?.id,
+    siteNumber,
+    bodyLocation: source?.bodyLocation ?? "",
+    treatmentLocationText: source?.treatmentLocationText ?? "",
+    diagnosisText: source?.diagnosisText ?? "",
+    icd10: source?.icd10 ?? ""
+  };
+}
+
+export function PendingCourseIntakeModal(props: {
+  courseForm: CourseInput;
+  busy: boolean;
+  onChange: (next: CourseInput) => void;
+  onClose: () => void;
+  onSave: () => void;
+  onDelete?: () => void;
+}) {
+  const courseForm = props.courseForm;
+  const isTwoSite = courseForm.courseType === "two_site";
+
+  function updateSites(nextSites: CourseInput["sites"]) {
+    props.onChange({
+      ...courseForm,
+      courseName: buildIntakeCourseName(nextSites),
+      sites: nextSites
+    });
+  }
+
+  function updateSite(index: number, patch: Partial<CourseInput["sites"][0]>) {
+    const nextSites = courseForm.sites.map((site, siteIndex) =>
+      siteIndex === index
+        ? {
+            ...site,
+            ...patch,
+            bodyLocation: patch.treatmentLocationText ?? patch.bodyLocation ?? site.bodyLocation,
+            treatmentLocationText: patch.treatmentLocationText ?? patch.bodyLocation ?? site.treatmentLocationText
+          }
+        : site
+    );
+    updateSites(nextSites);
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <div className={`modal-card pending-course-modal${isTwoSite ? " wide" : ""}`}>
+        <h3>{courseForm.id ? "Edit Consent / Path Intake" : "New Consent / Path Intake"}</h3>
+        <div className="pending-course-intro">
+          <p className="muted">
+            Start the course with the pathology details we already know. Full treatment setup can be completed after the sim / consult.
+          </p>
+          <p className="muted">
+            Projected Fractions are an estimate for the Sim Worksheet and can be changed on the 1st treatment to the Final Prescribed Fractions.
+          </p>
+        </div>
+          <div className="form-grid course-top-grid">
+            <label>
+              Number of Lesions
+            <select
+              value={courseForm.courseType}
+              onChange={(event) => {
+                const nextType = event.target.value as CourseInput["courseType"];
+                const nextSites =
+                  nextType === "two_site"
+                    ? [
+                        createIntakeSite(1, courseForm.sites[0]),
+                        createIntakeSite(2, courseForm.sites[1])
+                      ]
+                    : [createIntakeSite(1, courseForm.sites[0])];
+                props.onChange({
+                  ...courseForm,
+                  courseType: nextType,
+                  courseName: buildIntakeCourseName(nextSites),
+                  sites: nextSites
+                });
+              }}
+            >
+              <option value="one_site">1 Lesion</option>
+              <option value="two_site">2 Lesions</option>
+            </select>
+            </label>
+            <label>
+              Biopsy Date
+              <input
+                type="date"
+                value={courseForm.startDate}
+                onChange={(event) => props.onChange({ ...courseForm, startDate: event.target.value })}
+              />
+            </label>
+            <label>
+              Sim / Consult Date
+              <input
+                type="date"
+                value={courseForm.simConsultDate ?? ""}
+                onChange={(event) => props.onChange({ ...courseForm, simConsultDate: event.target.value })}
+              />
+            </label>
+          </div>
+        <div className={`site-grid${isTwoSite ? " two-site-course-grid" : ""}`}>
+          {courseForm.sites.map((site, index) => (
+            <div className="subpanel" key={site.siteNumber}>
+              <h4>{isTwoSite ? `Lesion ${site.siteNumber}` : "Lesion"}</h4>
+          <div className="form-grid course-top-grid">
+                <label>
+                  Treatment Lesion
+                  <input
+                    placeholder="Treatment location"
+                    value={site.treatmentLocationText}
+                    onChange={(event) => updateSite(index, { treatmentLocationText: event.target.value, bodyLocation: event.target.value })}
+                  />
+                </label>
+                <label>
+                  Diagnosis
+                  <select
+                    value={site.diagnosisText}
+                    onChange={(event) => updateSite(index, { diagnosisText: event.target.value })}
+                  >
+                    <option value="">Select Diagnosis</option>
+                    {DIAGNOSIS_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  ICD10
+                  <input
+                    placeholder="ICD10"
+                    value={site.icd10}
+                    onChange={(event) => updateSite(index, { icd10: normalizeIcd10Input(event.target.value) })}
+                  />
+                </label>
+                <label>
+                  {isTwoSite ? `Projected Fractions Lesion ${site.siteNumber}` : "Projected Fractions"}
+                  <input
+                    type="number"
+                    min={1}
+                    max={15}
+                    placeholder="e.g. 10"
+                    value={site.prescribedFractions ?? ""}
+                    onChange={(event) =>
+                      updateSite(index, {
+                        prescribedFractions: event.target.value ? Number(event.target.value) : undefined
+                      })
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+          ))}
+        </div>
         <div className="button-row">
           <button onClick={props.onClose}>Cancel</button>
+          {props.onDelete && courseForm.id ? (
+            <button style={{ color: "var(--danger)", borderColor: "var(--danger)" }} onClick={props.onDelete}>
+              Remove Intake
+            </button>
+          ) : null}
           <button className="primary" disabled={props.busy} onClick={props.onSave}>
-            Save Patient
+            Save Intake
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function CourseConsentModal(props: {
+  courseName: string;
+  hasConsentForm: boolean;
+  busy: boolean;
+  onClose: () => void;
+  onOpenConsentForm?: () => void;
+  onGenerateConsentForm?: () => void;
+  onUploadConsentForm?: () => void;
+  onDeleteConsentForm?: () => void;
+}) {
+  return (
+    <div className="modal-backdrop">
+      <div className="modal-card">
+        <h3>Consent</h3>
+        <p className="muted" style={{ marginTop: 0 }}>
+          Manage the consent form for {props.courseName || "this course"} after treatment setup has been completed.
+        </p>
+        <div className="subpanel">
+          <h4 style={{ marginBottom: "0.6rem" }}>Consent Form</h4>
+          <div className="button-row">
+            {props.hasConsentForm ? (
+              <>
+                <button onClick={props.onOpenConsentForm}>Open Consent Form</button>
+                <button onClick={props.onGenerateConsentForm}>Re-sign Consent</button>
+                <button onClick={props.onUploadConsentForm}>Import Signed Consent</button>
+                <button onClick={props.onDeleteConsentForm}>Remove Consent</button>
+              </>
+            ) : (
+              <>
+                <button onClick={props.onGenerateConsentForm}>Review / Sign Consent</button>
+                <button onClick={props.onUploadConsentForm}>Import Signed Consent</button>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="button-row">
+          <button onClick={props.onClose}>Close</button>
         </div>
       </div>
     </div>
@@ -114,15 +814,19 @@ export function PatientModal(props: {
 export function CourseModal(props: {
   courseForm: CourseInput;
   busy: boolean;
+  showFacePhotoPicker?: boolean;
+  facePhotoUploadName?: string;
   onChange: (next: CourseInput) => void;
   onClose: () => void;
   onSave: () => void;
+  onFacePhotoSelected?: (file: File | undefined) => void;
   onDelete?: () => void;
-}) {
-  const courseForm = props.courseForm;
-  const [customFractions, setCustomFractions] = useState("");
-  const [fractionMode, setFractionMode] = useState<"preset" | "other">("preset");
-  const showFractionsField = Boolean(courseForm.id);
+  }) {
+    const courseForm = props.courseForm;
+    const [customFractions, setCustomFractions] = useState("");
+    const [fractionMode, setFractionMode] = useState<"preset" | "other">("preset");
+    const isPendingCourseSetup = courseForm.status === "pending";
+    const showFractionsField = Boolean(courseForm.id) && !isPendingCourseSetup;
   const [doseModes, setDoseModes] = useState<Record<number, { dailyDose: "preset" | "other"; totalDose: "preset" | "other" }>>({});
   const [siteFractionModes, setSiteFractionModes] = useState<Record<number, { mode: "preset" | "other"; custom: string }>>({});
   const [customInputs, setCustomInputs] = useState<Record<number, string>>({});
@@ -283,10 +987,10 @@ export function CourseModal(props: {
     });
   }
 
-    return (
-      <div className="modal-backdrop">
-      <div className={`modal-card wide${isTwoSite ? " two-site-course-modal" : ""}`}>
-        <h3>{courseForm.id ? "Edit Course" : "Add Treatment Course"}</h3>
+      return (
+        <div className="modal-backdrop">
+        <div className={`modal-card wide${isTwoSite ? " two-site-course-modal" : ""}`}>
+          <h3>{isPendingCourseSetup ? "Complete Course Setup" : courseForm.id ? "Edit Course" : "Add Treatment Course"}</h3>
         <div className="form-grid">
           <label>
             Number of Lesions
@@ -338,11 +1042,26 @@ export function CourseModal(props: {
               />
             ) : null}
           </label> : null}
-          <label>
-            Start Date
-            <input type="date" value={courseForm.startDate} onChange={(event) => props.onChange({ ...courseForm, startDate: event.target.value })} />
-          </label>
-        </div>
+            <label>
+              Start Date
+              <input type="date" value={courseForm.startDate} onChange={(event) => props.onChange({ ...courseForm, startDate: event.target.value })} />
+            </label>
+            {props.showFacePhotoPicker ? (
+              <label className="file-picker course-face-photo-picker">
+                Face Photo
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => props.onFacePhotoSelected?.(event.target.files?.[0])}
+                />
+                {props.facePhotoUploadName ? (
+                  <span className="muted">Selected: {props.facePhotoUploadName}</span>
+                ) : (
+                  <span className="muted">Add if one is not already on file.</span>
+                )}
+              </label>
+            ) : null}
+          </div>
         <div className={`site-grid${isTwoSite ? " two-site-course-grid" : ""}`}>
             {courseForm.sites.map((site, index) => (
               <div className={`subpanel${isTwoSite ? " compact-course-subpanel" : ""}`} key={site.siteNumber}>
@@ -690,10 +1409,10 @@ export function CourseModal(props: {
               </div>
             </div>
           ))}
-        </div>
-        <div className="button-row">
-          <button onClick={props.onClose}>Cancel</button>
-          {props.courseForm.id ? (
+          </div>
+          <div className="button-row">
+            <button onClick={props.onClose}>Cancel</button>
+            {props.courseForm.id ? (
             <button
               style={{ color: "var(--danger)", borderColor: "var(--danger)" }}
               onClick={() => {

@@ -1,6 +1,7 @@
 import type {
   AppSettingsRecord,
   AppSettingsView,
+  CourseDocumentRecord,
   CourseInput,
   GeneratedPdfRecord,
   PatientInput,
@@ -30,6 +31,7 @@ type BrowserStoreName =
   | "patients"
   | "courses"
   | "sites"
+  | "courseDocuments"
   | "visitNotes"
   | "visitPhotos"
   | "visitAttachments"
@@ -39,7 +41,7 @@ type BrowserStoreName =
 type SqlValue = string | number | null;
 
 const DATABASE_NAME = "dermatherapy-note-maker-browser";
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
 
 const DEFAULT_SETTINGS_RECORD: AppSettingsRecord = {
   id: 1,
@@ -80,7 +82,7 @@ function parseBrowserAssetId(filePath: string | null | undefined) {
 }
 
 function createAssetReferenceForPath(
-  kind: "patient_face_photo" | "visit_photo" | "visit_attachment" | "generated_pdf" | "settings_logo",
+  kind: "patient_face_photo" | "visit_photo" | "visit_attachment" | "generated_pdf" | "course_document" | "settings_logo",
   seed?: string
 ) {
   const existingAssetId = parseBrowserAssetId(seed);
@@ -164,6 +166,7 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
   private patients = new Map<string, PatientRecord>();
   private courses = new Map<string, TreatmentCourseRecord>();
   private sites = new Map<string, TreatmentSiteRecord>();
+  private courseDocuments = new Map<string, CourseDocumentRecord>();
   private visitNotes = new Map<string, VisitNoteRecord>();
   private visitPhotos = new Map<string, VisitPhotoRecord>();
   private visitAttachments = new Map<string, VisitAttachmentRecord>();
@@ -202,6 +205,7 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
     this.patients.clear();
     this.courses.clear();
     this.sites.clear();
+    this.courseDocuments.clear();
     this.visitNotes.clear();
     this.visitPhotos.clear();
     this.visitAttachments.clear();
@@ -335,6 +339,19 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
     };
     this.patients.set(patientId, next);
     this.queuePut("patients", next);
+
+    if (status !== "active") {
+      for (const course of this.fetchCourses("patient_id = ?", [patientId]).filter((item) => item.status === "active" || item.status === "pending")) {
+        const nextCourse: TreatmentCourseRecord = {
+          ...course,
+          status: "archived",
+          archivedAt: nowIso(),
+          updatedAt: nowIso()
+        };
+        this.courses.set(course.id, nextCourse);
+        this.queuePut("courses", nextCourse);
+      }
+    }
   }
 
   fetchCourses(whereClause?: string, params: SqlValue[] = []): TreatmentCourseRecord[] {
@@ -358,6 +375,7 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
       prescribedFractions: input.prescribedFractions,
       status: input.status ?? existing?.status ?? "active",
       startDate: input.startDate,
+      simConsultDate: input.simConsultDate?.trim() || null,
       endDate: input.endDate ?? null,
       createdAt: existing?.createdAt ?? nowIso(),
       updatedAt: nowIso(),
@@ -391,6 +409,12 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
         energyKv: siteInput.energyKv,
         treatmentInterval: siteInput.treatmentInterval,
         additionalDevices: siteInput.additionalDevices,
+        worksheetSide: siteInput.worksheetSide,
+        worksheetPositioning: siteInput.worksheetPositioning,
+        worksheetVacLokArea: siteInput.worksheetVacLokArea,
+        worksheetEyeShieldType: siteInput.worksheetEyeShieldType,
+        worksheetGumShieldPosition: siteInput.worksheetGumShieldPosition,
+        worksheetLipShieldPosition: siteInput.worksheetLipShieldPosition,
         dailyDose: siteInput.dailyDose,
         totalDose: siteInput.totalDose,
         ...(siteInput.prescribedFractions !== undefined ? { prescribedFractions: siteInput.prescribedFractions } : {}),
@@ -412,6 +436,18 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
     this.queuePut("courses", next);
   }
 
+  updateCourseSitePrescribedFractions(courseId: string, siteNumber: 1 | 2, prescribedFractions: number) {
+    this.ensureInitialized();
+    const site = [...this.sites.values()].find((entry) => entry.courseId === courseId && entry.siteNumber === siteNumber);
+    if (!site) {
+      throw new Error(`Treatment site ${siteNumber} not found for course ${courseId}.`);
+    }
+
+    const next = { ...site, prescribedFractions, updatedAt: nowIso() };
+    this.sites.set(site.id, next);
+    this.queuePut("sites", next);
+  }
+
   setCourseStatus(courseId: string, status: TreatmentCourseRecord["status"], endDate?: string | null) {
     this.ensureInitialized();
     const course = this.requireRecord(this.courses, courseId, "Course");
@@ -429,7 +465,21 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
   fetchSites(courseIds: string[]) {
     this.ensureInitialized();
     const courseIdSet = new Set(courseIds);
-    return [...this.sites.values()].filter((site) => courseIdSet.has(site.courseId));
+    return [...this.sites.values()]
+      .filter((site) => courseIdSet.has(site.courseId))
+      .sort((left, right) => left.siteNumber - right.siteNumber);
+  }
+
+  fetchCourseDocuments(courseId: string) {
+    this.ensureInitialized();
+    return [...this.courseDocuments.values()]
+      .filter((document) => document.courseId === courseId)
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  }
+
+  fetchCourseDocument(documentId: string) {
+    this.ensureInitialized();
+    return this.courseDocuments.get(documentId) ?? null;
   }
 
   fetchVisit(visitId: string) {
@@ -569,6 +619,39 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
     this.queueDelete("visitAttachments", attachmentId);
   }
 
+  upsertCourseDocument(
+    courseId: string,
+    documentType: CourseDocumentRecord["documentType"],
+    filePath: string,
+    caption: string,
+    mimeType: string,
+    originalName: string
+  ) {
+    this.ensureInitialized();
+    const existing = this.fetchCourseDocuments(courseId).find((document) => document.documentType === documentType) ?? null;
+    const now = nowIso();
+    const record: CourseDocumentRecord = {
+      id: existing?.id ?? makeId("course-document"),
+      courseId,
+      documentType,
+      fileAsset: createAssetReferenceForPath("course_document", filePath),
+      caption,
+      mimeType,
+      originalName,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now
+    };
+    this.courseDocuments.set(record.id, record);
+    this.queuePut("courseDocuments", record);
+    return record;
+  }
+
+  deleteCourseDocumentRecord(documentId: string) {
+    this.ensureInitialized();
+    this.courseDocuments.delete(documentId);
+    this.queueDelete("courseDocuments", documentId);
+  }
+
   deleteVisitRecords(visitId: string) {
     this.ensureInitialized();
     this.visitNotes.delete(visitId);
@@ -589,6 +672,9 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
     this.ensureInitialized();
     for (const visit of this.fetchVisitsByCourseIds([courseId])) {
       this.deleteVisitRecords(visit.note.id);
+    }
+    for (const document of this.fetchCourseDocuments(courseId)) {
+      this.deleteCourseDocumentRecord(document.id);
     }
     for (const site of this.fetchSites([courseId])) {
       this.sites.delete(site.id);
@@ -699,7 +785,7 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
   fetchCompletedPatientIds(): string[] {
     const activeCoursePatientIds = new Set(
       this.fetchCourses("1 = 1", [])
-        .filter((course) => course.status === "active")
+        .filter((course) => course.status === "active" || course.status === "pending")
         .map((course) => course.patientId)
     );
 
@@ -723,6 +809,7 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
         courses: this.fetchCourses("patient_id = ?", [patient.id]).map((course) => ({
           course,
           sites: this.fetchSites([course.id]),
+          documents: this.fetchCourseDocuments(course.id),
           visits: this.fetchVisitsByCourseIds([course.id])
         }))
       }));
@@ -748,6 +835,7 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
     }
     return {
       course,
+      documents: this.fetchCourseDocuments(courseId),
       visits: this.fetchVisitsByCourseIds([courseId])
     };
   }
@@ -757,6 +845,7 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
       patient: this.fetchPatient(patientId),
       courses: this.fetchCourses("patient_id = ?", [patientId]).map((course) => ({
         course,
+        documents: this.fetchCourseDocuments(course.id),
         visits: this.fetchVisitsByCourseIds([course.id])
       }))
     };
@@ -801,8 +890,14 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
     this.settings = settings ?? { ...DEFAULT_SETTINGS_RECORD };
     this.savedOptions = this.asMap(await this.getAllFromStore<SavedOptionRecord>("savedOptions"));
     this.patients = this.asMap(await this.getAllFromStore<PatientRecord>("patients"));
-    this.courses = this.asMap(await this.getAllFromStore<TreatmentCourseRecord>("courses"));
+    this.courses = this.asMap(
+      (await this.getAllFromStore<TreatmentCourseRecord>("courses")).map((course) => ({
+        ...course,
+        simConsultDate: course.simConsultDate ?? null
+      }))
+    );
     this.sites = this.asMap(await this.getAllFromStore<TreatmentSiteRecord>("sites"));
+    this.courseDocuments = this.asMap(await this.getAllFromStore<CourseDocumentRecord>("courseDocuments"));
     const rawVisitNotes = await this.getAllFromStore<VisitNoteRecord>("visitNotes");
     const normalizedVisitNotes = rawVisitNotes.map((note) => {
       // Migrate older records that predate the addMips field
@@ -928,6 +1023,7 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
         ensureStore("patients", "id");
         ensureStore("courses", "id");
         ensureStore("sites", "id");
+        ensureStore("courseDocuments", "id");
         ensureStore("visitNotes", "id");
         ensureStore("visitPhotos", "id");
         ensureStore("visitAttachments", "id");
