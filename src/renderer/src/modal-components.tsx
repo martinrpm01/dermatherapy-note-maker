@@ -426,9 +426,6 @@ export function ConsentSigningModal(props: {
         </h3>
         {step === "review" ? (
           <>
-            <p className="muted" style={{ margin: 0 }}>
-              Review the full consent wording with the patient before moving into the signature step.
-            </p>
             <div className="site-grid">
               <div className="subpanel">
                 <h4>{props.patient.lastName}, {props.patient.firstName}</h4>
