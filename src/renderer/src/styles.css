@@ -1368,6 +1368,33 @@ input.search {
   }
 }
 
+@media (max-width: 1180px) {
+  .patient-row-grouped-header,
+  .patient-row-course-sub {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .patient-row-course-sub {
+    padding-left: 1.1rem;
+  }
+
+  .patient-row-stats {
+    min-width: 0;
+    flex: 0 1 auto;
+  }
+
+  .patient-row-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    min-width: 0;
+  }
+
+  .patient-row-actions button {
+    padding: 0.45rem 0.72rem;
+  }
+}
+
 @media (max-width: 640px) {
   .patient-form-grid {
     grid-template-columns: 1fr;
