@@ -153,7 +153,7 @@ async function drawSignatureImage(
   const scale = Math.min(targetWidth / image.width, targetHeight / image.height);
   const width = image.width * scale;
   const height = image.height * scale;
-  const x = rect.x + (options?.offsetX ?? 0);
+  const x = rect.x + (rect.width - width) / 2 + (options?.offsetX ?? 0);
   const y = rect.y + reservedBottom + (usableHeight - height) / 2 + (options?.offsetY ?? 0);
   page.drawImage(image, { x, y, width, height });
 }
@@ -190,6 +190,7 @@ function drawFittedText(
     maxSize?: number;
     minSize?: number;
     offsetY?: number;
+    align?: "left" | "center";
   }
 ) {
   if (!text.trim()) {
@@ -200,8 +201,12 @@ function drawFittedText(
   const maxSize = options?.maxSize ?? 15;
   const minSize = options?.minSize ?? 9;
   const size = fitTextSize(font, text, Math.max(1, rect.width - paddingX * 2), maxSize, minSize);
+  const textWidth = font.widthOfTextAtSize(text, size);
+  const x = options?.align === "center"
+    ? rect.x + Math.max(paddingX, (rect.width - textWidth) / 2)
+    : rect.x + paddingX;
   page.drawText(text, {
-    x: rect.x + paddingX,
+    x,
     y: rect.y + (rect.height - size) / 2 + (options?.offsetY ?? 0),
     size,
     font
@@ -309,7 +314,8 @@ export async function buildSignedConsentFormPdfFromTemplateBytes(
   setText(form, "Text Box 1_2", formatDisplayDate(input.patient.dob));
   setText(form, "Text Box 1_5", input.patient.mrn);
   const signDate = formatDisplayDate(input.signing.signDate || input.course.simConsultDate || input.course.startDate || "");
-  DATE_FIELDS.forEach((fieldName) => setTextWithFontSize(form, fieldName, signDate, 13));
+  const dateRects = DATE_FIELDS.map((fieldName) => getFieldRect(form, fieldName));
+  DATE_FIELDS.forEach((fieldName) => setText(form, fieldName, ""));
   setText(
     form,
     INITIALS_FIELD,
@@ -317,7 +323,8 @@ export async function buildSignedConsentFormPdfFromTemplateBytes(
   );
   setCheckbox(form, FORMER_RADIATION_ACKNOWLEDGMENT_FIELD, input.signing.formerRadiationAcknowledged);
   setCheckbox(form, MEDICAL_DEVICES_ACKNOWLEDGMENT_FIELD, input.signing.medicalDevicesAcknowledged);
-  setTextWithFontSize(form, PATIENT_PRINTED_NAME_FIELD, input.signing.patientPrintedName.trim(), 11.5);
+  const patientPrintedNameRect = getFieldRect(form, PATIENT_PRINTED_NAME_FIELD);
+  setText(form, PATIENT_PRINTED_NAME_FIELD, "");
   setText(form, WITNESS_SIGNATURE_FIELD, "");
 
   const sites = input.sites.slice().sort((left, right) => left.siteNumber - right.siteNumber);
@@ -331,23 +338,39 @@ export async function buildSignedConsentFormPdfFromTemplateBytes(
   const page = pdfDoc.getPages()[0];
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
+  dateRects.forEach((rect) => {
+    drawFittedText(page, font, signDate, rect, {
+      paddingX: 6,
+      maxSize: 11.5,
+      minSize: 8.5,
+      align: "center"
+    });
+  });
+
+  drawFittedText(page, font, input.signing.patientPrintedName.trim(), patientPrintedNameRect, {
+    paddingX: 10,
+    maxSize: 12,
+    minSize: 9,
+    align: "center"
+  });
+
   await drawSignatureImage(pdfDoc, page, input.signing.patientSignatureDataUrl, patientSignatureRect, {
-    widthScale: 1.2,
-    heightScale: 1.75,
-    offsetX: -patientSignatureRect.width * 0.03,
+    widthScale: 1.36,
+    heightScale: 1.88,
+    offsetX: 0,
     offsetY: patientSignatureRect.height * 0.02
   });
 
   const witnessSignatureRect = {
-    x: witnessRect.x + witnessRect.width * 0.02,
-    y: witnessRect.y + witnessRect.height * 0.12,
-    width: witnessRect.width * 0.28,
-    height: witnessRect.height * 0.72
+    x: witnessRect.x + witnessRect.width * 0.015,
+    y: witnessRect.y + witnessRect.height * 0.1,
+    width: witnessRect.width * 0.32,
+    height: witnessRect.height * 0.76
   };
   await drawSignatureImage(pdfDoc, page, input.signing.witnessSignatureDataUrl, witnessSignatureRect, {
-    widthScale: 1.08,
-    heightScale: 1.45,
-    offsetX: -witnessSignatureRect.width * 0.02,
+    widthScale: 1.18,
+    heightScale: 1.58,
+    offsetX: 0,
     offsetY: witnessSignatureRect.height * 0.01
   });
 
@@ -358,7 +381,12 @@ export async function buildSignedConsentFormPdfFromTemplateBytes(
     width: witnessRect.width * 0.52,
     height: witnessRect.height * 0.7
   };
-  drawFittedText(page, font, witnessName, witnessNameRect, { paddingX: 0, maxSize: 11.5, minSize: 8.5 });
+  drawFittedText(page, font, witnessName, witnessNameRect, {
+    paddingX: 6,
+    maxSize: 12,
+    minSize: 8.5,
+    align: "center"
+  });
 
   const documentIdentity = buildConsentDocumentIdentity(input.patient);
 

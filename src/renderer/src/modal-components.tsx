@@ -199,21 +199,43 @@ function SignaturePad(props: {
   const movedRef = useRef(false);
   const suppressExternalSyncRef = useRef(false);
 
+  function configureCanvas() {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      return null;
+    }
+
+    const dpr = typeof window !== "undefined" ? Math.max(window.devicePixelRatio || 1, 1) : 1;
+    const cssWidth = Math.max(1, Math.floor(canvas.clientWidth || 520));
+    const cssHeight = Math.max(1, props.height ?? 150);
+    const nextWidth = Math.floor(cssWidth * dpr);
+    const nextHeight = Math.floor(cssHeight * dpr);
+
+    if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
+      canvas.width = nextWidth;
+      canvas.height = nextHeight;
+    }
+
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return null;
+    }
+
+    context.imageSmoothingEnabled = true;
+    return { canvas, context, dpr };
+  }
+
   useEffect(() => {
     if (suppressExternalSyncRef.current) {
       suppressExternalSyncRef.current = false;
       return;
     }
 
-    const canvas = canvasRef.current;
-    if (!canvas) {
+    const configured = configureCanvas();
+    if (!configured) {
       return;
     }
-
-    const context = canvas.getContext("2d");
-    if (!context) {
-      return;
-    }
+    const { canvas, context } = configured;
 
     context.clearRect(0, 0, canvas.width, canvas.height);
     boundsRef.current = null;
@@ -232,7 +254,7 @@ function SignaturePad(props: {
       context.drawImage(image, x, y, width, height);
     };
     image.src = props.value;
-  }, [props.value]);
+  }, [props.value, props.height]);
 
   function updateBounds(x: number, y: number) {
     const current = boundsRef.current;
@@ -299,17 +321,17 @@ function SignaturePad(props: {
   }
 
   function startDrawing(event: ReactPointerEvent<HTMLCanvasElement>) {
-    const canvas = canvasRef.current;
-    const context = canvas?.getContext("2d");
-    if (!canvas || !context) {
+    const configured = configureCanvas();
+    if (!configured) {
       return;
     }
+    const { canvas, context, dpr } = configured;
 
     drawingRef.current = true;
     movedRef.current = false;
     const point = getPoint(event);
     context.strokeStyle = "#17324a";
-    context.lineWidth = 2.2;
+    context.lineWidth = 2.6 * dpr;
     context.lineCap = "round";
     context.lineJoin = "round";
     context.beginPath();
@@ -333,20 +355,20 @@ function SignaturePad(props: {
   }
 
   function stopDrawing(event?: ReactPointerEvent<HTMLCanvasElement>) {
-    const canvas = canvasRef.current;
-    const context = canvas?.getContext("2d");
-    if (!drawingRef.current || !canvas || !context) {
+    const configured = configureCanvas();
+    if (!drawingRef.current || !configured) {
       return;
     }
+    const { canvas, context, dpr } = configured;
 
     if (!movedRef.current) {
       const point = event ? getPoint(event) : { x: canvas.width / 2, y: canvas.height / 2 };
       context.beginPath();
-      context.arc(point.x, point.y, 1.6, 0, Math.PI * 2);
+      context.arc(point.x, point.y, 1.9 * dpr, 0, Math.PI * 2);
       context.fillStyle = "#17324a";
       context.fill();
-      updateBounds(point.x - 2, point.y - 2);
-      updateBounds(point.x + 2, point.y + 2);
+      updateBounds(point.x - 2.5 * dpr, point.y - 2.5 * dpr);
+      updateBounds(point.x + 2.5 * dpr, point.y + 2.5 * dpr);
     }
 
     drawingRef.current = false;
@@ -375,8 +397,6 @@ function SignaturePad(props: {
       <canvas
         ref={canvasRef}
         className="signature-pad"
-        width={520}
-        height={props.height ?? 150}
         onPointerDown={startDrawing}
         onPointerMove={continueDrawing}
         onPointerUp={stopDrawing}
