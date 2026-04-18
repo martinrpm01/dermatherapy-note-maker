@@ -49,6 +49,12 @@ export const VAC_LOK_AREA_OPTIONS = ["Head", "Leg", "Arm", "Hand", "Foot", "Ear"
 export const EYE_SHIELD_TYPE_OPTIONS = ["External", "Internal"] as const;
 export const GUM_SHIELD_POSITION_OPTIONS = ["Upper", "Lower"] as const;
 export const LIP_SHIELD_POSITION_OPTIONS = ["Upper", "Lower"] as const;
+export const PRESCRIBED_FRACTION_DOSE_MAP: Readonly<Record<number, { dailyDose: number; totalDose: number }>> = {
+  8: { dailyDose: 500, totalDose: 4000 },
+  10: { dailyDose: 400, totalDose: 4000 },
+  12: { dailyDose: 350, totalDose: 4200 },
+  15: { dailyDose: 280, totalDose: 4200 }
+};
 
 export function clampTreatmentNumber(value: number | null): number | null {
   if (value === null || Number.isNaN(value)) {
@@ -73,6 +79,39 @@ export function getSuggestedNoteType(treatmentNumber: number | null): NoteType {
   }
 
   return "standard_treatment";
+}
+
+export function getDoseValuesForFractions(fractions: number | null | undefined) {
+  if (!(typeof fractions === "number" && fractions > 0)) {
+    return null;
+  }
+
+  return PRESCRIBED_FRACTION_DOSE_MAP[fractions] ?? null;
+}
+
+export function applyAutomaticDoseValuesToSiteSnapshot<
+  T extends {
+    dailyDose: number;
+    totalDose: number;
+    prescribedFractions?: number | null;
+    cumulativeDose?: number;
+    doseManuallyAdjusted?: boolean;
+  }
+>(site: T, treatmentNumber: number | null, prescribedFractions = site.prescribedFractions ?? null): T {
+  const mappedDoseValues = getDoseValuesForFractions(prescribedFractions);
+  const shouldApplyAutomaticValues = Boolean(mappedDoseValues) && !site.doseManuallyAdjusted;
+  const dailyDose = shouldApplyAutomaticValues ? mappedDoseValues!.dailyDose : site.dailyDose;
+  const totalDose = shouldApplyAutomaticValues ? mappedDoseValues!.totalDose : site.totalDose;
+
+  return {
+    ...site,
+    dailyDose,
+    totalDose,
+    ...(Object.prototype.hasOwnProperty.call(site, "cumulativeDose")
+      ? { cumulativeDose: calculateCumulativeDose(dailyDose, treatmentNumber) }
+      : {}),
+    doseManuallyAdjusted: site.doseManuallyAdjusted ?? false
+  };
 }
 
 export function isOtvTreatmentNumber(treatmentNumber: number | null): boolean {
@@ -548,10 +587,17 @@ export function refreshVisitSiteSnapshots(
     noteType,
     latestSnapshots.map((site) => {
       const existingSnapshot = existingSiteSnapshots.find((snapshot) => snapshot.siteNumber === site.siteNumber);
+      const doseManuallyAdjusted = Boolean(existingSnapshot?.doseManuallyAdjusted);
+      const dailyDose = doseManuallyAdjusted ? existingSnapshot?.dailyDose ?? site.dailyDose : site.dailyDose;
+      const totalDose = doseManuallyAdjusted ? existingSnapshot?.totalDose ?? site.totalDose : site.totalDose;
       return {
         ...site,
         biopsyDate: existingSnapshot?.biopsyDate || fallbackBiopsyDate || "",
-        prescribedFractions: existingSnapshot?.prescribedFractions ?? site.prescribedFractions
+        dailyDose,
+        totalDose,
+        cumulativeDose: calculateCumulativeDose(dailyDose, treatmentNumber),
+        prescribedFractions: existingSnapshot?.prescribedFractions ?? site.prescribedFractions,
+        doseManuallyAdjusted
       };
     })
   );

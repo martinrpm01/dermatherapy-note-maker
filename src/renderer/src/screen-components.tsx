@@ -655,11 +655,10 @@ export function DashboardScreen(props: {
   onAddPatient: () => void;
   onOpenPatient: (patientId: string) => void;
   onArchivePatient: (patientId: string) => void;
-    onOpenVisit: (courseId: string, mode: "next_treatment" | "consult_sim", existingVisitId?: string) => void;
+  onOpenVisit: (courseId: string, mode: "next_treatment" | "consult_sim", existingVisitId?: string) => void;
   onEditPendingCourse: (patientId: string, courseId: string, mode: "intake" | "full") => void;
   onGenerateConsentForm: (courseId: string) => void;
   onUploadConsentForm: (patientId: string, courseId: string) => void;
-  onDeleteConsentForm: (patientId: string, courseId: string) => void;
   onOpenConsentForm: (patientId: string, courseId: string) => void;
   onRestoreArchivedPatient: (patientId: string) => void;
   }) {
@@ -822,8 +821,7 @@ export function DashboardScreen(props: {
                           <>
                             <button onClick={() => props.onOpenConsentForm(patientId, row.courseId)}>Open Consent Form</button>
                             <button onClick={() => props.onGenerateConsentForm(row.courseId)}>Re-sign Consent</button>
-                            <button onClick={() => props.onUploadConsentForm(patientId, row.courseId)}>Import Signed Consent</button>
-                            <button onClick={() => props.onDeleteConsentForm(patientId, row.courseId)}>Remove Consent</button>
+                            <button onClick={() => props.onUploadConsentForm(patientId, row.courseId)}>Replace Consent</button>
                           </>
                         ) : (
                           <>
@@ -983,7 +981,6 @@ export function PatientScreen(props: {
   onOpenPdf: (asset: AssetReference) => void;
   onGenerateConsentForm: (courseId: string) => void;
   onUploadConsentForm: (patientId: string, courseId: string) => void;
-  onDeleteConsentForm: (patientId: string, courseId: string) => void;
   onDeleteVisit: (visitId: string) => void;
 }) {
   const detail = props.patientDetail;
@@ -1053,8 +1050,7 @@ export function PatientScreen(props: {
                       <>
                         <button onClick={() => props.onOpenPdf(consentDocument.fileAsset)}>Open Consent Form</button>
                         <button onClick={() => props.onGenerateConsentForm(courseDetail.course.id)}>Re-sign Consent</button>
-                        <button onClick={() => props.onUploadConsentForm(courseDetail.course.patientId, courseDetail.course.id)}>Import Signed Consent</button>
-                        <button onClick={() => props.onDeleteConsentForm(courseDetail.course.patientId, courseDetail.course.id)}>Remove Consent</button>
+                        <button onClick={() => props.onUploadConsentForm(courseDetail.course.patientId, courseDetail.course.id)}>Replace Consent</button>
                       </>
                     ) : (
                       <>
@@ -1112,7 +1108,9 @@ export function PatientScreen(props: {
                 <p>{site.bodyLocation}</p>
                 <p>{site.icd10}</p>
                 <p>
-                  {site.dailyDose} cGy daily · {site.totalDose} cGy total
+                  {site.dailyDose > 0 && site.totalDose > 0
+                    ? `${site.dailyDose} cGy daily · ${site.totalDose} cGy total`
+                    : "Dose set on 1st treatment"}
                 </p>
               </div>
             ))}

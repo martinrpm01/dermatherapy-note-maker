@@ -29,9 +29,22 @@ import type {
 } from "../../shared/types";
 
 const FRACTION_PRESETS = [8, 10, 12, 15];
-const DAILY_DOSE_PRESETS = [350, 400, 500];
-const TOTAL_DOSE_PRESETS = [4000, 4200];
 const DEPTH_OPTIONS = ["3", "4", "5"];
+const CONE_SIZE_OPTIONS = ["10mm", "20mm", "35mm", "50mm"] as const;
+const CUTOUT_SIZE_OPTIONS = [
+  "13mm",
+  "15mm",
+  "18mm",
+  "23mm",
+  "25mm",
+  "27mm",
+  "30mm",
+  "33mm",
+  "37mm",
+  "45mm",
+  "Custom Cutout",
+  "Open Cone"
+] as const;
 const DIAGNOSIS_OPTIONS = [
   "Basal Cell Carcinoma",
   "Squamous Cell Carcinoma",
@@ -109,6 +122,14 @@ function ensureTherapistCredentials(value: string) {
 }
 
 function selectValue(value: number, presets: number[]): string {
+  return presets.includes(value) ? String(value) : "other";
+}
+
+function getFractionSelection(value: number | null | undefined, presets: readonly number[]) {
+  if (!(typeof value === "number" && value > 0)) {
+    return "";
+  }
+
   return presets.includes(value) ? String(value) : "other";
 }
 
@@ -380,21 +401,30 @@ export function ConsentSigningModal(props: {
 }) {
   const isFemalePatient = props.patient.sex.trim().toLowerCase() === "female";
   const [reviewAcknowledged, setReviewAcknowledged] = useState(false);
-  const [showSignatureStep, setShowSignatureStep] = useState(false);
-  const canSave =
+  const [step, setStep] = useState<"review" | "patient" | "witness">("review");
+  const patientStepComplete =
+    props.signingInput.signDate.trim().length > 0 &&
     props.signingInput.patientPrintedName.trim().length > 0 &&
     (!isFemalePatient || props.signingInput.patientInitials.trim().length > 0) &&
     props.signingInput.formerRadiationAcknowledged &&
     props.signingInput.medicalDevicesAcknowledged &&
+    Boolean(props.signingInput.patientSignatureDataUrl);
+  const canSave =
+    patientStepComplete &&
     props.signingInput.witnessPrintedName.trim().length > 0 &&
-    Boolean(props.signingInput.patientSignatureDataUrl) &&
     Boolean(props.signingInput.witnessSignatureDataUrl);
 
   return (
     <div className="modal-backdrop">
       <div className="modal-card wide consent-signing-modal">
-        <h3>{showSignatureStep ? "Sign Consent Form" : "Review Consent Form"}</h3>
-        {!showSignatureStep ? (
+        <h3>
+          {step === "review"
+            ? "Review Consent Form"
+            : step === "patient"
+              ? "Patient Signature"
+              : "Witness Signature"}
+        </h3>
+        {step === "review" ? (
           <>
             <p className="muted" style={{ margin: 0 }}>
               Review the full consent wording with the patient before moving into the signature step.
@@ -432,21 +462,21 @@ export function ConsentSigningModal(props: {
                   onChange={(event) => setReviewAcknowledged(event.target.checked)}
                 />
                 <span className="checkbox-option-label">
-                  I have reviewed this consent form with the patient and am ready to proceed to signatures.
+                  I have read and understand this consent form and am ready to proceed to signatures.
                 </span>
               </label>
             </div>
             <div className="button-row">
               <button onClick={props.onClose}>Cancel</button>
-              <button className="primary" disabled={!reviewAcknowledged} onClick={() => setShowSignatureStep(true)}>
-                Continue To Signature
+              <button className="primary" disabled={!reviewAcknowledged} onClick={() => setStep("patient")}>
+                Continue To Patient Signature
               </button>
             </div>
           </>
-        ) : (
+        ) : step === "patient" ? (
           <>
             <p className="muted" style={{ margin: 0 }}>
-              Collect initials and signatures inside the app, then finalize the signed consent PDF.
+              Capture the patient signature, printed name, date, and acknowledgments before moving to the witness step.
             </p>
             <div className="site-grid">
               <div className="subpanel">
@@ -466,7 +496,7 @@ export function ConsentSigningModal(props: {
                   ))}
               </div>
             </div>
-            <div className="form-grid consent-signing-grid">
+            <div className="form-grid consent-step-grid">
               <label>
                 Sign Date
                 <input
@@ -482,19 +512,6 @@ export function ConsentSigningModal(props: {
                   onChange={(event) => props.onChange({ ...props.signingInput, patientPrintedName: event.target.value })}
                 />
               </label>
-              <label>
-                Witness Name
-                <input
-              value={props.signingInput.witnessPrintedName}
-              onChange={(event) => props.onChange({ ...props.signingInput, witnessPrintedName: event.target.value })}
-              onBlur={(event) =>
-                props.onChange({
-                  ...props.signingInput,
-                  witnessPrintedName: ensureTherapistCredentials(event.target.value)
-                })
-              }
-            />
-          </label>
             </div>
             {isFemalePatient ? (
               <div className="subpanel">
@@ -542,25 +559,79 @@ export function ConsentSigningModal(props: {
                 </label>
               </div>
             </div>
-            <div className="site-grid">
-              <div className="subpanel">
-                <h4>Patient Signature</h4>
-                <SignaturePad
-                  value={props.signingInput.patientSignatureDataUrl}
-                  onChange={(next) => props.onChange({ ...props.signingInput, patientSignatureDataUrl: next })}
-                />
-              </div>
-              <div className="subpanel">
-                <h4>Witness Signature</h4>
-                <SignaturePad
-                  value={props.signingInput.witnessSignatureDataUrl}
-                  onChange={(next) => props.onChange({ ...props.signingInput, witnessSignatureDataUrl: next })}
-                />
-              </div>
+            <div className="subpanel">
+              <h4>Patient Signature</h4>
+              <SignaturePad
+                value={props.signingInput.patientSignatureDataUrl}
+                onChange={(next) => props.onChange({ ...props.signingInput, patientSignatureDataUrl: next })}
+                height={190}
+              />
             </div>
             <div className="button-row">
               <button onClick={props.onClose}>Cancel</button>
-              <button onClick={() => setShowSignatureStep(false)}>Back To Consent Text</button>
+              <button onClick={() => setStep("review")}>Back To Consent Text</button>
+              <button className="primary" disabled={!patientStepComplete} onClick={() => setStep("witness")}>
+                Continue To Witness Signature
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="muted" style={{ margin: 0 }}>
+              Capture the witness signature and witness name, then finalize the signed consent PDF.
+            </p>
+            <div className="site-grid">
+              <div className="subpanel">
+                <h4>{props.patient.lastName}, {props.patient.firstName}</h4>
+                <p>MRN {props.patient.mrn} · DOB {props.patient.dob}</p>
+                <p>{props.course.courseType === "one_site" ? "1-lesion course" : "2-lesion course"}</p>
+              </div>
+              <div className="subpanel">
+                <h4>Sites</h4>
+                {props.sites
+                  .slice()
+                  .sort((left, right) => left.siteNumber - right.siteNumber)
+                  .map((site) => (
+                    <p key={site.id}>
+                      Lesion {site.siteNumber}: {site.treatmentLocationText || site.bodyLocation || "Pending site"} · {site.diagnosisText || "Pending diagnosis"}
+                    </p>
+                  ))}
+              </div>
+            </div>
+            <div className="form-grid consent-step-grid">
+              <label>
+                Sign Date
+                <input
+                  type="date"
+                  value={props.signingInput.signDate}
+                  onChange={(event) => props.onChange({ ...props.signingInput, signDate: event.target.value })}
+                />
+              </label>
+              <label>
+                Witness Name
+                <input
+                  value={props.signingInput.witnessPrintedName}
+                  onChange={(event) => props.onChange({ ...props.signingInput, witnessPrintedName: event.target.value })}
+                  onBlur={(event) =>
+                    props.onChange({
+                      ...props.signingInput,
+                      witnessPrintedName: ensureTherapistCredentials(event.target.value)
+                    })
+                  }
+                />
+              </label>
+            </div>
+            <div className="subpanel">
+              <h4>Witness Signature</h4>
+              <SignaturePad
+                value={props.signingInput.witnessSignatureDataUrl}
+                onChange={(next) => props.onChange({ ...props.signingInput, witnessSignatureDataUrl: next })}
+                height={190}
+              />
+            </div>
+            <div className="button-row">
+              <button onClick={props.onClose}>Cancel</button>
+              <button onClick={() => setStep("patient")}>Back To Patient Signature</button>
               <button className="primary" disabled={props.busy || !canSave} onClick={props.onSave}>
                 Finalize Consent
               </button>
@@ -599,8 +670,8 @@ function createIntakeSite(siteNumber: 1 | 2, source?: CourseInput["sites"][numbe
       worksheetEyeShieldType: "",
       worksheetGumShieldPosition: "",
       worksheetLipShieldPosition: "",
-      dailyDose: 400,
-      totalDose: 4000
+      dailyDose: 0,
+      totalDose: 0
     }),
     id: source?.id,
     siteNumber,
@@ -634,8 +705,8 @@ function createDocumentOnlySite(siteNumber: 1 | 2, source?: DocumentOnlyInput["s
       worksheetEyeShieldType: "",
       worksheetGumShieldPosition: "",
       worksheetLipShieldPosition: "",
-      dailyDose: 400,
-      totalDose: 4000,
+      dailyDose: 0,
+      totalDose: 0,
       projectedFractions: null
     }),
     id: source?.id,
@@ -657,6 +728,18 @@ export function PendingCourseIntakeModal(props: {
 }) {
   const courseForm = props.courseForm;
   const isTwoSite = courseForm.courseType === "two_site";
+  const [projectedFractionModes, setProjectedFractionModes] = useState<Record<number, string>>({});
+
+  useEffect(() => {
+    setProjectedFractionModes((current) => {
+      const next: Record<number, string> = {};
+      courseForm.sites.forEach((site, index) => {
+        const derivedSelection = getFractionSelection(site.prescribedFractions, FRACTION_PRESETS);
+        next[index] = derivedSelection || (current[index] === "other" ? "other" : "");
+      });
+      return next;
+    });
+  }, [courseForm.id, courseForm.sites]);
 
   function updateSites(nextSites: CourseInput["sites"]) {
     props.onChange({
@@ -772,19 +855,47 @@ export function PendingCourseIntakeModal(props: {
                 </label>
                 <label>
                   {isTwoSite ? `Projected Fractions Lesion ${site.siteNumber}` : "Projected Fractions"}
-                  <input
-                    type="number"
-                    min={1}
-                    max={15}
-                    placeholder="e.g. 10"
-                    value={site.prescribedFractions ?? ""}
-                    onChange={(event) =>
+                  <select
+                    value={projectedFractionModes[index] ?? getFractionSelection(site.prescribedFractions, FRACTION_PRESETS)}
+                    onChange={(event) => {
+                      const selection = event.target.value;
+                      setProjectedFractionModes((current) => ({ ...current, [index]: selection }));
                       updateSite(index, {
-                        prescribedFractions: event.target.value ? Number(event.target.value) : undefined
-                      })
-                    }
-                  />
+                        prescribedFractions:
+                          selection && selection !== "other"
+                            ? Number(selection)
+                            : getFractionSelection(site.prescribedFractions, FRACTION_PRESETS) === "other"
+                              ? site.prescribedFractions
+                              : undefined
+                      });
+                    }}
+                  >
+                    <option value="">Select Fractions</option>
+                    {FRACTION_PRESETS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                    <option value="other">Other</option>
+                  </select>
                 </label>
+                {(projectedFractionModes[index] ?? getFractionSelection(site.prescribedFractions, FRACTION_PRESETS)) === "other" ? (
+                  <label>
+                    {isTwoSite ? `Actual Projected Fractions Lesion ${site.siteNumber}` : "Actual Projected Fractions"}
+                    <input
+                      type="number"
+                      min={1}
+                      max={30}
+                      placeholder="Enter fractions"
+                      value={site.prescribedFractions ?? ""}
+                      onChange={(event) =>
+                        updateSite(index, {
+                          prescribedFractions: event.target.value ? Number(event.target.value) : undefined
+                        })
+                      }
+                    />
+                  </label>
+                ) : null}
               </div>
             </div>
           ))}
@@ -961,6 +1072,7 @@ export function DocumentOnlyWorksheetModal(props: {
   const recordForm = props.recordForm;
   const isTwoSite = recordForm.courseType === "two_site";
   const [customShieldEnabled, setCustomShieldEnabled] = useState<Record<number, boolean>>({});
+  const [projectedFractionModes, setProjectedFractionModes] = useState<Record<number, string>>({});
 
   useEffect(() => {
     setCustomShieldEnabled((current) => {
@@ -968,6 +1080,17 @@ export function DocumentOnlyWorksheetModal(props: {
       recordForm.sites.forEach((site, index) => {
         const existingCustomValue = getSelectedDevices(site.additionalDevices).customValue.trim();
         next[index] = current[index] ?? Boolean(existingCustomValue);
+      });
+      return next;
+    });
+  }, [recordForm.id, recordForm.sites]);
+
+  useEffect(() => {
+    setProjectedFractionModes((current) => {
+      const next: Record<number, string> = {};
+      recordForm.sites.forEach((site, index) => {
+        const derivedSelection = getFractionSelection(site.projectedFractions, FRACTION_PRESETS);
+        next[index] = derivedSelection || (current[index] === "other" ? "other" : "");
       });
       return next;
     });
@@ -1080,32 +1203,66 @@ export function DocumentOnlyWorksheetModal(props: {
                 <div className="form-grid course-top-grid">
                   <label>
                     Projected Fractions
-                    <input
-                      type="number"
-                      min={1}
-                      max={15}
-                      placeholder="e.g. 10"
-                      value={site.projectedFractions ?? ""}
-                      onChange={(event) =>
-                        updateSite(index, { projectedFractions: event.target.value ? Number(event.target.value) : null })
-                      }
-                    />
+                    <select
+                      value={projectedFractionModes[index] ?? getFractionSelection(site.projectedFractions, FRACTION_PRESETS)}
+                      onChange={(event) => {
+                        const selection = event.target.value;
+                        setProjectedFractionModes((current) => ({ ...current, [index]: selection }));
+                        updateSite(index, {
+                          projectedFractions:
+                            selection && selection !== "other"
+                              ? Number(selection)
+                              : getFractionSelection(site.projectedFractions, FRACTION_PRESETS) === "other"
+                                ? site.projectedFractions
+                                : null
+                        });
+                      }}
+                    >
+                      <option value="">Select Fractions</option>
+                      {FRACTION_PRESETS.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                      <option value="other">Other</option>
+                    </select>
                   </label>
+                  {(projectedFractionModes[index] ?? getFractionSelection(site.projectedFractions, FRACTION_PRESETS)) === "other" ? (
+                    <label>
+                      Actual Projected Fractions
+                      <input
+                        type="number"
+                        min={1}
+                        max={30}
+                        placeholder="Enter fractions"
+                        value={site.projectedFractions ?? ""}
+                        onChange={(event) =>
+                          updateSite(index, { projectedFractions: event.target.value ? Number(event.target.value) : null })
+                        }
+                      />
+                    </label>
+                  ) : null}
                   <label>
                     Cone Size
-                    <input
-                      placeholder="e.g. 20mm"
-                      value={site.coneSize}
-                      onChange={(event) => updateSite(index, { coneSize: normalizeMeasurementInput(event.target.value) })}
-                    />
+                    <select value={site.coneSize} onChange={(event) => updateSite(index, { coneSize: event.target.value })}>
+                      <option value="">Select Cone</option>
+                      {CONE_SIZE_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <label>
                     Cutout Size
-                    <input
-                      placeholder="Open Cone or e.g. 18mm"
-                      value={site.cutoutSize}
-                      onChange={(event) => updateSite(index, { cutoutSize: normalizeMeasurementInput(event.target.value) })}
-                    />
+                    <select value={normalizeCutoutSizeLabel(site.cutoutSize)} onChange={(event) => updateSite(index, { cutoutSize: event.target.value })}>
+                      <option value="">Select Cutout</option>
+                      {CUTOUT_SIZE_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <label>
                     Lesion Size (mm)
@@ -1285,24 +1442,6 @@ export function DocumentOnlyWorksheetModal(props: {
                     </div>
                   </div>
                 </div>
-                <div className="form-grid compact-grid">
-                  <label>
-                    Daily Dose (cGy)
-                    <input
-                      type="number"
-                      value={site.dailyDose}
-                      onChange={(event) => updateSite(index, { dailyDose: Number(event.target.value) || 0 })}
-                    />
-                  </label>
-                  <label>
-                    Total Dose (cGy)
-                    <input
-                      type="number"
-                      value={site.totalDose}
-                      onChange={(event) => updateSite(index, { totalDose: Number(event.target.value) || 0 })}
-                    />
-                  </label>
-                </div>
               </div>
             );
           })}
@@ -1326,7 +1465,6 @@ export function CourseConsentModal(props: {
   onOpenConsentForm?: () => void;
   onGenerateConsentForm?: () => void;
   onUploadConsentForm?: () => void;
-  onDeleteConsentForm?: () => void;
 }) {
   return (
     <div className="modal-backdrop">
@@ -1342,8 +1480,7 @@ export function CourseConsentModal(props: {
               <>
                 <button onClick={props.onOpenConsentForm}>Open Consent Form</button>
                 <button onClick={props.onGenerateConsentForm}>Re-sign Consent</button>
-                <button onClick={props.onUploadConsentForm}>Import Signed Consent</button>
-                <button onClick={props.onDeleteConsentForm}>Remove Consent</button>
+                <button onClick={props.onUploadConsentForm}>Replace Consent</button>
               </>
             ) : (
               <>
@@ -1377,7 +1514,6 @@ export function CourseModal(props: {
     const [fractionMode, setFractionMode] = useState<"preset" | "other">("preset");
     const isPendingCourseSetup = courseForm.status === "pending";
     const showFractionsField = Boolean(courseForm.id) && !isPendingCourseSetup;
-  const [doseModes, setDoseModes] = useState<Record<number, { dailyDose: "preset" | "other"; totalDose: "preset" | "other" }>>({});
   const [siteFractionModes, setSiteFractionModes] = useState<Record<number, { mode: "preset" | "other"; custom: string }>>({});
   const [customInputs, setCustomInputs] = useState<Record<number, string>>({});
   const [customShieldEnabled, setCustomShieldEnabled] = useState<Record<number, boolean>>({});
@@ -1393,19 +1529,6 @@ export function CourseModal(props: {
     setFractionMode("other");
     setCustomFractions(courseForm.prescribedFractions ? String(courseForm.prescribedFractions) : "");
   }, [courseForm.id, courseForm.prescribedFractions]);
-
-  useEffect(() => {
-    setDoseModes((current) => {
-      const next: typeof current = {};
-      courseForm.sites.forEach((site, index) => {
-        next[index] = current[index] ?? {
-          dailyDose: DAILY_DOSE_PRESETS.includes(site.dailyDose) ? "preset" : "other",
-          totalDose: TOTAL_DOSE_PRESETS.includes(site.totalDose) ? "preset" : "other"
-        };
-      });
-      return next;
-    });
-  }, [courseForm.id, courseForm.sites.length]);
 
   useEffect(() => {
     setSiteFractionModes((current) => {
@@ -1505,23 +1628,6 @@ export function CourseModal(props: {
     updateSite(index, { [field]: formatWorksheetSelection(values) });
   }
 
-  function getDoseMode(index: number, key: "dailyDose" | "totalDose") {
-    const site = courseForm.sites[index];
-    const presets = key === "dailyDose" ? DAILY_DOSE_PRESETS : TOTAL_DOSE_PRESETS;
-    return doseModes[index]?.[key] ?? (presets.includes(site[key]) ? "preset" : "other");
-  }
-
-  function setDoseMode(index: number, key: "dailyDose" | "totalDose", value: "preset" | "other") {
-    setDoseModes((current) => ({
-      ...current,
-      [index]: {
-        dailyDose: current[index]?.dailyDose ?? (DAILY_DOSE_PRESETS.includes(courseForm.sites[index].dailyDose) ? "preset" : "other"),
-        totalDose: current[index]?.totalDose ?? (TOTAL_DOSE_PRESETS.includes(courseForm.sites[index].totalDose) ? "preset" : "other"),
-        [key]: value
-      }
-    }));
-  }
-
   function updateSite(index: number, patch: Partial<CourseInput["sites"][0]>) {
     const nextSite = { ...courseForm.sites[index], ...patch };
     props.onChange({
@@ -1542,25 +1648,27 @@ export function CourseModal(props: {
         <div className={`modal-card wide${isTwoSite ? " two-site-course-modal" : ""}`}>
           <h3>{isPendingCourseSetup ? "Complete Course Setup" : courseForm.id ? "Edit Course" : "Add Treatment Course"}</h3>
         <div className="form-grid">
-          <label>
-            Number of Lesions
-            <select
-              value={courseForm.courseType}
-              onChange={(event) => {
-                const next = event.target.value as CourseInput["courseType"];
-                props.onChange({
-                  ...courseForm,
-                  courseType: next,
-                  sites: next === "two_site"
-                    ? courseForm.sites.length === 2 ? courseForm.sites : [...courseForm.sites, { ...courseForm.sites[0], siteNumber: 2 }]
-                    : [courseForm.sites[0]]
-                });
-              }}
-            >
-              <option value="one_site">1 Lesion</option>
-              <option value="two_site">2 Lesions</option>
-            </select>
-          </label>
+          {!isPendingCourseSetup ? (
+            <label>
+              Number of Lesions
+              <select
+                value={courseForm.courseType}
+                onChange={(event) => {
+                  const next = event.target.value as CourseInput["courseType"];
+                  props.onChange({
+                    ...courseForm,
+                    courseType: next,
+                    sites: next === "two_site"
+                      ? courseForm.sites.length === 2 ? courseForm.sites : [...courseForm.sites, { ...courseForm.sites[0], siteNumber: 2 }]
+                      : [courseForm.sites[0]]
+                  });
+                }}
+              >
+                <option value="one_site">1 Lesion</option>
+                <option value="two_site">2 Lesions</option>
+              </select>
+            </label>
+          ) : null}
           {showFractionsField && !isTwoSite ? <label>
             Prescribed Fractions
             <select
@@ -1592,10 +1700,6 @@ export function CourseModal(props: {
               />
             ) : null}
           </label> : null}
-            <label>
-              Start Date
-              <input type="date" value={courseForm.startDate} onChange={(event) => props.onChange({ ...courseForm, startDate: event.target.value })} />
-            </label>
             {props.showFacePhotoPicker ? (
               <label className="file-picker course-face-photo-picker">
                 Face Photo
@@ -1647,61 +1751,65 @@ export function CourseModal(props: {
                   )}
                 </label>
               )}
-              <label>
-                Treatment Lesion
-                <input placeholder="Treatment location" value={site.treatmentLocationText} onChange={(event) => {
-                  const newSites = courseForm.sites.map((item, i) =>
-                    i === index ? { ...item, treatmentLocationText: event.target.value, bodyLocation: event.target.value } : item
-                  );
-                  props.onChange({ ...courseForm, courseName: newSites.map((s) => s.treatmentLocationText).filter(Boolean).join(" + "), sites: newSites });
-                }} />
-              </label>
-              <div className="form-grid">
-                <label>
-                  Diagnosis
-                  <select value={site.diagnosisText} onChange={(event) => updateSite(index, { diagnosisText: event.target.value })}>
-                    <option value="">Select Diagnosis</option>
-                    <option value="Basal Cell Carcinoma">Basal Cell Carcinoma</option>
-                    <option value="Squamous Cell Carcinoma">Squamous Cell Carcinoma</option>
-                    <option value="Squamous Cell Carcinoma in-situ">Squamous Cell Carcinoma in-situ</option>
-                  </select>
-                </label>
-                <label>
-                  ICD10
-                  <input
-                    placeholder="ICD10"
-                    value={site.icd10}
-                    onChange={(event) => updateSite(index, { icd10: normalizeIcd10Input(event.target.value) })}
-                  />
-                </label>
-              </div>
+              {isPendingCourseSetup ? (
+                <div className="muted" style={{ fontSize: "0.88rem", marginBottom: "0.45rem", lineHeight: 1.35 }}>
+                  <div><strong>Treatment Lesion:</strong> {site.treatmentLocationText || "Not entered yet"}</div>
+                  <div><strong>Diagnosis:</strong> {site.diagnosisText || "Not entered yet"}</div>
+                  <div><strong>ICD10:</strong> {site.icd10 || "Not entered yet"}</div>
+                </div>
+              ) : (
+                <>
+                  <label>
+                    Treatment Lesion
+                    <input placeholder="Treatment location" value={site.treatmentLocationText} onChange={(event) => {
+                      const newSites = courseForm.sites.map((item, i) =>
+                        i === index ? { ...item, treatmentLocationText: event.target.value, bodyLocation: event.target.value } : item
+                      );
+                      props.onChange({ ...courseForm, courseName: newSites.map((s) => s.treatmentLocationText).filter(Boolean).join(" + "), sites: newSites });
+                    }} />
+                  </label>
+                  <div className="form-grid">
+                    <label>
+                      Diagnosis
+                      <select value={site.diagnosisText} onChange={(event) => updateSite(index, { diagnosisText: event.target.value })}>
+                        <option value="">Select Diagnosis</option>
+                        <option value="Basal Cell Carcinoma">Basal Cell Carcinoma</option>
+                        <option value="Squamous Cell Carcinoma">Squamous Cell Carcinoma</option>
+                        <option value="Squamous Cell Carcinoma in-situ">Squamous Cell Carcinoma in-situ</option>
+                      </select>
+                    </label>
+                    <label>
+                      ICD10
+                      <input
+                        placeholder="ICD10"
+                        value={site.icd10}
+                        onChange={(event) => updateSite(index, { icd10: normalizeIcd10Input(event.target.value) })}
+                      />
+                    </label>
+                  </div>
+                </>
+              )}
               <div className="form-grid">
                 <label>
                   Cone Size
                   <select value={site.coneSize} onChange={(event) => updateSite(index, { coneSize: event.target.value })}>
                     <option value="">Select Cone</option>
-                    <option value="10mm">10mm</option>
-                    <option value="20mm">20mm</option>
-                    <option value="35mm">35mm</option>
-                    <option value="50mm">50mm</option>
+                    {CONE_SIZE_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <label>
                   Cutout Size
                   <select value={normalizeCutoutSizeLabel(site.cutoutSize)} onChange={(event) => updateSite(index, { cutoutSize: event.target.value })}>
                     <option value="">Select Cutout</option>
-                    <option value="13mm">13mm</option>
-                    <option value="15mm">15mm</option>
-                    <option value="18mm">18mm</option>
-                    <option value="23mm">23mm</option>
-                    <option value="25mm">25mm</option>
-                    <option value="27mm">27mm</option>
-                    <option value="30mm">30mm</option>
-                    <option value="33mm">33mm</option>
-                    <option value="37mm">37mm</option>
-                    <option value="45mm">45mm</option>
-                    <option value="Custom Cutout">Custom Cutout</option>
-                    <option value="Open Cone">Open Cone</option>
+                    {CUTOUT_SIZE_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <label>
@@ -1902,60 +2010,6 @@ export function CourseModal(props: {
                     })}
                   </div>
                 </div>
-              </div>
-              <div className="form-grid">
-                <label>
-                  Daily Dose (cGy)
-                  <select
-                    value={getDoseMode(index, "dailyDose") === "other" ? "other" : selectValue(site.dailyDose, DAILY_DOSE_PRESETS)}
-                    onChange={(event) => {
-                      if (event.target.value !== "other") {
-                        setDoseMode(index, "dailyDose", "preset");
-                        updateSite(index, { dailyDose: Number(event.target.value) });
-                      } else {
-                        setDoseMode(index, "dailyDose", "other");
-                      }
-                    }}
-                  >
-                    {DAILY_DOSE_PRESETS.map((n) => <option key={n} value={n}>{n} cGy</option>)}
-                    <option value="other">Other</option>
-                  </select>
-                  {getDoseMode(index, "dailyDose") === "other" ? (
-                    <input
-                      type="number"
-                      placeholder="Enter cGy"
-                      value={site.dailyDose || ""}
-                      style={{ marginTop: "0.4rem" }}
-                      onChange={(event) => updateSite(index, { dailyDose: Number(event.target.value || 0) })}
-                    />
-                  ) : null}
-                </label>
-                <label>
-                  Total Dose (cGy)
-                  <select
-                    value={getDoseMode(index, "totalDose") === "other" ? "other" : selectValue(site.totalDose, TOTAL_DOSE_PRESETS)}
-                    onChange={(event) => {
-                      if (event.target.value !== "other") {
-                        setDoseMode(index, "totalDose", "preset");
-                        updateSite(index, { totalDose: Number(event.target.value) });
-                      } else {
-                        setDoseMode(index, "totalDose", "other");
-                      }
-                    }}
-                  >
-                    {TOTAL_DOSE_PRESETS.map((n) => <option key={n} value={n}>{n} cGy</option>)}
-                    <option value="other">Other</option>
-                  </select>
-                  {getDoseMode(index, "totalDose") === "other" ? (
-                    <input
-                      type="number"
-                      placeholder="Enter cGy"
-                      value={site.totalDose || ""}
-                      style={{ marginTop: "0.4rem" }}
-                      onChange={(event) => updateSite(index, { totalDose: Number(event.target.value || 0) })}
-                    />
-                  ) : null}
-                </label>
               </div>
             </div>
           ))}

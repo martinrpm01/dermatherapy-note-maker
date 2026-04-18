@@ -18,6 +18,7 @@ import { DesktopPatientArchiveExportService } from "./archive-export";
 import { DesktopPatientArchiveReaderService } from "./archive-reader";
 import { DesktopPatientArchiveRestoreService } from "./archive-restore";
 import {
+  applyAutomaticDoseValuesToSiteSnapshot,
   applyAutoNumberOfBlocks,
   buildDefaultStructuredFields,
   buildShieldSummary,
@@ -846,6 +847,9 @@ export class RadiationNoteService {
             }),
             projectedFractionsFromConsult
           );
+          siteSnapshots = siteSnapshots.map((site) =>
+            applyAutomaticDoseValuesToSiteSnapshot(site, treatmentNumber, site.prescribedFractions ?? null)
+          );
           structuredFields.siteSnapshots = siteSnapshots.map((site) => ({
             ...site,
             biopsyDate: site.biopsyDate || course.startDate || ""
@@ -906,6 +910,14 @@ export class RadiationNoteService {
                 : input.structuredFields.prescribedFractionsInput ?? site.prescribedFractions ?? undefined
           }))
         : input.structuredFields.siteSnapshots
+    ).map((site) =>
+      input.noteType === "consult_sim"
+        ? { ...site, doseManuallyAdjusted: Boolean(site.doseManuallyAdjusted) }
+        : applyAutomaticDoseValuesToSiteSnapshot(
+            { ...site, doseManuallyAdjusted: Boolean(site.doseManuallyAdjusted) },
+            input.treatmentNumber,
+            site.prescribedFractions ?? null
+          )
     );
 
     const prescribedFractionsInput =
@@ -928,13 +940,21 @@ export class RadiationNoteService {
     if (input.noteType !== "consult_sim") {
       for (const siteSnapshot of normalizedSiteSnapshots) {
         const sitePrescribedFractions = siteSnapshot.prescribedFractions ?? null;
-        if (!(sitePrescribedFractions && sitePrescribedFractions > 0)) {
-          continue;
-        }
-
         const storedSite = courseSites.find((site) => site.siteNumber === siteSnapshot.siteNumber);
-        if ((storedSite?.prescribedFractions ?? null) !== sitePrescribedFractions) {
+        if (sitePrescribedFractions && sitePrescribedFractions > 0 && (storedSite?.prescribedFractions ?? null) !== sitePrescribedFractions) {
           this.repository.updateCourseSitePrescribedFractions(course.id, siteSnapshot.siteNumber, sitePrescribedFractions);
+          courseUpdated = true;
+        }
+        if (
+          (storedSite?.dailyDose ?? 0) !== siteSnapshot.dailyDose ||
+          (storedSite?.totalDose ?? 0) !== siteSnapshot.totalDose
+        ) {
+          this.repository.updateCourseSiteDoseValues(
+            course.id,
+            siteSnapshot.siteNumber,
+            siteSnapshot.dailyDose,
+            siteSnapshot.totalDose
+          );
           courseUpdated = true;
         }
       }
@@ -1644,6 +1664,14 @@ export class RadiationNoteService {
           ? visit.structuredFields.projectedFractionsInput ?? null
           : visit.structuredFields.prescribedFractionsInput ??
               (course.prescribedFractions > 0 ? course.prescribedFractions : null)
+      ).map((site) =>
+        visit.noteType === "consult_sim"
+          ? { ...site, doseManuallyAdjusted: Boolean(site.doseManuallyAdjusted) }
+          : applyAutomaticDoseValuesToSiteSnapshot(
+              { ...site, doseManuallyAdjusted: Boolean(site.doseManuallyAdjusted) },
+              visit.treatmentNumber,
+              site.prescribedFractions ?? null
+            )
       );
       const refreshedNote: VisitInput = {
         id: visit.id,
@@ -1744,6 +1772,10 @@ export class RadiationNoteService {
     const site1Render = {
       ...site1,
       biopsyDate: formatDisplayDate(site1.biopsyDate || note.structuredFields.biopsyDate),
+      dailyDose: site1.dailyDose > 0 ? site1.dailyDose : "",
+      totalDose: site1.totalDose > 0 ? site1.totalDose : "",
+      cumulativeDose: site1.cumulativeDose > 0 ? site1.cumulativeDose : "",
+      prescribedFractions: (site1.prescribedFractions ?? course.prescribedFractions) > 0 ? (site1.prescribedFractions ?? course.prescribedFractions) : "",
       cutoutSize: normalizeCutoutSizeLabel(site1.cutoutSize),
       shields: buildShieldSummary(site1.shields, site1.additionalDevices),
       machine: getDefaultMachine(site1.machine),
@@ -1760,6 +1792,10 @@ export class RadiationNoteService {
     const site2Render = {
       ...site2,
       biopsyDate: formatDisplayDate(site2.biopsyDate || note.structuredFields.biopsyDate),
+      dailyDose: site2.dailyDose > 0 ? site2.dailyDose : "",
+      totalDose: site2.totalDose > 0 ? site2.totalDose : "",
+      cumulativeDose: site2.cumulativeDose > 0 ? site2.cumulativeDose : "",
+      prescribedFractions: (site2.prescribedFractions ?? course.prescribedFractions) > 0 ? (site2.prescribedFractions ?? course.prescribedFractions) : "",
       cutoutSize: normalizeCutoutSizeLabel(site2.cutoutSize),
       shields: buildShieldSummary(site2.shields, site2.additionalDevices),
       machine: getDefaultMachine(site2.machine),
@@ -1793,7 +1829,7 @@ export class RadiationNoteService {
         therapistName: note.therapistName
       },
       course: {
-        prescribedFractions: course.prescribedFractions
+        prescribedFractions: course.prescribedFractions > 0 ? course.prescribedFractions : ""
       },
       settings: {
         supervisingPhysician: settings.supervisingPhysician,

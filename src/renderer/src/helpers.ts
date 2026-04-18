@@ -233,7 +233,12 @@ export function buildVisitPreviewText(
   const site1 = {
     ...site1Base,
     biopsyDate: formatDisplayDate(site1Base.biopsyDate || note.structuredFields.biopsyDate),
-    prescribedFractions: site1Base.prescribedFractions ?? course.prescribedFractions,
+    dailyDose: site1Base.dailyDose > 0 ? site1Base.dailyDose : "",
+    totalDose: site1Base.totalDose > 0 ? site1Base.totalDose : "",
+    cumulativeDose: site1Base.cumulativeDose > 0 ? site1Base.cumulativeDose : "",
+    prescribedFractions: (site1Base.prescribedFractions ?? course.prescribedFractions) > 0
+      ? (site1Base.prescribedFractions ?? course.prescribedFractions)
+      : "",
     cutoutSize: normalizeCutoutSizeLabel(site1Base.cutoutSize),
     shields: buildShieldSummary(site1Base.shields, site1Base.additionalDevices),
     machine: getDefaultMachine(site1Base.machine),
@@ -250,7 +255,12 @@ export function buildVisitPreviewText(
   const site2 = {
     ...site2Base,
     biopsyDate: formatDisplayDate(site2Base.biopsyDate || note.structuredFields.biopsyDate),
-    prescribedFractions: site2Base.prescribedFractions ?? course.prescribedFractions,
+    dailyDose: site2Base.dailyDose > 0 ? site2Base.dailyDose : "",
+    totalDose: site2Base.totalDose > 0 ? site2Base.totalDose : "",
+    cumulativeDose: site2Base.cumulativeDose > 0 ? site2Base.cumulativeDose : "",
+    prescribedFractions: (site2Base.prescribedFractions ?? course.prescribedFractions) > 0
+      ? (site2Base.prescribedFractions ?? course.prescribedFractions)
+      : "",
     cutoutSize: normalizeCutoutSizeLabel(site2Base.cutoutSize),
     shields: buildShieldSummary(site2Base.shields, site2Base.additionalDevices),
     machine: getDefaultMachine(site2Base.machine),
@@ -284,7 +294,7 @@ export function buildVisitPreviewText(
       therapistName: note.therapistName ? `${note.therapistName} RT(T)` : ""
     },
     course: {
-      prescribedFractions: course.prescribedFractions
+      prescribedFractions: course.prescribedFractions > 0 ? course.prescribedFractions : ""
     },
     settings: {
       dermatologyOfficeName: settings?.dermatologyOfficeName ?? ""
@@ -359,8 +369,8 @@ export function createEmptyCourseForm(patientId: string): CourseInput {
             worksheetEyeShieldType: "",
             worksheetGumShieldPosition: "",
             worksheetLipShieldPosition: "",
-            dailyDose: 400,
-            totalDose: 4000
+            dailyDose: 0,
+            totalDose: 0
         }
       ]
   };
@@ -403,8 +413,8 @@ export function createCourseFormFromDetail(courseDetail: CourseDetail): CourseIn
           treatmentInterval: site.treatmentInterval,
           worksheetSide: site.worksheetSide,
           worksheetVacLokArea: normalizeVacLokAreaValue(site.worksheetVacLokArea),
-          dailyDose: site.dailyDose > 0 ? site.dailyDose : fallbackSite.dailyDose,
-          totalDose: site.totalDose > 0 ? site.totalDose : fallbackSite.totalDose,
+          dailyDose: site.dailyDose,
+          totalDose: site.totalDose,
           prescribedFractions: site.prescribedFractions ?? courseDetail.course.prescribedFractions
         }))
     : fallback.sites;

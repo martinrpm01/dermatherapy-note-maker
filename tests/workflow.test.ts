@@ -232,15 +232,15 @@ describe("RadiationNoteService workflow", () => {
     expect(recoveryCode).toBeTruthy();
   });
 
-  it("starts new courses in a sim/consult state with the expected default dose values", () => {
+  it("starts new courses in a sim/consult state with unknown dose values", () => {
     const emptyCourse = createEmptyCourseForm("patient_1");
 
     expect(emptyCourse.prescribedFractions).toBe(0);
-    expect(emptyCourse.sites[0].dailyDose).toBe(400);
-    expect(emptyCourse.sites[0].totalDose).toBe(4000);
+    expect(emptyCourse.sites[0].dailyDose).toBe(0);
+    expect(emptyCourse.sites[0].totalDose).toBe(0);
   });
 
-  it("normalizes edit-course values so legacy empty doses use the current defaults", async () => {
+  it("preserves unknown dose values when reopening edit-course data", async () => {
     const { patient, course } = await createPatientAndCourse();
 
     service.saveCourse({
@@ -278,8 +278,8 @@ describe("RadiationNoteService workflow", () => {
     const form = createCourseFormFromDetail(detail.courses[0]);
 
     expect(form.prescribedFractions).toBe(15);
-    expect(form.sites[0].dailyDose).toBe(400);
-    expect(form.sites[0].totalDose).toBe(4000);
+    expect(form.sites[0].dailyDose).toBe(0);
+    expect(form.sites[0].totalDose).toBe(0);
   });
 
   it("defaults the treatment machine text when a site machine is blank", async () => {
@@ -493,6 +493,8 @@ describe("RadiationNoteService workflow", () => {
     const firstDraft = service.buildVisitDraft(course.id, "next_treatment");
     expect(firstDraft.note.noteType).toBe("first_fraction");
     expect(firstDraft.note.structuredFields.prescribedFractionsInput).toBeNull();
+    expect(firstDraft.note.structuredFields.siteSnapshots[0]?.dailyDose).toBe(400);
+    expect(firstDraft.note.structuredFields.siteSnapshots[0]?.totalDose).toBe(4000);
 
     firstDraft.note.structuredFields.prescribedFractionsInput = 10;
     const savedFirst = service.saveVisit(firstDraft.note);
@@ -538,6 +540,18 @@ describe("RadiationNoteService workflow", () => {
       firstDraft.note.structuredFields.siteSnapshots.find((site) => site.siteNumber === 2)?.prescribedFractions
     ).toBe(12);
     expect(firstDraft.note.structuredFields.prescribedFractionsInput).toBe(12);
+    expect(
+      firstDraft.note.structuredFields.siteSnapshots.find((site) => site.siteNumber === 1)?.dailyDose
+    ).toBe(500);
+    expect(
+      firstDraft.note.structuredFields.siteSnapshots.find((site) => site.siteNumber === 1)?.totalDose
+    ).toBe(4000);
+    expect(
+      firstDraft.note.structuredFields.siteSnapshots.find((site) => site.siteNumber === 2)?.dailyDose
+    ).toBe(350);
+    expect(
+      firstDraft.note.structuredFields.siteSnapshots.find((site) => site.siteNumber === 2)?.totalDose
+    ).toBe(4200);
 
     firstDraft.note.structuredFields.siteSnapshots = firstDraft.note.structuredFields.siteSnapshots.map((site) => ({
       ...site,
@@ -623,6 +637,128 @@ describe("RadiationNoteService workflow", () => {
     const thirdDraft = service.buildVisitDraft(course.id, "next_treatment");
     expect(thirdDraft.note.treatmentNumber).toBe(3);
     expect(thirdDraft.course.prescribedFractions).toBe(12);
+  });
+
+  it("maps first-treatment doses from prescribed fractions and stores them on the course", async () => {
+    const patient = service.savePatient({
+      firstName: "Dose",
+      lastName: "Map",
+      mrn: "MRN-DOSE",
+      dob: "1981-03-11",
+      notes: ""
+    });
+
+    const course = service.saveCourse({
+      patientId: patient.id,
+      courseName: "Dose Mapping Course",
+      courseType: "one_site",
+      prescribedFractions: 0,
+      startDate: "2026-04-03",
+      sites: [
+        {
+          siteNumber: 1,
+          bodyLocation: "Temple",
+          treatmentLocationText: "Temple",
+          diagnosisText: "Basal Cell Carcinoma",
+          icd10: "C44.319",
+          numberOfBlocks: 0,
+          lesionSize: "8mm",
+          treatmentDepth: "3",
+          coneSize: "20",
+          cutoutSize: "Open Cone",
+          shields: "",
+          machine: "Xoft Elekta 1200 SPX",
+          energyKv: "50kV",
+          treatmentInterval: "bi-weekly",
+          additionalDevices: "None",
+          dailyDose: 0,
+          totalDose: 0
+        }
+      ]
+    });
+
+    const consultDraft = service.buildVisitDraft(course.id, "next_treatment");
+    service.saveVisit(consultDraft.note);
+
+    const firstDraft = service.buildVisitDraft(course.id, "next_treatment");
+    firstDraft.note.structuredFields.prescribedFractionsInput = 12;
+    firstDraft.note.structuredFields.siteSnapshots = firstDraft.note.structuredFields.siteSnapshots.map((site) => ({
+      ...site,
+      prescribedFractions: 12
+    }));
+    const savedFirst = service.saveVisit(firstDraft.note);
+
+    expect(savedFirst.structuredFields.siteSnapshots[0]?.dailyDose).toBe(350);
+    expect(savedFirst.structuredFields.siteSnapshots[0]?.totalDose).toBe(4200);
+    expect(savedFirst.structuredFields.siteSnapshots[0]?.cumulativeDose).toBe(350);
+
+    const updatedDetail = service.getPatientDetail(patient.id).courses[0];
+    expect(updatedDetail.course.prescribedFractions).toBe(12);
+    expect(updatedDetail.sites[0]?.dailyDose).toBe(350);
+    expect(updatedDetail.sites[0]?.totalDose).toBe(4200);
+  });
+
+  it("preserves manual dose overrides when a first-treatment note is reopened", async () => {
+    const patient = service.savePatient({
+      firstName: "Manual",
+      lastName: "Override",
+      mrn: "MRN-MANUAL",
+      dob: "1982-07-21",
+      notes: ""
+    });
+
+    const course = service.saveCourse({
+      patientId: patient.id,
+      courseName: "Manual Dose Course",
+      courseType: "one_site",
+      prescribedFractions: 0,
+      startDate: "2026-04-03",
+      sites: [
+        {
+          siteNumber: 1,
+          bodyLocation: "Temple",
+          treatmentLocationText: "Temple",
+          diagnosisText: "Basal Cell Carcinoma",
+          icd10: "C44.319",
+          numberOfBlocks: 0,
+          lesionSize: "8mm",
+          treatmentDepth: "3",
+          coneSize: "20",
+          cutoutSize: "Open Cone",
+          shields: "",
+          machine: "Xoft Elekta 1200 SPX",
+          energyKv: "50kV",
+          treatmentInterval: "bi-weekly",
+          additionalDevices: "None",
+          dailyDose: 0,
+          totalDose: 0
+        }
+      ]
+    });
+
+    const consultDraft = service.buildVisitDraft(course.id, "next_treatment");
+    service.saveVisit(consultDraft.note);
+
+    const firstDraft = service.buildVisitDraft(course.id, "next_treatment");
+    firstDraft.note.structuredFields.prescribedFractionsInput = 10;
+    firstDraft.note.structuredFields.siteSnapshots = firstDraft.note.structuredFields.siteSnapshots.map((site) => ({
+      ...site,
+      prescribedFractions: 10,
+      dailyDose: 450,
+      totalDose: 4050,
+      cumulativeDose: 450,
+      doseManuallyAdjusted: true
+    }));
+    const savedFirst = service.saveVisit(firstDraft.note);
+
+    expect(savedFirst.structuredFields.siteSnapshots[0]?.dailyDose).toBe(450);
+    expect(savedFirst.structuredFields.siteSnapshots[0]?.totalDose).toBe(4050);
+    expect(savedFirst.structuredFields.siteSnapshots[0]?.doseManuallyAdjusted).toBe(true);
+
+    const reopenedFirst = service.buildVisitDraft(course.id, "next_treatment", savedFirst.id);
+    expect(reopenedFirst.note.structuredFields.siteSnapshots[0]?.dailyDose).toBe(450);
+    expect(reopenedFirst.note.structuredFields.siteSnapshots[0]?.totalDose).toBe(4050);
+    expect(reopenedFirst.note.structuredFields.siteSnapshots[0]?.doseManuallyAdjusted).toBe(true);
   });
 
   it("renders consult note text with patient information first instead of an internal title line", async () => {

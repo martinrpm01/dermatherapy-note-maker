@@ -602,6 +602,18 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
     this.queuePut("sites", next);
   }
 
+  updateCourseSiteDoseValues(courseId: string, siteNumber: 1 | 2, dailyDose: number, totalDose: number) {
+    this.ensureInitialized();
+    const site = [...this.sites.values()].find((entry) => entry.courseId === courseId && entry.siteNumber === siteNumber);
+    if (!site) {
+      throw new Error(`Treatment site ${siteNumber} not found for course ${courseId}.`);
+    }
+
+    const next = { ...site, dailyDose, totalDose, updatedAt: nowIso() };
+    this.sites.set(site.id, next);
+    this.queuePut("sites", next);
+  }
+
   setCourseStatus(courseId: string, status: TreatmentCourseRecord["status"], endDate?: string | null) {
     this.ensureInitialized();
     const course = this.requireRecord(this.courses, courseId, "Course");

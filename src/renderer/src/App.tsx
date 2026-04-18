@@ -685,6 +685,27 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     try {
       const patientId = courseForm.patientId;
         if (!appClient) return;
+        if (courseForm.status !== "pending") {
+          await appClient.saveCourse({
+            ...courseForm,
+            status: "pending"
+          });
+          setCourseForm(null);
+          setCourseFormMode("full");
+          setCourseCompletionNeedsFacePhoto(false);
+          setCourseCompletionFacePhotoUpload(null);
+          await loadDashboard();
+          const refreshed = await appClient.getPatientDetail(patientId).catch(() => null);
+          if (!refreshed) {
+            setScreen({ name: "dashboard" });
+            showToast("Course moved back to pending intake.");
+            return;
+          }
+          setPatientDetail(refreshed);
+          setScreen({ name: "patient", patientId });
+          showToast("Course moved back to pending intake.");
+          return;
+        }
         await appClient.deleteCourse(courseForm.id);
         setCourseForm(null);
         setCourseFormMode("full");
@@ -1302,7 +1323,6 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
               })()}
               onGenerateConsentForm={(courseId) => void generateConsentFormForCourse(courseId)}
               onUploadConsentForm={(patientId, courseId) => void uploadConsentFormForCourse(patientId, courseId)}
-              onDeleteConsentForm={(patientId, courseId) => void deleteConsentFormForCourse(patientId, courseId)}
               onOpenConsentForm={(patientId, courseId) => void (async () => {
                 if (!appClient) return;
               const detail = await appClient.getPatientDetail(patientId);
@@ -1382,7 +1402,6 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
               onOpenPdf={(asset) => void appClient?.openAsset(asset)}
               onGenerateConsentForm={(courseId) => void generateConsentFormForCourse(courseId)}
               onUploadConsentForm={(patientId, courseId) => void uploadConsentFormForCourse(patientId, courseId)}
-              onDeleteConsentForm={(patientId, courseId) => void deleteConsentFormForCourse(patientId, courseId)}
               onDeleteVisit={(visitId) => void (async () => {
               if (!appClient) return;
               await appClient.deleteVisit(visitId);
@@ -1715,7 +1734,6 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
                   void generateConsentFormForCourse(targetCourse.course.id);
                 }}
                 onUploadConsentForm={() => void uploadConsentFormForCourse(targetCourse.course.patientId, targetCourse.course.id)}
-                onDeleteConsentForm={() => void deleteConsentFormForCourse(targetCourse.course.patientId, targetCourse.course.id)}
               />
             );
           })() : null}

@@ -1239,8 +1239,8 @@ input.search {
   gap: 0.6rem;
 }
 
-.consent-signing-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+.consent-step-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .signature-pad-shell {
@@ -1286,6 +1286,15 @@ input.search {
   align-items: center;
 }
 
+.consent-step-summary {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.consent-step-summary p {
+  margin: 0;
+}
+
 .consent-pregnancy-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 180px;
@@ -1313,6 +1322,10 @@ input.search {
   }
 
   .consent-pregnancy-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .consent-step-grid {
     grid-template-columns: 1fr;
   }
 

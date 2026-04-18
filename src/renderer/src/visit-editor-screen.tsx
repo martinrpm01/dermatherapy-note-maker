@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { AppClient, SettingsPayload, VisitEditorState } from "../../shared/types";
 import {
+  applyAutomaticDoseValuesToSiteSnapshot,
   NOTE_TYPE_LABELS,
   formatBloodPressure,
   formatHeartRate,
@@ -12,6 +13,16 @@ import {
   isOtvTreatmentNumber
 } from "../../shared/note-rules";
 import { useResolvedAssetUrl } from "./asset-url";
+
+const STANDARD_PRESCRIBED_FRACTION_OPTIONS = [8, 10, 12, 15] as const;
+
+function getFractionSelectionFromValue(value: number | null | undefined, options: readonly number[]) {
+  if (!(typeof value === "number" && value > 0)) {
+    return "";
+  }
+
+  return options.includes(value) ? String(value) : "other";
+}
 
 function ExistingPhotoTile(props: {
   appClient: AppClient | null;
@@ -38,6 +49,12 @@ function formatTreatmentDepthLabel(value: string) {
   return /mm\b/i.test(normalized) ? normalized : `${normalized} mm`;
 }
 
+function formatDoseFieldLabel(prefix: string, isTwoLesionLayout: boolean, _siteNumber: 1 | 2, bodyLocation: string, index: number) {
+  return isTwoLesionLayout
+    ? `${prefix} Lesion ${index + 1}${bodyLocation ? ` (${bodyLocation})` : ""}`
+    : prefix;
+}
+
 export function VisitEditorScreen(props: {
   appClient: AppClient | null;
   visitEditor: VisitEditorState;
@@ -62,6 +79,7 @@ export function VisitEditorScreen(props: {
   onOpenLatestPdf: (asset: VisitEditorState["generatedPdfs"][number]["fileAsset"]) => void;
 }) {
   const [activePanel, setActivePanel] = useState<"details" | "preview">("details");
+  const [projectedFractionModes, setProjectedFractionModes] = useState<Record<number, string>>({});
   const editor = props.visitEditor;
   const showPrescribedFractionsInput =
     editor.note.noteType !== "consult_sim" &&
@@ -80,6 +98,49 @@ export function VisitEditorScreen(props: {
     isTwoLesionLayout
       ? `${prefix} Lesion ${index + 1}${bodyLocation ? ` (${bodyLocation})` : ""}`
       : prefix;
+  const getCurrentProjectedFractionsValue = (site: VisitEditorState["note"]["structuredFields"]["siteSnapshots"][number]) =>
+    isTwoLesionLayout
+      ? site.prescribedFractions ?? null
+      : editor.note.structuredFields.projectedFractionsInput ?? site.prescribedFractions ?? null;
+
+  useEffect(() => {
+    setProjectedFractionModes((current) => {
+      const next: Record<number, string> = {};
+      sortedSiteSnapshots.forEach((site) => {
+        const derivedSelection = getFractionSelectionFromValue(
+          getCurrentProjectedFractionsValue(site),
+          STANDARD_PRESCRIBED_FRACTION_OPTIONS
+        );
+        next[site.siteNumber] = derivedSelection || (current[site.siteNumber] === "other" ? "other" : "");
+      });
+      return next;
+    });
+  }, [editor.note.structuredFields.projectedFractionsInput, editor.note.structuredFields.siteSnapshots, isTwoLesionLayout]);
+
+  const getProjectedFractionsSelection = (site: VisitEditorState["note"]["structuredFields"]["siteSnapshots"][number]) => {
+    const currentFractions = getCurrentProjectedFractionsValue(site);
+    const derivedSelection = getFractionSelectionFromValue(currentFractions, STANDARD_PRESCRIBED_FRACTION_OPTIONS);
+    return derivedSelection || (projectedFractionModes[site.siteNumber] === "other" ? "other" : "");
+  };
+  const getCurrentPrescribedFractionsValue = (site: VisitEditorState["note"]["structuredFields"]["siteSnapshots"][number]) =>
+    isTwoLesionLayout
+      ? site.prescribedFractions ?? null
+      : editor.note.structuredFields.prescribedFractionsInput ?? site.prescribedFractions ?? null;
+  const getPrescribedFractionsSelection = (site: VisitEditorState["note"]["structuredFields"]["siteSnapshots"][number]) => {
+    const currentFractions = getCurrentPrescribedFractionsValue(site);
+    if (site.doseManuallyAdjusted) {
+      return "other";
+    }
+
+    if (
+      typeof currentFractions === "number" &&
+      STANDARD_PRESCRIBED_FRACTION_OPTIONS.includes(currentFractions as (typeof STANDARD_PRESCRIBED_FRACTION_OPTIONS)[number])
+    ) {
+      return String(currentFractions);
+    }
+
+    return currentFractions ? "other" : "";
+  };
   return (
     <section className={`screen visit-screen${isTwoLesionLayout ? " two-lesion-screen" : ""}`}>
       <div className="screen-header">
@@ -158,6 +219,13 @@ export function VisitEditorScreen(props: {
                       getMaxSitePrescribedFractions(current.note.structuredFields.siteSnapshots) ??
                       current.note.structuredFields.projectedFractionsInput ??
                       null;
+                    const nextSiteSnapshots = current.note.structuredFields.siteSnapshots.map((site) =>
+                      applyAutomaticDoseValuesToSiteSnapshot(
+                        { ...site, doseManuallyAdjusted: Boolean(site.doseManuallyAdjusted) },
+                        nextTreatmentNumber,
+                        site.prescribedFractions ?? projectedFractions
+                      )
+                    );
                     return {
                       ...current,
                       note: {
@@ -170,10 +238,7 @@ export function VisitEditorScreen(props: {
                             nextTreatmentNumber === 1 && projectedFractions && projectedFractions > 0
                               ? projectedFractions
                               : current.note.structuredFields.prescribedFractionsInput,
-                          siteSnapshots: current.note.structuredFields.siteSnapshots.map((site) => ({
-                            ...site,
-                            cumulativeDose: site.dailyDose * nextTreatmentNumber
-                          }))
+                          siteSnapshots: nextSiteSnapshots
                         }
                       }
                     };
@@ -197,7 +262,13 @@ export function VisitEditorScreen(props: {
                       noteType: num !== null ? getSuggestedNoteType(num) : current.note.noteType,
                       structuredFields: {
                         ...current.note.structuredFields,
-                        siteSnapshots: current.note.structuredFields.siteSnapshots.map((site) => ({ ...site, cumulativeDose: site.dailyDose * (num ?? 0) }))
+                        siteSnapshots: current.note.structuredFields.siteSnapshots.map((site) =>
+                          applyAutomaticDoseValuesToSiteSnapshot(
+                            { ...site, doseManuallyAdjusted: Boolean(site.doseManuallyAdjusted) },
+                            num,
+                            site.prescribedFractions ?? undefined
+                          )
+                        )
                       }
                     }
                   }), { regenerate: true, overwriteEdited: !props.textDirty });
@@ -211,86 +282,284 @@ export function VisitEditorScreen(props: {
               </label>
             ) : null}
             {showProjectedFractionsInput
-              ? sortedSiteSnapshots.map((site, index) => (
-                  <label key={`projected-fractions-${site.siteNumber}`}>
-                    {formatFractionLabel("Projected Fractions", site.siteNumber, site.bodyLocation, index)}
-                    <input
-                      type="number"
-                      min={1}
-                      max={15}
-                      value={
-                        isTwoLesionLayout
-                          ? site.prescribedFractions ?? ""
-                          : editor.note.structuredFields.projectedFractionsInput ?? site.prescribedFractions ?? ""
-                      }
-                      onChange={(event) => {
-                        const projectedFractions = event.target.value ? Number(event.target.value) : null;
-                        props.onUpdate((current) => {
-                          const nextSiteSnapshots = current.note.structuredFields.siteSnapshots.map((snapshot) =>
-                            snapshot.siteNumber === site.siteNumber
-                              ? { ...snapshot, prescribedFractions: projectedFractions ?? undefined }
-                              : snapshot
-                          );
-                          const overallProjectedFractions = getMaxSitePrescribedFractions(nextSiteSnapshots);
-                          return {
-                            ...current,
-                            note: {
-                              ...current.note,
-                              structuredFields: {
-                                ...current.note.structuredFields,
-                                projectedFractionsInput: overallProjectedFractions,
-                                siteSnapshots: nextSiteSnapshots
+              ? sortedSiteSnapshots.flatMap((site, index) => {
+                  const fractionSelection = getProjectedFractionsSelection(site);
+                  const currentFractions = getCurrentProjectedFractionsValue(site);
+
+                  return [
+                    <label key={`projected-fractions-select-${site.siteNumber}`}>
+                      {formatFractionLabel("Projected Fractions", site.siteNumber, site.bodyLocation, index)}
+                      <select
+                        value={fractionSelection}
+                        onChange={(event) => {
+                          const selection = event.target.value;
+                          setProjectedFractionModes((current) => ({ ...current, [site.siteNumber]: selection }));
+                          props.onUpdate((current) => {
+                            const nextSiteSnapshots = current.note.structuredFields.siteSnapshots.map((snapshot) =>
+                              snapshot.siteNumber === site.siteNumber
+                                ? {
+                                    ...snapshot,
+                                    prescribedFractions:
+                                      selection && selection !== "other"
+                                        ? Number(selection)
+                                        : getFractionSelectionFromValue(
+                                            getCurrentProjectedFractionsValue(snapshot),
+                                            STANDARD_PRESCRIBED_FRACTION_OPTIONS
+                                          ) === "other"
+                                          ? getCurrentProjectedFractionsValue(snapshot) ?? undefined
+                                          : undefined
+                                  }
+                                : snapshot
+                            );
+                            const overallProjectedFractions = getMaxSitePrescribedFractions(nextSiteSnapshots);
+                            return {
+                              ...current,
+                              note: {
+                                ...current.note,
+                                structuredFields: {
+                                  ...current.note.structuredFields,
+                                  projectedFractionsInput: overallProjectedFractions,
+                                  siteSnapshots: nextSiteSnapshots
+                                }
                               }
-                            }
-                          };
-                        }, { regenerate: true, overwriteEdited: !props.textDirty });
-                      }}
-                    />
-                  </label>
-                ))
+                            };
+                          }, { regenerate: true, overwriteEdited: !props.textDirty });
+                        }}
+                      >
+                        <option value="">Select Fractions</option>
+                        {STANDARD_PRESCRIBED_FRACTION_OPTIONS.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                        <option value="other">Other</option>
+                      </select>
+                    </label>,
+                    ...(fractionSelection === "other"
+                      ? [
+                          <label key={`projected-fractions-manual-${site.siteNumber}`}>
+                            {formatFractionLabel("Actual Projected Fractions", site.siteNumber, site.bodyLocation, index)}
+                            <input
+                              type="number"
+                              min={1}
+                              max={30}
+                              value={currentFractions ?? ""}
+                              onChange={(event) => {
+                                const projectedFractions = event.target.value ? Number(event.target.value) : null;
+                                props.onUpdate((current) => {
+                                  const nextSiteSnapshots = current.note.structuredFields.siteSnapshots.map((snapshot) =>
+                                    snapshot.siteNumber === site.siteNumber
+                                      ? { ...snapshot, prescribedFractions: projectedFractions ?? undefined }
+                                      : snapshot
+                                  );
+                                  const overallProjectedFractions = getMaxSitePrescribedFractions(nextSiteSnapshots);
+                                  return {
+                                    ...current,
+                                    note: {
+                                      ...current.note,
+                                      structuredFields: {
+                                        ...current.note.structuredFields,
+                                        projectedFractionsInput: overallProjectedFractions,
+                                        siteSnapshots: nextSiteSnapshots
+                                      }
+                                    }
+                                  };
+                                }, { regenerate: true, overwriteEdited: !props.textDirty });
+                              }}
+                            />
+                          </label>
+                        ]
+                      : [])
+                  ];
+                })
               : null}
             {showPrescribedFractionsInput
-              ? sortedSiteSnapshots.map((site, index) => (
-                  <label key={`prescribed-fractions-${site.siteNumber}`}>
-                    {formatFractionLabel("Prescribed Fractions", site.siteNumber, site.bodyLocation, index)}
+              ? sortedSiteSnapshots.flatMap((site, index) => {
+                  const fractionSelection = getPrescribedFractionsSelection(site);
+                  const currentFractions = getCurrentPrescribedFractionsValue(site);
+
+                  return [
+                    <label key={`prescribed-fractions-select-${site.siteNumber}`}>
+                      {formatFractionLabel("Prescribed Fractions", site.siteNumber, site.bodyLocation, index)}
+                      <select
+                        value={fractionSelection}
+                        onChange={(event) => {
+                          const selection = event.target.value;
+                          props.onUpdate((current) => {
+                            const nextSiteSnapshots = current.note.structuredFields.siteSnapshots.map((snapshot) => {
+                              if (snapshot.siteNumber !== site.siteNumber) {
+                                return applyAutomaticDoseValuesToSiteSnapshot(
+                                  { ...snapshot, doseManuallyAdjusted: Boolean(snapshot.doseManuallyAdjusted) },
+                                  current.note.treatmentNumber,
+                                  snapshot.prescribedFractions ?? undefined
+                                );
+                              }
+
+                              if (selection === "other") {
+                                return {
+                                  ...snapshot,
+                                  prescribedFractions: undefined,
+                                  dailyDose: 0,
+                                  totalDose: 0,
+                                  cumulativeDose: 0,
+                                  doseManuallyAdjusted: true
+                                };
+                              }
+
+                              const mappedFractions = selection ? Number(selection) : null;
+                              return applyAutomaticDoseValuesToSiteSnapshot(
+                                {
+                                  ...snapshot,
+                                  prescribedFractions: mappedFractions ?? undefined,
+                                  doseManuallyAdjusted: false
+                                },
+                                current.note.treatmentNumber,
+                                mappedFractions ?? undefined
+                              );
+                            });
+                            const overallPrescribedFractions = getMaxSitePrescribedFractions(nextSiteSnapshots);
+                            return {
+                              ...current,
+                              course: {
+                                ...current.course,
+                                prescribedFractions: overallPrescribedFractions ?? 0
+                              },
+                              note: {
+                                ...current.note,
+                                structuredFields: {
+                                  ...current.note.structuredFields,
+                                  prescribedFractionsInput: overallPrescribedFractions,
+                                  siteSnapshots: nextSiteSnapshots
+                                }
+                              }
+                            };
+                          }, { regenerate: true, overwriteEdited: !props.textDirty });
+                        }}
+                      >
+                        <option value="">Select Fractions</option>
+                        {STANDARD_PRESCRIBED_FRACTION_OPTIONS.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                        <option value="other">Other</option>
+                      </select>
+                    </label>,
+                    ...(fractionSelection === "other"
+                      ? [
+                          <label key={`prescribed-fractions-manual-${site.siteNumber}`}>
+                            {formatFractionLabel("Actual Prescribed Fractions", site.siteNumber, site.bodyLocation, index)}
+                            <input
+                              type="number"
+                              min={1}
+                              max={30}
+                              value={currentFractions ?? ""}
+                              onChange={(event) => {
+                                const prescribedFractions = event.target.value ? Number(event.target.value) : null;
+                                props.onUpdate((current) => {
+                                  const nextSiteSnapshots = current.note.structuredFields.siteSnapshots.map((snapshot) =>
+                                    snapshot.siteNumber === site.siteNumber
+                                      ? {
+                                          ...snapshot,
+                                          prescribedFractions: prescribedFractions ?? undefined,
+                                          doseManuallyAdjusted: true
+                                        }
+                                      : snapshot
+                                  );
+                                  const overallPrescribedFractions = getMaxSitePrescribedFractions(nextSiteSnapshots);
+                                  return {
+                                    ...current,
+                                    course: {
+                                      ...current.course,
+                                      prescribedFractions: overallPrescribedFractions ?? 0
+                                    },
+                                    note: {
+                                      ...current.note,
+                                      structuredFields: {
+                                        ...current.note.structuredFields,
+                                        prescribedFractionsInput: overallPrescribedFractions,
+                                        siteSnapshots: nextSiteSnapshots
+                                      }
+                                    }
+                                  };
+                                }, { regenerate: true, overwriteEdited: !props.textDirty });
+                              }}
+                            />
+                          </label>
+                        ]
+                      : [])
+                  ];
+                })
+              : null}
+            {editor.note.noteType !== "consult_sim"
+              ? sortedSiteSnapshots.flatMap((site, index) =>
+                  getPrescribedFractionsSelection(site) === "other"
+                    ? [
+                  <label key={`daily-dose-${site.siteNumber}`}>
+                    {formatDoseFieldLabel("Daily Dose (cGy)", isTwoLesionLayout, site.siteNumber, site.bodyLocation, index)}
                     <input
                       type="number"
-                      min={1}
-                      max={15}
-                      value={
-                        isTwoLesionLayout
-                          ? site.prescribedFractions ?? ""
-                          : editor.note.structuredFields.prescribedFractionsInput ?? site.prescribedFractions ?? ""
-                      }
+                      min={0}
+                      value={site.dailyDose > 0 ? site.dailyDose : ""}
                       onChange={(event) => {
-                        const prescribedFractions = event.target.value ? Number(event.target.value) : null;
+                        const dailyDose = event.target.value ? Number(event.target.value) : 0;
                         props.onUpdate((current) => {
-                          const nextSiteSnapshots = current.note.structuredFields.siteSnapshots.map((snapshot) =>
-                            snapshot.siteNumber === site.siteNumber
-                              ? { ...snapshot, prescribedFractions: prescribedFractions ?? undefined }
-                              : snapshot
-                          );
-                          const overallPrescribedFractions = getMaxSitePrescribedFractions(nextSiteSnapshots);
+                          const treatmentNumber = current.note.treatmentNumber ?? 0;
                           return {
                             ...current,
-                            course: {
-                              ...current.course,
-                              prescribedFractions: overallPrescribedFractions ?? 0
-                            },
                             note: {
                               ...current.note,
                               structuredFields: {
                                 ...current.note.structuredFields,
-                                prescribedFractionsInput: overallPrescribedFractions,
-                                siteSnapshots: nextSiteSnapshots
+                                siteSnapshots: current.note.structuredFields.siteSnapshots.map((snapshot) =>
+                                  snapshot.siteNumber === site.siteNumber
+                                    ? {
+                                        ...snapshot,
+                                        dailyDose,
+                                        cumulativeDose: dailyDose * treatmentNumber,
+                                        doseManuallyAdjusted: true
+                                      }
+                                    : snapshot
+                                )
                               }
                             }
                           };
                         }, { regenerate: true, overwriteEdited: !props.textDirty });
                       }}
                     />
+                  </label>,
+                  <label key={`total-dose-${site.siteNumber}`}>
+                    {formatDoseFieldLabel("Total Dose (cGy)", isTwoLesionLayout, site.siteNumber, site.bodyLocation, index)}
+                    <input
+                      type="number"
+                      min={0}
+                      value={site.totalDose > 0 ? site.totalDose : ""}
+                      onChange={(event) => {
+                        const totalDose = event.target.value ? Number(event.target.value) : 0;
+                        props.onUpdate((current) => ({
+                          ...current,
+                          note: {
+                            ...current.note,
+                            structuredFields: {
+                              ...current.note.structuredFields,
+                              siteSnapshots: current.note.structuredFields.siteSnapshots.map((snapshot) =>
+                                snapshot.siteNumber === site.siteNumber
+                                  ? {
+                                      ...snapshot,
+                                      totalDose,
+                                      doseManuallyAdjusted: true
+                                    }
+                                  : snapshot
+                              )
+                            }
+                          }
+                        }), { regenerate: true, overwriteEdited: !props.textDirty });
+                      }}
+                    />
                   </label>
-                ))
+                ]
+                    : []
+                )
               : null}
             {editor.note.noteType !== "consult_sim" ? (
               <label>

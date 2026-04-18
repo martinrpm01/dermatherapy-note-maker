@@ -263,6 +263,7 @@ export interface SiteSnapshot {
   totalDose: number;
   cumulativeDose: number;
   prescribedFractions?: number;
+  doseManuallyAdjusted?: boolean;
 }
 
 export interface VisitStructuredFields {

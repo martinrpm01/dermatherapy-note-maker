@@ -789,6 +789,17 @@ export class RadiationNoteRepository implements StructuredDataStore {
     });
   }
 
+  updateCourseSiteDoseValues(courseId: string, siteNumber: 1 | 2, dailyDose: number, totalDose: number) {
+    this.mutate(() => {
+      this.run(
+        `UPDATE treatment_sites
+         SET daily_dose = ?, total_dose = ?, updated_at = ?
+         WHERE course_id = ? AND site_number = ?`,
+        [dailyDose, totalDose, nowIso(), courseId, siteNumber]
+      );
+    });
+  }
+
   setCourseStatus(courseId: string, status: TreatmentCourseRecord["status"], endDate: string | null = null) {
     const timestamp = nowIso();
     this.mutate(() => {

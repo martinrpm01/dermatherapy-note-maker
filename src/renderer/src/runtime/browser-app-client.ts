@@ -17,6 +17,7 @@ import type {
   PatientArchiveRestoreResult
 } from "../../../shared/archive";
 import {
+  applyAutomaticDoseValuesToSiteSnapshot,
   applyAutoNumberOfBlocks,
   buildDefaultStructuredFields,
   buildSiteSnapshots,
@@ -304,6 +305,14 @@ export class BrowserAppClient implements AppClient {
         ? visit.structuredFields.projectedFractionsInput ?? null
         : visit.structuredFields.prescribedFractionsInput ??
             (course.prescribedFractions > 0 ? course.prescribedFractions : null)
+    ).map((site) =>
+      visit.noteType === "consult_sim"
+        ? { ...site, doseManuallyAdjusted: Boolean(site.doseManuallyAdjusted) }
+        : applyAutomaticDoseValuesToSiteSnapshot(
+            { ...site, doseManuallyAdjusted: Boolean(site.doseManuallyAdjusted) },
+            visit.treatmentNumber,
+            site.prescribedFractions ?? null
+          )
     );
     const refreshedNote: VisitInput = {
       id: visit.id,
@@ -1079,6 +1088,9 @@ export class BrowserAppClient implements AppClient {
             }),
             projectedFractionsFromConsult
           );
+          siteSnapshots = siteSnapshots.map((site) =>
+            applyAutomaticDoseValuesToSiteSnapshot(site, treatmentNumber, site.prescribedFractions ?? null)
+          );
           structuredFields.siteSnapshots = siteSnapshots.map((site) => ({
             ...site,
             biopsyDate: site.biopsyDate || course.startDate || ""
@@ -1144,6 +1156,14 @@ export class BrowserAppClient implements AppClient {
                 : input.structuredFields.prescribedFractionsInput ?? site.prescribedFractions ?? undefined
           }))
         : input.structuredFields.siteSnapshots
+    ).map((site) =>
+      input.noteType === "consult_sim"
+        ? { ...site, doseManuallyAdjusted: Boolean(site.doseManuallyAdjusted) }
+        : applyAutomaticDoseValuesToSiteSnapshot(
+            { ...site, doseManuallyAdjusted: Boolean(site.doseManuallyAdjusted) },
+            input.treatmentNumber,
+            site.prescribedFractions ?? null
+          )
     );
 
     const prescribedFractionsInput =
@@ -1173,6 +1193,18 @@ export class BrowserAppClient implements AppClient {
         const storedSite = courseSites.find((site) => site.siteNumber === siteSnapshot.siteNumber);
         if ((storedSite?.prescribedFractions ?? null) !== sitePrescribedFractions) {
           structuredDataStore.updateCourseSitePrescribedFractions(course.id, siteSnapshot.siteNumber, sitePrescribedFractions);
+          courseUpdated = true;
+        }
+        if (
+          (storedSite?.dailyDose ?? 0) !== siteSnapshot.dailyDose ||
+          (storedSite?.totalDose ?? 0) !== siteSnapshot.totalDose
+        ) {
+          structuredDataStore.updateCourseSiteDoseValues(
+            course.id,
+            siteSnapshot.siteNumber,
+            siteSnapshot.dailyDose,
+            siteSnapshot.totalDose
+          );
           courseUpdated = true;
         }
       }

@@ -49,8 +49,8 @@ export function createEmptyDocumentOnlySiteInput(siteNumber: 1 | 2): DocumentOnl
     worksheetEyeShieldType: "",
     worksheetGumShieldPosition: "",
     worksheetLipShieldPosition: "",
-    dailyDose: 400,
-    totalDose: 4000,
+    dailyDose: 0,
+    totalDose: 0,
     projectedFractions: null
   };
 }

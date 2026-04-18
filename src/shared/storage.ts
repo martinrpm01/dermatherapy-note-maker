@@ -85,6 +85,7 @@ export interface StructuredDataStore {
   saveCourse(input: CourseInput): TreatmentCourseRecord;
   updateCoursePrescribedFractions(courseId: string, prescribedFractions: number): void;
   updateCourseSitePrescribedFractions(courseId: string, siteNumber: 1 | 2, prescribedFractions: number): void;
+  updateCourseSiteDoseValues(courseId: string, siteNumber: 1 | 2, dailyDose: number, totalDose: number): void;
   setCourseStatus(courseId: string, status: TreatmentCourseRecord["status"], endDate?: string | null): void;
   fetchSites(courseIds: string[]): TreatmentSiteRecord[];
   fetchCourseDocuments(courseId: string): CourseDocumentRecord[];
