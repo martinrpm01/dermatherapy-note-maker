@@ -337,7 +337,7 @@ export async function buildSimWorksheetPdfFromTemplateBytes(
   form.flatten();
 
   const bytes = await pdfDoc.save();
-  const baseName = sanitizeWorksheetName(`Sim Worksheet ${input.patient.firstName} ${input.patient.lastName}`.trim()) || "Sim Worksheet";
+  const baseName = sanitizeWorksheetName(`${input.patient.firstName} ${input.patient.lastName} Sim Worksheet`.trim()) || "Sim Worksheet";
   return {
     bytes,
     fileName: `${baseName}.pdf`,

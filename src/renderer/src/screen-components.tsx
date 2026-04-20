@@ -64,15 +64,6 @@ function buildPatientDetailMatches(details: PatientDetail[], search: string) {
   );
 }
 
-function getVisitSimWorksheet(visit: PatientDetail["courses"][number]["visits"][number]) {
-  return (
-    visit.attachments.find((attachment) =>
-      attachment.mimeType.toLowerCase().includes("pdf") &&
-      attachment.originalName.toLowerCase().startsWith("sim worksheet")
-    ) ?? null
-  );
-}
-
 function getCourseConsentDocument(courseDetail: PatientDetail["courses"][number]) {
   return courseDetail.documents.find((document) => document.documentType === "consent_form") ?? null;
 }
@@ -1089,7 +1080,7 @@ export function PatientScreen(props: {
               </p>
             </div>
             <div className="button-row">
-              <button onClick={() => props.onEditPathIntake(courseDetail.course.id)}>Consent</button>
+              <button onClick={() => props.onEditPathIntake(courseDetail.course.id)}>Documents</button>
               <button onClick={() => props.onEditCourse(courseDetail.course.id)}>Edit Course</button>
               <button className="primary" onClick={() => props.onOpenVisit(courseDetail.course.id, "next_treatment")}>
                 Start Today's Note
@@ -1117,8 +1108,6 @@ export function PatientScreen(props: {
           </div>
           <div className="visit-list">
             {courseDetail.visits.map((visit) => {
-              const simWorksheet = getVisitSimWorksheet(visit);
-              const consentDocument = getCourseConsentDocument(courseDetail);
               return (
                 <div className="visit-row" key={visit.note.id}>
                 <div>
@@ -1128,11 +1117,6 @@ export function PatientScreen(props: {
                 </div>
                 <div className="button-row">
                   <button onClick={() => props.onOpenVisit(courseDetail.course.id, "next_treatment", visit.note.id)}>Open Note</button>
-                  {visit.note.noteType === "consult_sim" && consentDocument ? (
-                    <button onClick={() => props.onOpenPdf(consentDocument.fileAsset)}>Open Consent Form</button>
-                  ) : null}
-                  {simWorksheet ? <button onClick={() => props.onOpenPdf(simWorksheet.fileAsset)}>Open Sim Worksheet</button> : null}
-                  {visit.note.pdfAsset ? <button onClick={() => props.onOpenPdf(visit.note.pdfAsset!)}>Open PDF</button> : null}
                   <button
                     style={{ color: "var(--danger)", borderColor: "var(--danger)" }}
                     onClick={() => {

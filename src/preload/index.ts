@@ -47,6 +47,7 @@ const api: ElectronApi = {
   generatePdf: (visitId) => ipcRenderer.invoke("visit:generatePdf", visitId),
   generateSimWorksheet: (visitId) => ipcRenderer.invoke("visit:generateSimWorksheet", visitId),
   generateConsentForm: (courseId) => ipcRenderer.invoke("course:generateConsentForm", courseId),
+  generateCourseSimWorksheet: (courseId) => ipcRenderer.invoke("course:generateSimWorksheet", courseId),
   finalizeConsentForm: (courseId, input) => ipcRenderer.invoke("course:finalizeConsentForm", courseId, input),
   uploadConsentForm: (courseId, upload) => ipcRenderer.invoke("course:uploadConsentForm", courseId, upload),
   deleteConsentForm: (courseId) => ipcRenderer.invoke("course:deleteConsentForm", courseId),

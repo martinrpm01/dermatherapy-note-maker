@@ -1477,18 +1477,21 @@ export function DocumentOnlyWorksheetModal(props: {
 export function CourseConsentModal(props: {
   courseName: string;
   hasConsentForm: boolean;
+  hasSimWorksheet: boolean;
   busy: boolean;
   onClose: () => void;
   onOpenConsentForm?: () => void;
   onGenerateConsentForm?: () => void;
   onUploadConsentForm?: () => void;
+  onOpenSimWorksheet?: () => void;
+  onGenerateSimWorksheet?: () => void;
 }) {
   return (
     <div className="modal-backdrop">
       <div className="modal-card">
-        <h3>Consent</h3>
+        <h3>Documents</h3>
         <p className="muted" style={{ marginTop: 0 }}>
-          Manage the consent form for {props.courseName || "this course"} after treatment setup has been completed.
+          Manage the course documents for {props.courseName || "this course"} after treatment setup has been completed.
         </p>
         <div className="subpanel">
           <h4 style={{ marginBottom: "0.6rem" }}>Consent Form</h4>
@@ -1504,6 +1507,19 @@ export function CourseConsentModal(props: {
                 <button onClick={props.onGenerateConsentForm}>Review / Sign Consent</button>
                 <button onClick={props.onUploadConsentForm}>Import Signed Consent</button>
               </>
+            )}
+          </div>
+        </div>
+        <div className="subpanel">
+          <h4 style={{ marginBottom: "0.6rem" }}>Sim Worksheet</h4>
+          <div className="button-row">
+            {props.hasSimWorksheet ? (
+              <>
+                <button onClick={props.onOpenSimWorksheet}>Open Sim Worksheet</button>
+                <button onClick={props.onGenerateSimWorksheet}>Regenerate Sim Worksheet</button>
+              </>
+            ) : (
+              <button onClick={props.onGenerateSimWorksheet}>Generate Sim Worksheet</button>
             )}
           </div>
         </div>

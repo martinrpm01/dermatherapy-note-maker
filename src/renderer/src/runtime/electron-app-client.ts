@@ -159,6 +159,10 @@ export class ElectronAppClient implements AppClient {
     return this.api.generateConsentForm(courseId);
   }
 
+  generateCourseSimWorksheet(courseId: string) {
+    return this.api.generateCourseSimWorksheet(courseId);
+  }
+
   finalizeConsentForm(courseId: string, input: Parameters<AppClient["finalizeConsentForm"]>[1]) {
     return this.api.finalizeConsentForm(courseId, input);
   }

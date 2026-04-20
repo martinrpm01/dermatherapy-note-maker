@@ -798,7 +798,6 @@ export class RadiationNoteService {
     }
 
     const sites = this.repository.fetchSites([courseId]);
-    const courseDocuments = this.repository.fetchCourseDocuments(courseId);
     const visits = this.repository.fetchVisitsByCourseIds([courseId]);
     const hasConsultVisit = visits.some((visit) => visit.note.noteType === "consult_sim");
     const shouldStartWithConsult = mode === "next_treatment" && !hasConsultVisit && course.prescribedFractions <= 0;
@@ -810,6 +809,7 @@ export class RadiationNoteService {
     }
 
     const noteType = mode === "consult_sim" || shouldStartWithConsult ? "consult_sim" : getSuggestedNoteType(treatmentNumber);
+      const courseDocuments = noteType === "consult_sim" ? this.repository.fetchCourseDocuments(courseId) : [];
       let siteSnapshots = applyAutoNumberOfBlocks(noteType, buildSiteSnapshots(sites, treatmentNumber));
       const settings = this.repository.getSettingsRecord();
       const latestConsultVisit = visits
@@ -1397,6 +1397,82 @@ export class RadiationNoteService {
       return persistedDocument;
     }
 
+  async generateCourseSimWorksheet(courseId: string) {
+    this.assertUnlocked();
+    const course = this.repository.fetchCourse(courseId);
+    if (!course) {
+      throw new Error("Course not found.");
+    }
+
+    const patient = this.repository.fetchPatient(course.patientId);
+    if (!patient) {
+      throw new Error("Patient not found.");
+    }
+
+    const sites = this.repository.fetchSites([course.id]);
+    const settings = this.repository.toSettingsView(this.repository.getSettingsRecord());
+    const existingDocument = this.repository
+      .fetchCourseDocuments(course.id)
+      .find((document) => document.documentType === "sim_worksheet") ?? null;
+    const siteSnapshots = fillMissingSitePrescribedFractions(
+      applyAutoNumberOfBlocks("consult_sim", buildSiteSnapshots(sites, null)),
+      null
+    );
+    const structuredFields = {
+      ...buildDefaultStructuredFields("consult_sim", siteSnapshots, settings.supervisingPhysician, {
+        biopsyDate: course.startDate || "",
+        lastTreatmentDate: course.startDate || ""
+      }),
+      siteSnapshots,
+      projectedFractionsInput:
+        siteSnapshots.find((site) => typeof site.prescribedFractions === "number" && site.prescribedFractions > 0)
+          ?.prescribedFractions ?? null
+    };
+    const worksheet = await buildSimWorksheetPdf({
+      patient,
+      course,
+      visit: {
+        id: `course_worksheet_${course.id}`,
+        patientId: patient.id,
+        courseId: course.id,
+        visitDate: course.simConsultDate || course.startDate || todayIso(),
+        noteType: "consult_sim",
+        treatmentNumber: null,
+        status: "draft",
+        therapistName: settings.defaultTherapist,
+        vitals: createEmptyVitals(),
+        structuredFields,
+        generatedText: "",
+        editedText: "",
+        pdfAsset: null,
+        createdAt: course.createdAt,
+        updatedAt: course.updatedAt
+      }
+    });
+
+    const documentsDir = this.assetStore.getCourseDocumentsDir(patient.id, course.id);
+    this.assetStore.ensureDirectory(documentsDir);
+    const outputPath = path.join(documentsDir, worksheet.fileName);
+    this.assetStore.writeBinaryFile(outputPath, worksheet.bytes);
+
+    const persistedDocument = (this.repository as AssetAwareStructuredDataStore).upsertCourseDocument(
+      course.id,
+      "sim_worksheet",
+      this.assetStore.createAssetReference(outputPath, "course_document")!,
+      worksheet.caption,
+      "application/pdf",
+      worksheet.fileName
+    );
+
+    const previousPath = existingDocument ? this.resolveAssetPath(existingDocument.fileAsset) : null;
+    if (previousPath && previousPath !== outputPath) {
+      this.assetStore.deleteFile(previousPath);
+      this.assetStore.cleanupEmptyDirectoryChain(path.dirname(previousPath), this.assetStore.rootDir);
+    }
+
+    return persistedDocument;
+  }
+
   async finalizeConsentForm(courseId: string, signing: ConsentSigningInput) {
     this.assertUnlocked();
     const course = this.repository.fetchCourse(courseId);
@@ -1536,6 +1612,10 @@ export class RadiationNoteService {
     if (!attachment) {
       return;
     }
+    const attachmentName = `${attachment.originalName || ""} ${attachment.caption || ""}`.toLowerCase();
+    if (attachmentName.includes("sim worksheet")) {
+      return;
+    }
 
     this.repository.deleteVisitAttachmentRecord(attachmentId);
     const attachmentPath = this.requireAssetPath(attachment.fileAsset, `visit attachment ${attachment.id}`);
@@ -1650,7 +1730,7 @@ export class RadiationNoteService {
       }
 
       const sites = this.repository.fetchSites([course.id]);
-      const courseDocuments = this.repository.fetchCourseDocuments(course.id);
+      const courseDocuments = visit.noteType === "consult_sim" ? this.repository.fetchCourseDocuments(course.id) : [];
       const refreshedSiteSnapshots = refreshVisitSiteSnapshots(
         visit.noteType,
         sites,

@@ -55,6 +55,13 @@ function formatDoseFieldLabel(prefix: string, isTwoLesionLayout: boolean, _siteN
     : prefix;
 }
 
+function isLegacySimWorksheetAttachment(
+  attachment: VisitEditorState["existingAttachments"][number]
+) {
+  const name = (attachment.originalName || attachment.caption || "").toLowerCase();
+  return name.includes("sim worksheet");
+}
+
 export function VisitEditorScreen(props: {
   appClient: AppClient | null;
   visitEditor: VisitEditorState;
@@ -62,7 +69,6 @@ export function VisitEditorScreen(props: {
   textDirty: boolean;
   onSaveDraft: () => void;
   onSaveAndGeneratePdf: () => void;
-  onGenerateSimWorksheet: () => void;
   onOpenPatient: () => void;
   onResetNoteText: () => void;
   onRemoveExistingPhoto: (photoId: string) => void;
@@ -172,9 +178,6 @@ export function VisitEditorScreen(props: {
             Note Preview
           </button>
           <button onClick={props.onSaveDraft}>Save Draft</button>
-          {editor.note.noteType === "consult_sim" ? (
-            <button onClick={props.onGenerateSimWorksheet}>Generate Sim Worksheet</button>
-          ) : null}
           <button className="primary" onClick={props.onSaveAndGeneratePdf}>
             Save + Generate PDF
           </button>
@@ -920,7 +923,9 @@ export function VisitEditorScreen(props: {
                   </div>
                   <div className="button-row">
                     <button onClick={() => props.onOpenExistingAttachment(attachment.fileAsset)}>Open</button>
-                    <button onClick={() => props.onRemoveExistingAttachment(attachment.id)}>Remove</button>
+                    {!isLegacySimWorksheetAttachment(attachment) ? (
+                      <button onClick={() => props.onRemoveExistingAttachment(attachment.id)}>Remove</button>
+                    ) : null}
                   </div>
                 </div>
               ))}

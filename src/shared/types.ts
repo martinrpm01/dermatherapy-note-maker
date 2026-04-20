@@ -18,7 +18,7 @@ export type AssetKind =
   | "generated_pdf"
   | "course_document"
   | "settings_logo";
-export type CourseDocumentType = "consent_form";
+export type CourseDocumentType = "consent_form" | "sim_worksheet";
 export type DocumentOnlyFileType = "consent_form" | "sim_worksheet";
 
 export interface AssetReference {
@@ -618,6 +618,7 @@ export interface AppClient {
   generatePdf: (visitId: string) => Promise<PdfGenerationResult>;
   generateSimWorksheet: (visitId: string) => Promise<VisitAttachmentRecord>;
   generateConsentForm: (courseId: string) => Promise<CourseDocumentRecord>;
+  generateCourseSimWorksheet: (courseId: string) => Promise<CourseDocumentRecord>;
   finalizeConsentForm: (courseId: string, input: ConsentSigningInput) => Promise<CourseDocumentRecord>;
   uploadConsentForm: (courseId: string, upload: StoredAssetUpload) => Promise<CourseDocumentRecord>;
   deleteConsentForm: (courseId: string) => Promise<void>;

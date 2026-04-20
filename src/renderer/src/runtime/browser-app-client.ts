@@ -291,7 +291,7 @@ export class BrowserAppClient implements AppClient {
     }
 
     const sites = structuredDataStore.fetchSites([course.id]);
-    const courseDocuments = structuredDataStore.fetchCourseDocuments(course.id);
+    const courseDocuments = visit.noteType === "consult_sim" ? structuredDataStore.fetchCourseDocuments(course.id) : [];
     const refreshedSiteSnapshots = refreshVisitSiteSnapshots(
       visit.noteType,
       sites,
@@ -1043,7 +1043,6 @@ export class BrowserAppClient implements AppClient {
     }
 
     const sites = structuredDataStore.fetchSites([courseId]);
-    const courseDocuments = structuredDataStore.fetchCourseDocuments(course.id);
     const visits = structuredDataStore.fetchVisitsByCourseIds([courseId]);
     const hasConsultVisit = visits.some((visit) => visit.note.noteType === "consult_sim");
     const shouldStartWithConsult = mode === "next_treatment" && !hasConsultVisit && course.prescribedFractions <= 0;
@@ -1053,6 +1052,7 @@ export class BrowserAppClient implements AppClient {
     }
 
     const noteType = mode === "consult_sim" || shouldStartWithConsult ? "consult_sim" : getSuggestedNoteType(treatmentNumber);
+    const courseDocuments = noteType === "consult_sim" ? structuredDataStore.fetchCourseDocuments(course.id) : [];
       let siteSnapshots = applyAutoNumberOfBlocks(noteType, buildSiteSnapshots(sites, treatmentNumber));
       const settings = structuredDataStore.getSettingsRecord();
       const latestConsultVisit = visits
@@ -1712,6 +1712,89 @@ export class BrowserAppClient implements AppClient {
       return persistedDocument;
     }
 
+  async generateCourseSimWorksheet(courseId: string) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    const course = structuredDataStore.fetchCourse(courseId);
+    if (!course) {
+      throw new Error("Course not found.");
+    }
+
+    const patient = structuredDataStore.fetchPatient(course.patientId);
+    if (!patient) {
+      throw new Error("Patient not found.");
+    }
+
+    const settings = structuredDataStore.toSettingsView(structuredDataStore.getSettingsRecord());
+    const sites = structuredDataStore.fetchSites([course.id]);
+    const existingDocument = structuredDataStore
+      .fetchCourseDocuments(course.id)
+      .find((document) => document.documentType === "sim_worksheet") ?? null;
+    const siteSnapshots = fillMissingSitePrescribedFractions(
+      applyAutoNumberOfBlocks("consult_sim", buildSiteSnapshots(sites, null)),
+      null
+    );
+    const structuredFields = {
+      ...buildDefaultStructuredFields("consult_sim", siteSnapshots, settings.supervisingPhysician, {
+        biopsyDate: course.startDate || "",
+        lastTreatmentDate: course.startDate || ""
+      }),
+      siteSnapshots,
+      projectedFractionsInput:
+        siteSnapshots.find((site) => typeof site.prescribedFractions === "number" && site.prescribedFractions > 0)
+          ?.prescribedFractions ?? null
+    };
+    const worksheet = await buildSimWorksheetPdfFromTemplateBytes(await this.readSimWorksheetTemplateBytes(), {
+      patient,
+      course,
+      visit: {
+        id: `course_worksheet_${course.id}`,
+        patientId: patient.id,
+        courseId: course.id,
+        visitDate: course.simConsultDate || course.startDate || todayIso(),
+        noteType: "consult_sim",
+        treatmentNumber: null,
+        status: "draft",
+        therapistName: settings.defaultTherapist,
+        vitals: createEmptyVitals(),
+        structuredFields,
+        generatedText: "",
+        editedText: "",
+        pdfAsset: null,
+        createdAt: course.createdAt,
+        updatedAt: course.updatedAt
+      }
+    });
+
+    const filePath = binaryAssetStore.saveUpload(
+      {
+        name: worksheet.fileName,
+        mimeType: "application/pdf",
+        dataUrl: await this.bytesToDataUrl(worksheet.bytes, "application/pdf")
+      },
+      binaryAssetStore.getCourseDocumentsDir(patient.id, course.id),
+      worksheet.caption
+    );
+
+    const persistedDocument = structuredDataStore.upsertCourseDocument(
+      course.id,
+      "sim_worksheet",
+      filePath,
+      worksheet.caption,
+      "application/pdf",
+      worksheet.fileName
+    );
+
+    const previousPath = existingDocument ? this.getStoredAssetPath(binaryAssetStore, existingDocument.fileAsset) : null;
+    if (previousPath && previousPath !== filePath) {
+      this.deleteStoredFiles(binaryAssetStore, [previousPath]);
+    }
+
+    await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
+    return persistedDocument;
+  }
+
   async finalizeConsentForm(courseId: string, input: Parameters<AppClient["finalizeConsentForm"]>[1]) {
     this.assertUnlocked();
     const structuredDataStore = await this.getStructuredDataStore();
@@ -1865,6 +1948,10 @@ export class BrowserAppClient implements AppClient {
     const binaryAssetStore = await this.getBinaryAssetStore();
     const attachment = structuredDataStore.fetchVisitAttachment(attachmentId);
     if (!attachment) {
+      return;
+    }
+    const attachmentName = `${attachment.originalName || ""} ${attachment.caption || ""}`.toLowerCase();
+    if (attachmentName.includes("sim worksheet")) {
       return;
     }
 

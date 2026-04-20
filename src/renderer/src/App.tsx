@@ -636,39 +636,42 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     try {
       const isEditing = Boolean(courseForm.id);
       if (!appClient) return;
-        const nextCourseForm =
-          courseFormMode === "full" && courseForm.status === "pending"
-            ? { ...courseForm, status: "active" as const }
-            : courseForm;
-        const course = await appClient.saveCourse(nextCourseForm);
-        const shouldAttachFacePhoto =
-          courseFormMode === "full" &&
-          courseForm.status === "pending" &&
-          courseCompletionNeedsFacePhoto &&
-          courseCompletionFacePhotoUpload;
-        if (shouldAttachFacePhoto) {
-          const detail =
-            patientDetail?.patient.id === course.patientId
-              ? patientDetail
-              : await appClient.getPatientDetail(course.patientId);
-          if (!detail.patient.facePhoto) {
-            await appClient.savePatient({
-              ...toPatientFormInput(detail.patient),
-              facePhotoUpload: courseCompletionFacePhotoUpload
-            });
-          }
+      const isCompletingPendingCourse = courseFormMode === "full" && courseForm.status === "pending";
+      const nextCourseForm =
+        isCompletingPendingCourse
+          ? { ...courseForm, status: "active" as const }
+          : courseForm;
+      const course = await appClient.saveCourse(nextCourseForm);
+      const shouldAttachFacePhoto =
+        isCompletingPendingCourse &&
+        courseCompletionNeedsFacePhoto &&
+        courseCompletionFacePhotoUpload;
+      if (shouldAttachFacePhoto) {
+        const detail =
+          patientDetail?.patient.id === course.patientId
+            ? patientDetail
+            : await appClient.getPatientDetail(course.patientId);
+        if (!detail.patient.facePhoto) {
+          await appClient.savePatient({
+            ...toPatientFormInput(detail.patient),
+            facePhotoUpload: courseCompletionFacePhotoUpload
+          });
         }
-        setCourseForm(null);
-        setCourseFormMode("full");
-        setCourseCompletionFacePhotoUpload(null);
-        setCourseCompletionNeedsFacePhoto(false);
-        setScreen({ name: "patient", patientId: course.patientId });
-        await loadDashboard();
-        await loadPatient(course.patientId);
-        if (courseFormMode === "intake") {
-          showToast(isEditing ? "Path intake updated. Re-sign consent if details changed." : "Consent intake saved.");
+      }
+      if (isCompletingPendingCourse) {
+        await appClient.generateCourseSimWorksheet(course.id);
+      }
+      setCourseForm(null);
+      setCourseFormMode("full");
+      setCourseCompletionFacePhotoUpload(null);
+      setCourseCompletionNeedsFacePhoto(false);
+      setScreen({ name: "patient", patientId: course.patientId });
+      await loadDashboard();
+      await loadPatient(course.patientId);
+      if (courseFormMode === "intake") {
+        showToast(isEditing ? "Path intake updated. Re-sign consent if details changed." : "Consent intake saved.");
       } else if (courseForm.status === "pending") {
-        showToast("Course setup completed.");
+        showToast("Course setup completed and sim worksheet generated.");
       } else {
         showToast(isEditing ? "Treatment course updated." : "Treatment course saved.");
       }
@@ -772,6 +775,22 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
       null;
     if (ownerPatientId) {
       await openConsentSigningForCourse(ownerPatientId, courseId);
+    }
+  }
+
+  async function generateCourseSimWorksheetForCourse(patientId: string, courseId: string) {
+    if (!appClient) return;
+    setBusy(true);
+    try {
+      await appClient.generateCourseSimWorksheet(courseId);
+      await loadDashboard();
+      await loadPatient(patientId);
+      showToast("Sim worksheet generated.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not generate the sim worksheet.";
+      showToast(message);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -937,22 +956,6 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
       if (revealTarget) {
         await appClient.revealAsset(revealTarget);
       }
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function generateSimWorksheetForVisit() {
-    if (!visitEditor || !appClient) {
-      return;
-    }
-
-    setBusy(true);
-    try {
-      const saved = await appClient.saveVisit(visitEditor.note);
-      await appClient.generateSimWorksheet(saved.id);
-      await loadVisit(visitEditor.course.id, "consult_sim", saved.id);
-      showToast("Sim worksheet generated and attached.");
     } finally {
       setBusy(false);
     }
@@ -1420,7 +1423,6 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
             textDirty={textDirty}
             onSaveDraft={() => void saveVisit(false)}
             onSaveAndGeneratePdf={() => void saveVisit(true)}
-            onGenerateSimWorksheet={() => void generateSimWorksheetForVisit()}
             onOpenPatient={() => void (async () => {
               if (!appClient) return;
               await appClient.saveVisit(visitEditor.note);
@@ -1718,10 +1720,12 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
               return null;
             }
             const consentDocument = targetCourse.documents.find((document) => document.documentType === "consent_form") ?? null;
+            const simWorksheetDocument = targetCourse.documents.find((document) => document.documentType === "sim_worksheet") ?? null;
             return (
               <CourseConsentModal
                 courseName={targetCourse.course.courseName || "this course"}
                 hasConsentForm={Boolean(consentDocument)}
+                hasSimWorksheet={Boolean(simWorksheetDocument)}
                 busy={busy}
                 onClose={() => setCourseConsentActions(null)}
                 onOpenConsentForm={() => {
@@ -1734,6 +1738,15 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
                   void generateConsentFormForCourse(targetCourse.course.id);
                 }}
                 onUploadConsentForm={() => void uploadConsentFormForCourse(targetCourse.course.patientId, targetCourse.course.id)}
+                onOpenSimWorksheet={() => {
+                  if (simWorksheetDocument) {
+                    void appClient?.openAsset(simWorksheetDocument.fileAsset);
+                  }
+                }}
+                onGenerateSimWorksheet={() => {
+                  setCourseConsentActions(null);
+                  void generateCourseSimWorksheetForCourse(targetCourse.course.patientId, targetCourse.course.id);
+                }}
               />
             );
           })() : null}
