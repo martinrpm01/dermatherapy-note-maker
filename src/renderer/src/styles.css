@@ -1368,7 +1368,7 @@ input.search {
   }
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1366px) and (pointer: coarse) {
   .patient-row-grouped-header,
   .patient-row-course-sub {
     flex-wrap: wrap;
@@ -1394,13 +1394,20 @@ input.search {
     padding: 0.45rem 0.72rem;
   }
 
-  .documents-button {
-    min-width: 108px;
-    min-height: 52px;
+  .course-action-row {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .course-action-row button {
+    min-width: 132px;
+    min-height: 56px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     text-align: center;
+    white-space: normal;
+    line-height: 1.15;
   }
 }
 
