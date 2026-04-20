@@ -1400,13 +1400,14 @@ input.search {
   }
 
   .course-action-row button {
-    min-width: 132px;
-    min-height: 56px;
+    min-width: 104px;
+    min-height: 50px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     text-align: center;
-    white-space: normal;
+    padding: 0.55rem 0.85rem;
+    white-space: nowrap;
     line-height: 1.15;
   }
 }
