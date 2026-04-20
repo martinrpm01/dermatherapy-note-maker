@@ -1080,7 +1080,7 @@ export function PatientScreen(props: {
               </p>
             </div>
             <div className="button-row">
-              <button onClick={() => props.onEditPathIntake(courseDetail.course.id)}>Documents</button>
+              <button className="documents-button" onClick={() => props.onEditPathIntake(courseDetail.course.id)}>Documents</button>
               <button onClick={() => props.onEditCourse(courseDetail.course.id)}>Edit Course</button>
               <button className="primary" onClick={() => props.onOpenVisit(courseDetail.course.id, "next_treatment")}>
                 Start Today's Note

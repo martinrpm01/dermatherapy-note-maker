@@ -1393,6 +1393,15 @@ input.search {
   .patient-row-actions button {
     padding: 0.45rem 0.72rem;
   }
+
+  .documents-button {
+    min-width: 108px;
+    min-height: 52px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
 }
 
 @media (max-width: 640px) {
