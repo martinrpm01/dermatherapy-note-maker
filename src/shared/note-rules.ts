@@ -170,7 +170,14 @@ export function formatAdditionalDevices(value: string): string {
 
 export function getCustomAdditionalDevices(value: string): string {
   return parseAdditionalDevices(value)
-    .filter((device) => !DEVICE_OPTIONS.includes(device as typeof DEVICE_OPTIONS[number]))
+    .filter((device) => {
+      const normalized = normalizeOptionValue(device);
+      return (
+        normalized !== normalizeOptionValue("Custom Shield") &&
+        normalized !== normalizeOptionValue("Special Set-up") &&
+        !DEVICE_OPTIONS.includes(device as typeof DEVICE_OPTIONS[number])
+      );
+    })
     .join(", ");
 }
 
@@ -237,6 +244,7 @@ export function siteHasVacLok(site: Pick<SiteSnapshot, "additionalDevices" | "wo
 export function formatAdditionalDevicesForSite(site: Pick<
   SiteSnapshot,
   | "additionalDevices"
+  | "worksheetPositioning"
   | "worksheetVacLokArea"
   | "worksheetEyeShieldType"
   | "worksheetGumShieldPosition"
@@ -245,6 +253,10 @@ export function formatAdditionalDevicesForSite(site: Pick<
   const devices = parseAdditionalDevices(site.additionalDevices).filter(
     (device) => normalizeOptionValue(device) !== normalizeOptionValue("Vac-Lok")
   );
+  if (siteHasVacLok(site)) {
+    const vacLokArea = normalizeVacLokAreaValue(site.worksheetVacLokArea);
+    devices.push(vacLokArea ? `Vac-Lok - ${vacLokArea}` : "Vac-Lok");
+  }
   if (!devices.length) {
     return "None";
   }
@@ -256,6 +268,15 @@ export function formatAdditionalDevicesForSite(site: Pick<
   return devices
     .map((device) => {
       const normalized = normalizeOptionValue(device);
+      if (
+        normalized === normalizeOptionValue("Custom Shield") ||
+        normalized === normalizeOptionValue("Special Set-up")
+      ) {
+        return "";
+      }
+      if (normalized === "vac-lok" || normalized.startsWith("vac-lok - ")) {
+        return device;
+      }
       if (normalized === "eye shield" && eyeShieldType) {
         return `Eye Shield - ${eyeShieldType}`;
       }
@@ -266,10 +287,11 @@ export function formatAdditionalDevicesForSite(site: Pick<
         return `Lip Shield - ${lipShieldPosition}`;
       }
       if (!DEVICE_OPTIONS.some((option) => normalizeOptionValue(option) === normalized)) {
-        return `Custom Shield - ${device}`;
+        return `Special Set-up - ${device}`;
       }
       return device;
     })
+    .filter(Boolean)
     .join(", ");
 }
 
@@ -651,6 +673,29 @@ export function getDefaultPhysicsComment(noteType: NoteType): string {
     : "";
 }
 
+export function shouldIncludeExamVitals(noteType: NoteType, includeExamVitals: boolean | undefined): boolean {
+  if (noteType !== "consult_sim" && noteType !== "otv") {
+    return false;
+  }
+
+  return includeExamVitals !== false;
+}
+
+export function stripExamVitalsSection(
+  renderedText: string,
+  noteType: NoteType,
+  includeExamVitals: boolean | undefined
+): string {
+  if (shouldIncludeExamVitals(noteType, includeExamVitals)) {
+    return renderedText;
+  }
+
+  return renderedText.replace(
+    /\nExam Vitals:\nBlood Pressure:[^\n]*\nHeart Rate:[^\n]*\nOxygen Saturation:[^\n]*\nWeight:[^\n]*\n?/,
+    "\n"
+  );
+}
+
 export function buildDefaultStructuredFields(
   noteType: NoteType,
   siteSnapshots: SiteSnapshot[],
@@ -669,6 +714,7 @@ export function buildDefaultStructuredFields(
   return {
     chiefComplaint: "",
     additionalNotes: "",
+    includeExamVitals: true,
     finalTreatment: false,
     prescribedFractionsInput: null,
     projectedFractionsInput: null,

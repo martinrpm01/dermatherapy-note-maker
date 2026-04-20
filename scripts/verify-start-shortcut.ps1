@@ -1,12 +1,12 @@
 param(
-  [string]$ShortcutPath = "$env:USERPROFILE\Desktop\Dermatherapy Note Maker.lnk",
+  [string]$ShortcutPath = "$env:USERPROFILE\Desktop\ClearSkin Hub.lnk",
   [int]$TimeoutSeconds = 45
 )
 
 $ErrorActionPreference = "Stop"
 
 $launchStatusPaths = @(
-  (Join-Path $env:APPDATA "Dermatherapy Note Maker\launch-status.json"),
+  (Join-Path $env:APPDATA "ClearSkin Hub\launch-status.json"),
   (Join-Path $env:APPDATA "dermatherapy-note-maker\launch-status.json"),
   (Join-Path $env:USERPROFILE "Desktop\PT notes\launch-status.json")
 )

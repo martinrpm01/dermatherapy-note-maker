@@ -52,7 +52,7 @@ const DATABASE_VERSION = 3;
 
 const DEFAULT_SETTINGS_RECORD: AppSettingsRecord = {
   id: 1,
-  appName: "Dermatherapy Note Maker",
+  appName: "ClearSkin Hub",
   pinHash: null,
   pinSalt: null,
   recoveryCodeHash: null,

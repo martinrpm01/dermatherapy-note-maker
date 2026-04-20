@@ -193,7 +193,7 @@ function buildBlockedPreflightSections(preflightResult: PatientArchivePreflightR
           category,
           "Invalid Archive",
           [
-            "Use a patient archive ZIP created by Dermatherapy Note Maker.",
+            "Use a patient archive ZIP created by ClearSkin Hub.",
             "If this ZIP was edited, re-export the patient archive from the source device before trying again."
           ]
         ).items.push(issue.message);
@@ -203,7 +203,7 @@ function buildBlockedPreflightSections(preflightResult: PatientArchivePreflightR
           category,
           "Unsupported Archive Version",
           [
-            "Use a restore archive created by a compatible version of Dermatherapy Note Maker.",
+            "Use a restore archive created by a compatible version of ClearSkin Hub.",
             "If the source device is ahead of this app version, update this desktop app before retrying."
           ]
         ).items.push(issue.message);
@@ -233,7 +233,7 @@ function buildBlockedPreflightSections(preflightResult: PatientArchivePreflightR
           category,
           "Invalid Archive",
           [
-            "Use a patient archive ZIP created by Dermatherapy Note Maker.",
+            "Use a patient archive ZIP created by ClearSkin Hub.",
             "If this ZIP was edited, re-export the patient archive from the source device before trying again."
           ]
         ).items.push(blocker.message);
@@ -355,6 +355,7 @@ function CrossLocationSearchResults(props: {
 export function LockScreen(props: {
   appName: string;
   logoSrc?: string;
+  defaultNoteLogoSrc: string;
   requiresPinSetup: boolean;
   statusMessage: string;
   unlockPin: string;
@@ -422,7 +423,11 @@ export function LockScreen(props: {
               </label>
               <div className="logo-settings">
                 <span className="strong">Dermatology Office Logo</span>
-                <img className="settings-logo-preview" src={props.setupSettings.dermatologyOfficeLogoUpload?.dataUrl || props.logoSrc} alt="Dermatology office logo preview" />
+                <img
+                  className="settings-logo-preview"
+                  src={props.setupSettings.dermatologyOfficeLogoUpload?.dataUrl || props.defaultNoteLogoSrc}
+                  alt="Dermatology office logo preview"
+                />
                 <div className="button-row">
                   <label className="logo-upload-button">
                     Upload Logo
@@ -473,7 +478,7 @@ export function InstallPromptBanner(props: {
         <p>
           {props.setupFirst
             ? "Do this first before setup, or you may need to enter everything again."
-            : "For the best iPad experience, install Dermatherapy Note Maker so it opens like a native app."}
+            : "For the best iPad experience, install ClearSkin Hub so it opens like a native app."}
         </p>
         <ol>
           <li>Tap the Safari Share button, the square with an upward arrow.</li>
@@ -865,7 +870,7 @@ export function DocumentOnlyScreen(props: {
             <h2>Consent / Sim Docs</h2>
             <p>Generate and sign consent forms first, then add worksheet-only setup when you need the sim worksheet.</p>
           </div>
-          <button className="primary" onClick={props.onAddRecord}>Add Document Record</button>
+          <button className="primary" onClick={props.onAddRecord}>Add Patient Info</button>
         </div>
         <label style={{ display: "block", maxWidth: "360px" }}>
           <input
@@ -1070,6 +1075,14 @@ export function PatientScreen(props: {
         </>
       ) : null}
       {regularCourses.map((courseDetail) => (
+        (() => {
+          const latestDraftVisit = [...courseDetail.visits]
+            .filter((visit) => visit.note.status === "draft" && !visit.note.pdfAsset)
+            .sort((left, right) => right.note.updatedAt.localeCompare(left.note.updatedAt))[0] ?? null;
+          const hasGeneratedFinalTreatmentNote = courseDetail.visits.some(
+            (visit) => Boolean(visit.note.pdfAsset) && Boolean(visit.note.structuredFields.finalTreatment)
+          );
+          return (
         <section className="panel" key={courseDetail.course.id}>
           <div className="section-header">
             <div>
@@ -1086,7 +1099,13 @@ export function PatientScreen(props: {
                 Start Today's Note
               </button>
               {courseDetail.course.status === "active" ? (
-                <button onClick={() => props.onCompleteCourse(courseDetail.course.id)}>Treatment Completed</button>
+                latestDraftVisit ? (
+                  <button onClick={() => props.onOpenVisit(courseDetail.course.id, "next_treatment", latestDraftVisit.note.id)}>
+                    Resume Last Note
+                  </button>
+                ) : hasGeneratedFinalTreatmentNote ? (
+                  <button onClick={() => props.onCompleteCourse(courseDetail.course.id)}>Treatment Completed</button>
+                ) : null
               ) : (
                 <button onClick={() => props.onRestoreCourse(courseDetail.course.id)}>Restore Course</button>
               )}
@@ -1133,6 +1152,8 @@ export function PatientScreen(props: {
             })}
           </div>
         </section>
+          );
+        })()
       ))}
     </section>
   );
@@ -1182,12 +1203,7 @@ export function CompletedScreen(props: {
       <div className="screen-header">
         <div>
           <h2>Completed Patients</h2>
-          <p>Patients with finished treatment history and no active course. Add a new course to return them to the active workflow, or export a patient archive for backup and transfer.</p>
-        </div>
-        <div className="button-row">
-          <button className="primary" disabled={props.archiveActionBusy} onClick={props.onImportArchive}>
-            {props.archiveActionBusy ? "Working..." : "Import Patient Archive"}
-          </button>
+          <p>Patients with finished treatment history and no active course. Add a new course to return them to the active workflow.</p>
         </div>
       </div>
       {exportResult || props.exportError ? (
@@ -1589,6 +1605,7 @@ export function SettingsScreen(props: {
   onChangePin: (next: { currentPin: string; nextPin: string; confirmPin: string }) => void;
   onSave: () => void;
   onSubmitPin: () => void;
+  onLockApp: () => void;
   onLogoSelected: (file: File | undefined) => void;
   onRemoveLogo: () => void;
 }) {
@@ -1639,6 +1656,7 @@ export function SettingsScreen(props: {
           <input type="password" inputMode="numeric" placeholder="New PIN" value={props.changePin.nextPin} onChange={(event) => props.onChangePin({ ...props.changePin, nextPin: event.target.value })} />
           <input type="password" inputMode="numeric" placeholder="Confirm New PIN" value={props.changePin.confirmPin} onChange={(event) => props.onChangePin({ ...props.changePin, confirmPin: event.target.value })} />
           <button onClick={props.onSubmitPin}>Update PIN</button>
+          <button className="ghost" onClick={props.onLockApp}>Lock App</button>
         </div>
       </div>
     </section>

@@ -21,7 +21,7 @@ function findLogoPath() {
   if (!logoPath) {
     throw new Error(
       [
-        "Could not find the Dermatherapy logo source file.",
+        "Could not find the ClearSkin Hub logo source file.",
         "Checked:",
         ...candidateLogoPaths.map((candidatePath) => `- ${candidatePath}`)
       ].join("\n")

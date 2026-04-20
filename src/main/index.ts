@@ -12,7 +12,7 @@ import type { RadiationNoteService } from "./backend";
 import { DesktopBinaryAssetStore } from "./storage/desktop-binary-asset-store";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const APP_NAME = "Dermatherapy Note Maker";
+const APP_NAME = "ClearSkin Hub";
 
 app.setName(APP_NAME);
 
@@ -26,7 +26,7 @@ const DESKTOP_PT_NOTES_DIR = path.join(app.getPath("desktop"), "PT notes");
 const DESKTOP_PATIENT_NOTES_DIR = path.join(app.getPath("desktop"), "All Patient Notes");
 const DESKTOP_PATIENT_ARCHIVES_DIR = path.join(app.getPath("desktop"), "Patient Archives");
 const LEGACY_USER_DATA_DIR = path.join(app.getPath("appData"), "dermatherapy-note-maker");
-const NOTE_LOGO_PATH = path.join(app.getAppPath(), "assets", "branding", "dermatherapy-note-logo.jpg");
+const NOTE_LOGO_PATH = path.join(app.getAppPath(), "assets", "branding", "clear-skin-note-logo.jpg");
 
 const launchStatusPath = path.join(USER_DATA, "launch-status.json");
 const startupLogPath = path.join(USER_DATA, "startup-debug.log");
@@ -69,7 +69,7 @@ let service!: RadiationNoteService;
 let assetStore!: DesktopBinaryAssetStore;
 
 function createWindow() {
-  const iconPath = path.join(app.getAppPath(), "assets", "branding", "dermatherapy-icon.png");
+  const iconPath = path.join(app.getAppPath(), "assets", "branding", "clear-skin-app-icon.png");
   const preloadPath = resolvePreloadPath();
   appendStartupLog(`createWindow preload=${preloadPath} exists=${existsSync(preloadPath)}`);
   writeLaunchStatus("loading");
@@ -80,7 +80,7 @@ function createWindow() {
     minHeight: 760,
     title: APP_NAME,
     icon: iconPath,
-    backgroundColor: "#f5f1e7",
+    backgroundColor: "#eef6fb",
     webPreferences: {
       preload: preloadPath,
       sandbox: false,

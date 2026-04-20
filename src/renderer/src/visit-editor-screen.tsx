@@ -10,7 +10,8 @@ import {
   getDefaultPhysicsComment,
   getMaxSitePrescribedFractions,
   getSuggestedNoteType,
-  isOtvTreatmentNumber
+  isOtvTreatmentNumber,
+  shouldIncludeExamVitals
 } from "../../shared/note-rules";
 import { useResolvedAssetUrl } from "./asset-url";
 
@@ -706,45 +707,76 @@ export function VisitEditorScreen(props: {
           )}
           {(editor.note.noteType === "consult_sim" || editor.note.noteType === "otv") && (
             <div>
-              <h4 style={{ margin: "0 0 0.4rem" }}>Exam Vitals</h4>
-              <div className="form-grid">
-                <label>
-                  Blood Pressure
+              <div className="summary-checkboxes" style={{ marginBottom: "0.4rem" }}>
+                <label className="checkbox-label">
                   <input
-                    placeholder="e.g. 120/80 mmHg"
-                    value={editor.note.vitals.bloodPressure}
-                    onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, bloodPressure: event.target.value } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
-                    onBlur={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, bloodPressure: formatBloodPressure(event.target.value) } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                    type="checkbox"
+                    checked={shouldIncludeExamVitals(
+                      editor.note.noteType,
+                      editor.note.structuredFields.includeExamVitals
+                    )}
+                    onChange={(event) =>
+                      props.onUpdate(
+                        (current) => ({
+                          ...current,
+                          note: {
+                            ...current.note,
+                            structuredFields: {
+                              ...current.note.structuredFields,
+                              includeExamVitals: event.target.checked
+                            }
+                          }
+                        }),
+                        { regenerate: true, overwriteEdited: !props.textDirty }
+                      )
+                    }
                   />
-                </label>
-                <label>
-                  Heart Rate
-                  <input
-                    placeholder="e.g. 72 BPM"
-                    value={editor.note.vitals.heartRate}
-                    onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, heartRate: event.target.value } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
-                    onBlur={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, heartRate: formatHeartRate(event.target.value) } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
-                  />
-                </label>
-                <label>
-                  O2 Saturation
-                  <input
-                    placeholder="e.g. 98%"
-                    value={editor.note.vitals.oxygenSaturation}
-                    onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, oxygenSaturation: event.target.value } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
-                    onBlur={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, oxygenSaturation: formatOxygenSaturation(event.target.value) } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
-                  />
-                </label>
-                <label>
-                  Weight
-                  <input
-                    placeholder="e.g. 165 lbs"
-                    value={editor.note.vitals.weight}
-                    onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, weight: event.target.value } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
-                    onBlur={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, weight: formatWeight(event.target.value) } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
-                  />
+                  Include Exam Vitals
                 </label>
               </div>
+              {shouldIncludeExamVitals(editor.note.noteType, editor.note.structuredFields.includeExamVitals) ? (
+                <>
+                  <h4 style={{ margin: "0 0 0.4rem" }}>Exam Vitals</h4>
+                  <div className="form-grid">
+                    <label>
+                      Blood Pressure
+                      <input
+                        placeholder="e.g. 120/80 mmHg"
+                        value={editor.note.vitals.bloodPressure}
+                        onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, bloodPressure: event.target.value } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                        onBlur={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, bloodPressure: formatBloodPressure(event.target.value) } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                      />
+                    </label>
+                    <label>
+                      Heart Rate
+                      <input
+                        placeholder="e.g. 72 BPM"
+                        value={editor.note.vitals.heartRate}
+                        onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, heartRate: event.target.value } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                        onBlur={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, heartRate: formatHeartRate(event.target.value) } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                      />
+                    </label>
+                    <label>
+                      O2 Saturation
+                      <input
+                        placeholder="e.g. 98%"
+                        value={editor.note.vitals.oxygenSaturation}
+                        onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, oxygenSaturation: event.target.value } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                        onBlur={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, oxygenSaturation: formatOxygenSaturation(event.target.value) } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                      />
+                    </label>
+                    <label>
+                      Weight
+                      <input
+                        placeholder="e.g. 165 lbs"
+                        value={editor.note.vitals.weight}
+                        onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, weight: event.target.value } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                        onBlur={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, weight: formatWeight(event.target.value) } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                      />
+                    </label>
+                  </div>
+                </>
+              ) : null}
             </div>
           )}
         </div>

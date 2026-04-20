@@ -39,7 +39,8 @@ import {
   PendingCourseIntakeModal
 } from "./modal-components";
 import { VisitEditorScreen } from "./visit-editor-screen";
-import brandLogo from "./assets/dermatherapy-note-logo.jpg";
+import appBrandLogo from "./assets/clear-skin-app-logo.jpg";
+import defaultNoteLogo from "./assets/clear-skin-note-logo.jpg";
 import brandIcon from "./assets/dermatherapy-icon.png";
 import type { PatientArchiveExportResult, PatientArchivePreflightResult, PatientArchiveRestoreResult } from "../../shared/archive";
 import type {
@@ -281,7 +282,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
   const [updateReady, setUpdateReady] = useState(false);
   const autosaveTimerRef = useRef<number | null>(null);
   const autosaveSignatureRef = useRef("");
-  const resolvedLogoSrc = useResolvedAssetUrl(appClient, boot?.settings.dermatologyOfficeLogoAsset);
+  const resolvedNoteLogoSrc = useResolvedAssetUrl(appClient, boot?.settings.dermatologyOfficeLogoAsset);
   const authGateActive = Boolean(pendingRecoveryCode) || browserRecoveryFlow !== "auth";
 
   useEffect(() => {
@@ -1097,14 +1098,15 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     );
   }
 
-  const activeLogoSrc = resolvedLogoSrc || brandLogo;
+  const activeLogoSrc = appBrandLogo;
+  const authLogoSrc = defaultNoteLogo;
 
   if (pendingRecoveryCode) {
     return (
       <>
         <RecoveryCodeScreen
           appName={boot.settings.appName}
-          logoSrc={activeLogoSrc}
+          logoSrc={authLogoSrc}
           recoveryCode={pendingRecoveryCode}
           onAcknowledge={() => setPendingRecoveryCode(null)}
         />
@@ -1129,7 +1131,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
       <>
         <PinRecoveryScreen
           appName={boot.settings.appName}
-          logoSrc={activeLogoSrc}
+          logoSrc={authLogoSrc}
           recoveryCode={recoveryCodeInput}
           nextPin={recoveryNextPin}
           confirmPin={recoveryConfirmPin}
@@ -1173,7 +1175,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
       <>
         <WipeLocalDataScreen
           appName={boot.settings.appName}
-          logoSrc={activeLogoSrc}
+          logoSrc={authLogoSrc}
           confirmationText={wipeConfirmationText}
           statusMessage={statusMessage}
           onConfirmationTextChange={setWipeConfirmationText}
@@ -1205,7 +1207,8 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
       <>
         <LockScreen
           appName={boot.settings.appName}
-          logoSrc={activeLogoSrc}
+          logoSrc={authLogoSrc}
+          defaultNoteLogoSrc={defaultNoteLogo}
           requiresPinSetup={boot.requiresPinSetup}
           statusMessage={statusMessage}
           unlockPin={unlockPin}
@@ -1278,7 +1281,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
       <div className="app-shell">
         <aside className="sidebar">
           <div>
-            <img className="brand-logo" src={activeLogoSrc} alt="Dermatherapy logo" />
+              <img className="brand-logo" src={activeLogoSrc} alt="ClearSkin Hub logo" />
             <h1>{boot.settings.appName}</h1>
             <p className="muted">Local-first treatment note workflow</p>
           </div>
@@ -1289,7 +1292,6 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
             <button className={screen.name === "documents" ? "nav active" : "nav"} onClick={() => setScreen({ name: "documents" })}>Consent / Sim Docs</button>
             <button className={screen.name === "settings" ? "nav active" : "nav"} onClick={() => setScreen({ name: "settings" })}>Settings</button>
           </nav>
-          <button className="ghost" onClick={() => void lockApp()}>Lock App</button>
         </aside>
 
         <main className="content-shell">
@@ -1590,12 +1592,13 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
           <SettingsScreen
             appClient={appClient}
             settingsPayload={settingsPayload}
-            defaultLogoSrc={brandLogo}
+            defaultLogoSrc={defaultNoteLogo}
             changePin={changePin}
             onSettingsChange={(settings) => setSettingsPayload({ ...settingsPayload, settings })}
             onChangePin={setChangePin}
             onSave={() => void saveSettingsForm()}
             onSubmitPin={() => void submitPinChange()}
+            onLockApp={() => void lockApp()}
             onLogoSelected={(file) => {
               void (async () => {
                 if (!file || !settingsPayload) return;

@@ -1,10 +1,10 @@
 {
-  "name": "Dermatherapy Note Maker",
-  "short_name": "DermaNotes",
+  "name": "ClearSkin Hub",
+  "short_name": "ClearSkin Hub",
   "display": "standalone",
   "start_url": "./",
-  "background_color": "#edf3f6",
-  "theme_color": "#406782",
+  "background_color": "#02457a",
+  "theme_color": "#02457a",
   "icons": [
     {
       "src": "/icon-192.png",

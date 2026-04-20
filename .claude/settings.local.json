@@ -4,15 +4,18 @@
       "Bash(npm test:*)",
       "Bash(npx tsc:*)",
       "Bash(npm run:*)",
-      "Bash(taskkill /F /IM \"Dermatherapy Note Maker.exe\")",
-      "Bash(powershell -Command \"Stop-Process -Name ''Dermatherapy Note Maker'' -Force -ErrorAction SilentlyContinue; Start-Sleep 2\")",
-      "Bash(powershell -Command \"Stop-Process -Name ''''Dermatherapy Note Maker'''' -Force -ErrorAction SilentlyContinue; Start-Sleep 1\")",
+      "Bash(taskkill /F /IM \"ClearSkin Hub.exe\")",
+      "Bash(powershell -Command \"Stop-Process -Name ''ClearSkin Hub'' -Force -ErrorAction SilentlyContinue; Start-Sleep 2\")",
+      "Bash(powershell -Command \"Stop-Process -Name ''''ClearSkin Hub'''' -Force -ErrorAction SilentlyContinue; Start-Sleep 1\")",
       "Bash(powershell -Command \"Get-ChildItem $env:APPDATA | Where-Object {$_me -like ''''*derm*'''' -or $_me -like ''''*note*'''' -or $_me -like ''''*radiation*''''}\")",
       "Bash(powershell -Command \"Get-ChildItem ''C:\\\\Users\\\\cobra\\\\AppData\\\\Roaming'' | Where-Object {$_Name -like ''*derm*'' -or $_Name -like ''*note*'' -or $_Name -like ''*Note*''} | Select-Object Name, FullName\")",
-      "Bash(powershell -Command \"Stop-Process -Name ''Dermatherapy Note Maker'' -Force -ErrorAction SilentlyContinue\")",
+      "Bash(powershell -Command \"Stop-Process -Name ''ClearSkin Hub'' -Force -ErrorAction SilentlyContinue\")",
       "Bash(powershell -Command \"Get-Process | Where-Object { $_Name -like ''*Dermatherapy*'' -or $_Name -like ''*Electron*'' } | Stop-Process -Force\")",
-      "Bash(powershell -Command \"Stop-Process -Name ''Dermatherapy Note Maker'' -Force -ErrorAction SilentlyContinue; Stop-Process -Name ''electron'' -Force -ErrorAction SilentlyContinue; exit 0\")",
-      "Bash(powershell -Command \"Stop-Process -Name ''''Dermatherapy Note Maker'''' -Force -ErrorAction SilentlyContinue; Stop-Process -Name ''''electron'''' -Force -ErrorAction SilentlyContinue; exit 0\")"
+      "Bash(powershell -Command \"Stop-Process -Name ''ClearSkin Hub'' -Force -ErrorAction SilentlyContinue; Stop-Process -Name ''electron'' -Force -ErrorAction SilentlyContinue; exit 0\")",
+      "Bash(powershell -Command \"Stop-Process -Name ''''ClearSkin Hub'''' -Force -ErrorAction SilentlyContinue; Stop-Process -Name ''''electron'''' -Force -ErrorAction SilentlyContinue; exit 0\")",
+      "Bash(powershell -Command ' *)",
+      "Bash(powershell -Command \"Remove-Item -Force -LiteralPath 'C:\\\\Users\\\\cobra\\\\Desktop\\\\Dermatherapy Note Maker.lnk' -ErrorAction SilentlyContinue; Get-Item 'C:\\\\Users\\\\cobra\\\\Desktop\\\\Dermatherapy Note Maker.lnk' -ErrorAction SilentlyContinue\")",
+      "Bash(cmd /c \"del /f /q \\\\\"C:\\\\Users\\\\cobra\\\\Desktop\\\\Dermatherapy Note Maker.lnk\\\\\"\")"
     ]
   }
 }

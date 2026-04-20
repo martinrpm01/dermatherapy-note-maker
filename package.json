@@ -1,7 +1,7 @@
 {
-  "name": "dermatherapy-note-maker",
+  "name": "clearskin-hub",
   "version": "0.1.0",
-  "description": "Dermatherapy Note Maker is a local-first desktop application for radiation treatment notes.",
+  "description": "ClearSkin Hub is a local-first desktop application for radiation treatment notes.",
   "author": "Codex",
   "private": true,
   "type": "module",
@@ -20,8 +20,8 @@
   },
   "build": {
     "appId": "local.dermatherapy.note.maker",
-    "productName": "Dermatherapy Note Maker",
-    "icon": "assets/branding/dermatherapy-icon.ico",
+    "productName": "ClearSkin Hub",
+    "icon": "assets/branding/clear-skin-app-icon.ico",
     "directories": {
       "output": "dist"
     },
@@ -38,16 +38,16 @@
     },
     "win": {
       "signAndEditExecutable": false,
-      "icon": "assets/branding/dermatherapy-icon.ico",
+      "icon": "assets/branding/clear-skin-app-icon.ico",
       "target": [
         "nsis",
         "portable"
       ]
     },
     "nsis": {
-      "installerIcon": "assets/branding/dermatherapy-icon.ico",
-      "uninstallerIcon": "assets/branding/dermatherapy-icon.ico",
-      "installerHeaderIcon": "assets/branding/dermatherapy-icon.ico"
+      "installerIcon": "assets/branding/clear-skin-app-icon.ico",
+      "uninstallerIcon": "assets/branding/clear-skin-app-icon.ico",
+      "installerHeaderIcon": "assets/branding/clear-skin-app-icon.ico"
     }
   },
   "dependencies": {
@@ -71,10 +71,6 @@
     "typescript": "6.0.2",
     "vite": "7.3.1",
     "vitest": "4.1.2"
-  },
-  "directories": {
-    "doc": "docs",
-    "test": "tests"
   },
   "keywords": [],
   "license": "ISC"

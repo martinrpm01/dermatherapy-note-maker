@@ -12,7 +12,8 @@ import {
   normalizeVacLokAreaValue,
   normalizeWorksheetDeviceDetailsForSite,
   normalizeVacLokPlacement,
-  normalizeCutoutSizeLabel
+  normalizeCutoutSizeLabel,
+  stripExamVitalsSection
 } from "../../shared/note-rules";
 import { renderTemplate } from "../../shared/template-engine";
 import type {
@@ -315,15 +316,19 @@ export function buildVisitPreviewText(
     }
   });
 
-  return injectFinalTreatmentSection(
-    injectMipsSection(
-      injectPhysicsConsultationDetails(renderedText, note.structuredFields.physicsComment?.trim() || getDefaultPhysicsComment(note.noteType), [
-        site1.bodyLocation,
-        site2.bodyLocation
-      ]),
-      mipsSection
+  return stripExamVitalsSection(
+    injectFinalTreatmentSection(
+      injectMipsSection(
+        injectPhysicsConsultationDetails(renderedText, note.structuredFields.physicsComment?.trim() || getDefaultPhysicsComment(note.noteType), [
+          site1.bodyLocation,
+          site2.bodyLocation
+        ]),
+        mipsSection
+      ),
+      finalTreatmentSection
     ),
-    finalTreatmentSection
+    note.noteType,
+    note.structuredFields.includeExamVitals
   );
 }
 

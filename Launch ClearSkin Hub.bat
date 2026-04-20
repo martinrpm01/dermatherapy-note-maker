@@ -5,8 +5,8 @@ cd /d "%~dp0"
 set "NODE_EXE=C:\Program Files\nodejs\npm.cmd"
 set "ELECTRON_EXE=node_modules\electron\dist\electron.exe"
 set "MAIN_BUILD=out\main\index.js"
-set "APP_EXE=dist\win-unpacked\Dermatherapy Note Maker.exe"
-set "PORTABLE_EXE=dist\Dermatherapy Note Maker 0.1.0.exe"
+set "APP_EXE=dist\win-unpacked\ClearSkin Hub.exe"
+set "PORTABLE_EXE=dist\ClearSkin Hub 0.1.0.exe"
 
 if exist "%NODE_EXE%" (
   call "%NODE_EXE%" run build
@@ -43,6 +43,6 @@ if exist "%PORTABLE_EXE%" (
   exit /b 0
 )
 
-echo Could not find a runnable Dermatherapy Note Maker executable.
+echo Could not find a runnable ClearSkin Hub executable.
 echo Try running npm install and then this launcher again.
 pause

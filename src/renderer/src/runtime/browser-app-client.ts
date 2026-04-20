@@ -65,7 +65,7 @@ import { validateTemplate } from "../../../shared/template-engine";
 import { buildDocumentOnlySyntheticContext } from "../../../shared/document-only";
 import { BrowserBinaryAssetStore } from "../storage/browser-binary-asset-store";
 import { BrowserStructuredDataStore } from "../storage/browser-structured-data-store";
-import brandLogo from "../assets/dermatherapy-note-logo.jpg";
+import brandLogo from "../assets/clear-skin-note-logo.jpg";
 import consentFormTemplateUrl from "../../../../assets/templates/radiation-therapy-consent-form.pdf";
 import simWorksheetTemplateUrl from "../../../../assets/templates/radiation-therapy-sim-worksheet.pdf";
 

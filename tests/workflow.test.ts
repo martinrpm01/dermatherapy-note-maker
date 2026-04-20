@@ -1217,7 +1217,7 @@ describe("RadiationNoteService workflow", () => {
     });
 
     const settings = service.getSettingsPayload().settings;
-    expect(settings.appName).toBe("Dermatherapy Note Maker");
+    expect(settings.appName).toBe("ClearSkin Hub");
     expect(settings.defaultTherapist).toBe("Jamie RT(T)");
   });
 

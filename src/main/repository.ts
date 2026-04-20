@@ -41,7 +41,7 @@ import type {
 } from "../shared/storage";
 
 type SqlValue = string | number | null;
-const DEFAULT_APP_NAME = "Dermatherapy Note Maker";
+const DEFAULT_APP_NAME = "ClearSkin Hub";
 
 const require = createRequire(import.meta.url);
 const sqlWasmPath = require.resolve("sql.js/dist/sql-wasm.wasm");

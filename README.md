@@ -1,6 +1,6 @@
-# Dermatherapy Note Maker
+# ClearSkin Hub
 
-Dermatherapy Note Maker is a local-first Electron + React + TypeScript desktop application for radiation treatment note workflows. It is designed for single-site use, stores all data locally, generates editable/regeneratable PDFs, keeps patient/course/visit history searchable after archive, and seeds its default note wording from the uploaded 2026 EBRT source forms while removing site-specific branding.
+ClearSkin Hub is a local-first Electron + React + TypeScript desktop application for radiation treatment note workflows. It is designed for single-site use, stores all data locally, generates editable/regeneratable PDFs, keeps patient/course/visit history searchable after archive, and seeds its default note wording from the uploaded 2026 EBRT source forms while removing site-specific branding.
 
 ## What The App Does
 
@@ -24,7 +24,7 @@ The MVP is local-first and single-site:
 
 On Windows, a packaged app creates its hidden working data under the Electron user-data folder, typically inside:
 
-`%APPDATA%\Dermatherapy Note Maker\`
+`%APPDATA%\ClearSkin Hub\`
 
 Inside that hidden app folder, the app creates:
 
@@ -181,7 +181,7 @@ The app creates its local database automatically on first launch:
 
 ### One-Click Launch
 
-Double-click [Launch Dermatherapy Note Maker.bat](/C:/Users/cobra/Desktop/Doc%20maker/Launch%20Dermatherapy%20Note%20Maker.bat).
+Double-click [Launch ClearSkin Hub.bat](/C:/Users/cobra/Desktop/Doc%20maker/Launch%20ClearSkin%20Hub.bat).
 
 It will:
 
@@ -191,7 +191,7 @@ It will:
 
 Desktop shortcut for daily use:
 
-- `C:\Users\cobra\Desktop\Dermatherapy Note Maker.lnk`
+- `C:\Users\cobra\Desktop\ClearSkin Hub.lnk`
 
 Verification command used after app changes:
 
@@ -234,9 +234,9 @@ After packaging, distribute the generated files from the `dist/` folder to a sin
 
 Current Windows artifacts after packaging:
 
-- `dist\Dermatherapy Note Maker Setup 0.1.0.exe`
-- `dist\Dermatherapy Note Maker 0.1.0.exe`
-- `dist\win-unpacked\Dermatherapy Note Maker.exe`
+- `dist\ClearSkin Hub Setup 0.1.0.exe`
+- `dist\ClearSkin Hub 0.1.0.exe`
+- `dist\win-unpacked\ClearSkin Hub.exe`
 
 Recommended local deployment pattern:
 
@@ -248,7 +248,7 @@ Recommended local deployment pattern:
 
 ## Branding
 
-- Project/app name: `Dermatherapy Note Maker`
+- Project/app name: `ClearSkin Hub`
 - App icon sources:
   - [assets/branding/dermatherapy-icon.ico](/C:/Users/cobra/Desktop/Doc%20maker/assets/branding/dermatherapy-icon.ico)
   - [assets/branding/dermatherapy-icon.png](/C:/Users/cobra/Desktop/Doc%20maker/assets/branding/dermatherapy-icon.png)

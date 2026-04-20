@@ -12,6 +12,7 @@ import {
   formatWorksheetSelection,
   getAutoNumberOfBlocks,
   normalizeVacLokAreaValue,
+  normalizeOptionValue,
   normalizeWorksheetDetailValue,
   normalizeCutoutSizeLabel,
   normalizeWorksheetDeviceDetailsForSite,
@@ -963,7 +964,7 @@ export function DocumentOnlyRecordModal(props: {
   return (
     <div className="modal-backdrop">
       <div className={`modal-card wide${isTwoSite ? " two-site-course-modal" : ""}`}>
-        <h3>{recordForm.id ? "Edit Document Record" : "New Document Record"}</h3>
+        <h3>{recordForm.id ? "Edit Patient Info" : "New Patient Info"}</h3>
         <div className="pending-course-intro">
           <p className="muted">
             Capture only the information needed for consent now. Additional worksheet setup will be collected later when you generate the Sim Worksheet.
@@ -1116,7 +1117,12 @@ export function DocumentOnlyWorksheetModal(props: {
   function getSelectedDevices(value: string) {
     const parsed = parseAdditionalDevices(value);
     const selected = new Set(parsed);
-    const customValues = parsed.filter((device) => !DEVICE_OPTIONS.includes(device));
+    const customValues = parsed.filter(
+      (device) =>
+        !DEVICE_OPTIONS.includes(device) &&
+        normalizeOptionValue(device) !== normalizeOptionValue("Custom Shield") &&
+        normalizeOptionValue(device) !== normalizeOptionValue("Special Set-up")
+    );
     return {
       selected,
       customValue: customValues.join(", ")
@@ -1332,7 +1338,7 @@ export function DocumentOnlyWorksheetModal(props: {
                             updateAdditionalDevices(index, selectedDevices.selected, enabled ? customShieldValue : "");
                           }}
                         />
-                        <span>Custom Shield</span>
+                        <span>Special Set-up</span>
                       </label>
                     </div>
                     {selectedDevices.selected.has("Eye Shield") ? (
@@ -1385,9 +1391,9 @@ export function DocumentOnlyWorksheetModal(props: {
                     ) : null}
                     {(customShieldEnabled[index] ?? Boolean(customShieldValue)) ? (
                       <label>
-                        Custom Shield
+                        Special Set-up
                         <input
-                          placeholder="Enter custom shield/device"
+                          placeholder="Enter special set-up instructions"
                           value={customShieldValue}
                           onChange={(event) => updateAdditionalDevices(index, selectedDevices.selected, event.target.value)}
                         />
@@ -1606,7 +1612,12 @@ export function CourseModal(props: {
   function getSelectedDevices(value: string) {
     const parsed = parseAdditionalDevices(value);
     const selected = new Set(parsed);
-    const customValues = parsed.filter((device) => !DEVICE_OPTIONS.includes(device));
+    const customValues = parsed.filter(
+      (device) =>
+        !DEVICE_OPTIONS.includes(device) &&
+        normalizeOptionValue(device) !== normalizeOptionValue("Custom Shield") &&
+        normalizeOptionValue(device) !== normalizeOptionValue("Special Set-up")
+    );
     return {
       selected,
       customValue: customValues.join(", ")
@@ -1907,14 +1918,14 @@ export function CourseModal(props: {
                                 updateAdditionalDevices(index, deviceState.selected, "");
                               }}
                             />
-                            Custom Shield
+                            Special Set-up
                           </label>
                         </div>
                         {hasCustomShield ? (
                           <label style={{ marginTop: "0.35rem" }}>
-                            Custom Shield Details
+                            Special Set-up Instructions
                             <input
-                              placeholder="Enter custom shield/device"
+                              placeholder="Enter special set-up instructions"
                               value={customInputs[index] ?? deviceState.customValue}
                               onChange={(event) => {
                                 const val = event.target.value;

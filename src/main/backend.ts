@@ -43,7 +43,8 @@ import {
   normalizeWorksheetDeviceDetailsForSite,
   normalizeVacLokPlacement,
   normalizeCutoutSizeLabel,
-  normalizeOptionValue
+  normalizeOptionValue,
+  stripExamVitalsSection
 } from "../shared/note-rules";
 import {
   ensureValidPin,
@@ -168,6 +169,11 @@ function sanitizeFolderName(value: string) {
     .replace(/[. ]+$/g, "");
 }
 
+function buildVersionedDocumentPath(basePath: string) {
+  const parsed = path.parse(basePath);
+  return path.join(parsed.dir, `${parsed.name}-${Date.now()}${parsed.ext}`);
+}
+
 function getDefaultMachine(value: string) {
   return value.trim() || "Xoft Elekta 1200 SPX";
 }
@@ -179,6 +185,16 @@ function getDefaultTreatmentDepth(value: string) {
 function buildAdditionalNotesSection(value: string) {
   const trimmed = value.trim();
   return trimmed ? `Additional Notes:\n${trimmed}\n` : "";
+}
+
+function isLockedFileError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code !== undefined &&
+    ["EBUSY", "EPERM"].includes(String((error as { code?: string }).code))
+  );
 }
 
 function buildFinalTreatmentSection(enabled: boolean) {
@@ -1452,8 +1468,17 @@ export class RadiationNoteService {
 
     const documentsDir = this.assetStore.getCourseDocumentsDir(patient.id, course.id);
     this.assetStore.ensureDirectory(documentsDir);
-    const outputPath = path.join(documentsDir, worksheet.fileName);
-    this.assetStore.writeBinaryFile(outputPath, worksheet.bytes);
+    const preferredPath = path.join(documentsDir, worksheet.fileName);
+    let outputPath = preferredPath;
+    try {
+      this.assetStore.writeBinaryFile(outputPath, worksheet.bytes);
+    } catch (error) {
+      if (!isLockedFileError(error)) {
+        throw error;
+      }
+      outputPath = buildVersionedDocumentPath(preferredPath);
+      this.assetStore.writeBinaryFile(outputPath, worksheet.bytes);
+    }
 
     const persistedDocument = (this.repository as AssetAwareStructuredDataStore).upsertCourseDocument(
       course.id,
@@ -1466,8 +1491,14 @@ export class RadiationNoteService {
 
     const previousPath = existingDocument ? this.resolveAssetPath(existingDocument.fileAsset) : null;
     if (previousPath && previousPath !== outputPath) {
-      this.assetStore.deleteFile(previousPath);
-      this.assetStore.cleanupEmptyDirectoryChain(path.dirname(previousPath), this.assetStore.rootDir);
+      try {
+        this.assetStore.deleteFile(previousPath);
+        this.assetStore.cleanupEmptyDirectoryChain(path.dirname(previousPath), this.assetStore.rootDir);
+      } catch (error) {
+        if (!isLockedFileError(error)) {
+          throw error;
+        }
+      }
     }
 
     return persistedDocument;
@@ -1929,15 +1960,19 @@ export class RadiationNoteService {
       }
     });
 
-    return injectFinalTreatmentSection(
-      injectMipsSection(
-        injectPhysicsConsultationDetails(renderedText, note.structuredFields.physicsComment, [
-          site1Render.bodyLocation,
-          site2Render.bodyLocation
-        ]),
-        mipsSection
+    return stripExamVitalsSection(
+      injectFinalTreatmentSection(
+        injectMipsSection(
+          injectPhysicsConsultationDetails(renderedText, note.structuredFields.physicsComment, [
+            site1Render.bodyLocation,
+            site2Render.bodyLocation
+          ]),
+          mipsSection
+        ),
+        finalTreatmentSection
       ),
-      finalTreatmentSection
+      note.noteType,
+      note.structuredFields.includeExamVitals
     );
   }
 

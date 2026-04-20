@@ -269,6 +269,7 @@ export interface SiteSnapshot {
 export interface VisitStructuredFields {
   chiefComplaint: string;
   additionalNotes: string;
+  includeExamVitals: boolean;
   finalTreatment: boolean;
   prescribedFractionsInput: number | null;
   projectedFractionsInput: number | null;

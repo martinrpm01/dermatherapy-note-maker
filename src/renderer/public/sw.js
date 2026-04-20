@@ -1,4 +1,4 @@
-const CACHE_NAME = "dermatherapy-v3";
+const CACHE_NAME = "clearskin-hub-v4";
 
 // Bump CACHE_NAME when a deployment should invalidate previously cached shell files.
 const PRECACHE_URLS = ["/index.browser.html", "/manifest.json", "/icon-192.png", "/icon-512.png"];
