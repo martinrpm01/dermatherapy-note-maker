@@ -1009,8 +1009,20 @@ export class RadiationNoteService {
         )
       };
 
+    const slotVisits = this.repository
+      .fetchVisitsByCourseIds([input.courseId])
+      .filter((visit) =>
+        visit.note.courseId === input.courseId &&
+        (visit.note.treatmentNumber ?? null) === (input.treatmentNumber ?? null)
+      )
+      .sort((left, right) => right.note.updatedAt.localeCompare(left.note.updatedAt));
+    const targetSlotVisit = input.id
+      ? slotVisits.find((visit) => visit.note.id === input.id) ?? slotVisits[0] ?? null
+      : slotVisits[0] ?? null;
+
     const normalizedInput: VisitInput = {
       ...input,
+      id: targetSlotVisit?.note.id ?? input.id,
       therapistName: input.therapistName.trim(),
       vitals: formatVitals(input.vitals),
       structuredFields
@@ -1062,6 +1074,18 @@ export class RadiationNoteService {
         upload.name
       );
     });
+
+    const duplicateSlotVisits = this.repository
+      .fetchVisitsByCourseIds([input.courseId])
+      .filter((visit) =>
+        visit.note.id !== savedVisit.id &&
+        visit.note.courseId === input.courseId &&
+        (visit.note.treatmentNumber ?? null) === (savedVisit.treatmentNumber ?? null)
+      );
+
+    for (const duplicate of duplicateSlotVisits) {
+      this.deleteVisit(duplicate.note.id);
+    }
 
     return this.repository.fetchVisit(savedVisit.id)!;
   }
@@ -2002,9 +2026,13 @@ export class RadiationNoteService {
       .fetchVisitsByCourseIds([currentVisit.courseId])
       .filter((visit) =>
         visit.note.id !== currentVisit.id &&
-        visit.note.status === "finalized" &&
         visit.note.noteType === currentVisit.noteType &&
-        (visit.note.treatmentNumber ?? null) === (currentVisit.treatmentNumber ?? null)
+        (visit.note.treatmentNumber ?? null) === (currentVisit.treatmentNumber ?? null) &&
+        (
+          visit.note.status === "finalized" ||
+          Boolean(visit.note.pdfAsset) ||
+          visit.pdfs.length > 0
+        )
       );
 
     for (const duplicate of duplicateVisits) {
