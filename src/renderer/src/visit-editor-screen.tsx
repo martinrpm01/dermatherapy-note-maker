@@ -93,7 +93,7 @@ export function VisitEditorScreen(props: {
       editor.course.prescribedFractions <= 0 ||
       (editor.note.structuredFields.prescribedFractionsInput ?? 0) > 0
     );
-  const showProjectedFractionsInput = editor.note.noteType === "consult_sim";
+const showProjectedFractionsInput = false;
   const otvEligible = editor.note.noteType !== "consult_sim" && isOtvTreatmentNumber(editor.note.treatmentNumber);
   const isTwoLesionLayout = editor.note.structuredFields.siteSnapshots.length > 1;
   const sortedSiteSnapshots = [...editor.note.structuredFields.siteSnapshots].sort(

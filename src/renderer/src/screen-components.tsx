@@ -184,6 +184,50 @@ function useNumPadField() {
   const [allSelected, setAllSelected] = useState(false);
   const activation = useNumPadActivation(fieldIdRef.current!);
 
+  function positionFieldIntoView() {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) {
+      return;
+    }
+
+    if (wrapper.closest(".modal-backdrop")) {
+      return;
+    }
+
+    const panel = document.querySelector<HTMLElement>(".numpad-panel");
+    const dockHeight = (panel?.getBoundingClientRect().height ?? 220) + 24;
+    document.documentElement.style.setProperty("--numpad-offset", `${dockHeight}px`);
+    const lockShell = wrapper.closest<HTMLElement>(".lock-shell");
+
+    if (lockShell) {
+      lockShell.classList.add("numpad-open-context");
+      document.body.classList.remove("numpad-open");
+    } else {
+      document.body.classList.add("numpad-open");
+      document.querySelector(".lock-shell")?.classList.remove("numpad-open-context");
+    }
+
+    const wrapperRect = wrapper.getBoundingClientRect();
+    const visibleTop = 24;
+    const visibleBottom = window.innerHeight - dockHeight - 16;
+
+    if (wrapperRect.top >= visibleTop && wrapperRect.bottom <= visibleBottom) {
+      return;
+    }
+
+    const scrollParent = findScrollableParent(wrapper);
+    const delta =
+      wrapperRect.bottom > visibleBottom
+        ? wrapperRect.bottom - visibleBottom
+        : wrapperRect.top - visibleTop;
+
+    if (scrollParent) {
+      scrollParent.scrollBy({ top: delta, behavior: "smooth" });
+    } else {
+      window.scrollBy({ top: delta, behavior: "smooth" });
+    }
+  }
+
   useEffect(() => {
     if (!activation.isActive) {
       setAllSelected(false);
@@ -198,50 +242,8 @@ function useNumPadField() {
       return;
     }
 
-    function positionActiveField() {
-      const wrapper = wrapperRef.current;
-      if (!wrapper) {
-        return;
-      }
-
-      if (wrapper.closest(".modal-backdrop")) {
-        return;
-      }
-
-      const panel = document.querySelector<HTMLElement>(".numpad-panel");
-      const dockHeight = (panel?.getBoundingClientRect().height ?? 220) + 24;
-      document.documentElement.style.setProperty("--numpad-offset", `${dockHeight}px`);
-      const lockShell = wrapper.closest<HTMLElement>(".lock-shell");
-
-      if (lockShell) {
-        lockShell.classList.add("numpad-open-context");
-      } else {
-        document.body.classList.add("numpad-open");
-      }
-
-      const wrapperRect = wrapper.getBoundingClientRect();
-      const visibleTop = 24;
-      const visibleBottom = window.innerHeight - dockHeight - 16;
-
-      if (wrapperRect.top >= visibleTop && wrapperRect.bottom <= visibleBottom) {
-        return;
-      }
-
-      const scrollParent = findScrollableParent(wrapper);
-      const delta =
-        wrapperRect.bottom > visibleBottom
-          ? wrapperRect.bottom - visibleBottom
-          : wrapperRect.top - visibleTop;
-
-      if (scrollParent) {
-        scrollParent.scrollBy({ top: delta, behavior: "smooth" });
-      } else {
-        window.scrollBy({ top: delta, behavior: "smooth" });
-      }
-    }
-
     const rafId = window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(positionActiveField);
+      window.requestAnimationFrame(positionFieldIntoView);
     });
 
     return () => {
@@ -268,6 +270,9 @@ function useNumPadField() {
   function open() {
     setAllSelected(false);
     activation.activate();
+    requestAnimationFrame(() => {
+      requestAnimationFrame(positionFieldIntoView);
+    });
     focusInput(false);
   }
 
