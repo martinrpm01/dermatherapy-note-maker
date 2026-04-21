@@ -217,6 +217,7 @@ function DockedNumPad(props: {
   onBackspace: () => void;
   onClear: () => void;
   onClose: () => void;
+  closeLabel?: string;
   extraKey?: string;
 }) {
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -265,7 +266,7 @@ function DockedNumPad(props: {
         </div>
         <div className="numpad">
           {"123456789".split("").map((digit) => renderButton(digit, () => props.onPress(digit)))}
-          {props.extraKey ? renderButton(props.extraKey, () => props.onPress(props.extraKey)) : <span className="numpad-spacer" />}
+          {renderButton(props.closeLabel ?? "Done", props.onClose, "numpad-button-primary")}
           {renderButton("0", () => props.onPress("0"))}
           {renderButton("Del", props.onBackspace)}
         </div>
@@ -303,21 +304,18 @@ export function DobInput(props: { value: string; onChange: (value: string) => vo
     }
   }, [field.isActive, props.value]);
 
-  function updateFromDigits(digits: string, closeAfterUpdate = false) {
+  function updateFromDigits(digits: string) {
     const limitedDigits = digits.slice(0, 8);
     const formatted = formatDigitsAsDate(limitedDigits);
     setDisplayValue(formatted);
     props.onChange(limitedDigits.length === 8 ? parseMmDdYyyy(formatted) : "");
-    if (closeAfterUpdate) {
-      field.close();
-    }
   }
 
   function handlePress(digit: string) {
     const baseDigits = field.allSelected ? "" : displayValue.replace(/\D/g, "");
     const nextDigits = (baseDigits + digit).slice(0, 8);
     field.clearSelection();
-    updateFromDigits(nextDigits, nextDigits.length === 8);
+    updateFromDigits(nextDigits);
   }
 
   function handleBackspace() {
@@ -468,7 +466,7 @@ export function NumericInput(props: { value: string | number; onChange: (value: 
   );
 }
 
-export function PinInput(props: { value: string; onChange: (value: string) => void; placeholder?: string }) {
+export function PinInput(props: { value: string; onChange: (value: string) => void; placeholder?: string; onDone?: () => void }) {
   const field = useNumPadField();
 
   function handlePress(digit: string) {
@@ -491,6 +489,11 @@ export function PinInput(props: { value: string; onChange: (value: string) => vo
     props.onChange("");
   }
 
+  function handleDone() {
+    field.close();
+    props.onDone?.();
+  }
+
   return (
     <div ref={field.wrapperRef} className={`numpad-field${field.isActive ? " is-active" : ""}`}>
       <input
@@ -509,7 +512,7 @@ export function PinInput(props: { value: string; onChange: (value: string) => vo
           onPress={handlePress}
           onBackspace={handleBackspace}
           onClear={handleClear}
-          onClose={field.close}
+          onClose={handleDone}
         />
       ) : null}
     </div>
@@ -879,7 +882,7 @@ export function LockScreen(props: {
             <div className="panel lock-setup-pin-panel">
               <h3>Set PIN</h3>
               <PinInput placeholder="New PIN" value={props.setupPin} onChange={props.onSetupPinChange} />
-              <PinInput placeholder="Confirm PIN" value={props.confirmPin} onChange={props.onConfirmPinChange} />
+              <PinInput placeholder="Confirm PIN" value={props.confirmPin} onChange={props.onConfirmPinChange} onDone={props.onSetup} />
               <button className="primary" onClick={props.onSetup}>
                 Save Setup
               </button>
@@ -887,7 +890,7 @@ export function LockScreen(props: {
           </div>
         ) : (
           <>
-            <PinInput placeholder="PIN" value={props.unlockPin} onChange={props.onUnlockPinChange} />
+            <PinInput placeholder="PIN" value={props.unlockPin} onChange={props.onUnlockPinChange} onDone={props.onUnlock} />
             <button className="primary" onClick={props.onUnlock}>
               Unlock
             </button>
@@ -999,7 +1002,7 @@ export function PinRecoveryScreen(props: {
           onChange={(event) => props.onRecoveryCodeChange(event.target.value.toUpperCase())}
         />
         <PinInput placeholder="New PIN" value={props.nextPin} onChange={props.onNextPinChange} />
-        <PinInput placeholder="Confirm New PIN" value={props.confirmPin} onChange={props.onConfirmPinChange} />
+        <PinInput placeholder="Confirm New PIN" value={props.confirmPin} onChange={props.onConfirmPinChange} onDone={props.onSubmit} />
         <div className="button-row">
           <button className="primary" onClick={props.onSubmit}>
             Reset PIN
@@ -2079,7 +2082,7 @@ export function SettingsScreen(props: {
           <h3>Change PIN</h3>
           <PinInput placeholder="Current PIN" value={props.changePin.currentPin} onChange={(next) => props.onChangePin({ ...props.changePin, currentPin: next })} />
           <PinInput placeholder="New PIN" value={props.changePin.nextPin} onChange={(next) => props.onChangePin({ ...props.changePin, nextPin: next })} />
-          <PinInput placeholder="Confirm New PIN" value={props.changePin.confirmPin} onChange={(next) => props.onChangePin({ ...props.changePin, confirmPin: next })} />
+          <PinInput placeholder="Confirm New PIN" value={props.changePin.confirmPin} onChange={(next) => props.onChangePin({ ...props.changePin, confirmPin: next })} onDone={props.onSubmitPin} />
           <button onClick={props.onSubmitPin}>Update PIN</button>
           <button className="ghost" onClick={props.onLockApp}>Lock App</button>
         </div>

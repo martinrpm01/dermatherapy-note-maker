@@ -1481,6 +1481,7 @@ input.search {
 .numpad-toolbar {
   display: flex;
   justify-content: flex-end;
+  gap: 0.55rem;
   margin-bottom: 0.55rem;
 }
 
@@ -1488,8 +1489,10 @@ input.search {
   min-width: 86px;
 }
 
-.numpad-spacer {
-  display: block;
+.numpad-button-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
 }
 
 .numpad {
