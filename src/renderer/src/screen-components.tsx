@@ -131,6 +131,12 @@ function findScrollableParent(element: HTMLElement | null): HTMLElement | null {
   return null;
 }
 
+function clearNumPadViewportState() {
+  document.body.classList.remove("numpad-open");
+  document.querySelector(".lock-shell")?.classList.remove("numpad-open-context");
+  document.documentElement.style.removeProperty("--numpad-offset");
+}
+
 let activeNumPadFieldId: string | null = null;
 let numPadFieldCounter = 0;
 const numPadFieldListeners = new Set<() => void>();
@@ -186,9 +192,9 @@ function useNumPadField() {
 
   useEffect(() => {
     if (!activation.isActive) {
-      document.body.classList.remove("numpad-open");
-      document.querySelector(".lock-shell")?.classList.remove("numpad-open-context");
-      document.documentElement.style.removeProperty("--numpad-offset");
+      if (!activeNumPadFieldId) {
+        clearNumPadViewportState();
+      }
       return;
     }
 
@@ -240,9 +246,9 @@ function useNumPadField() {
 
     return () => {
       window.cancelAnimationFrame(rafId);
-      document.body.classList.remove("numpad-open");
-      document.querySelector(".lock-shell")?.classList.remove("numpad-open-context");
-      document.documentElement.style.removeProperty("--numpad-offset");
+      if (!activeNumPadFieldId) {
+        clearNumPadViewportState();
+      }
     };
   }, [activation.isActive]);
 
