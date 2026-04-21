@@ -326,6 +326,7 @@ function useNumPadField() {
     inputRef,
     allSelected,
     close: activation.deactivate,
+    refreshPosition: scheduleReposition,
     clearSelection,
     handleInputPointerDown,
     handleInputFocus
@@ -362,6 +363,24 @@ function DockedNumPad(props: {
       document.removeEventListener("pointerdown", handlePointerDown, true);
     };
   }, [props]);
+
+  useEffect(() => {
+    function preventScroll(event: TouchEvent | WheelEvent) {
+      event.preventDefault();
+    }
+
+    const panel = panelRef.current;
+    if (!panel) {
+      return;
+    }
+
+    panel.addEventListener("touchmove", preventScroll, { passive: false });
+    panel.addEventListener("wheel", preventScroll, { passive: false });
+    return () => {
+      panel.removeEventListener("touchmove", preventScroll);
+      panel.removeEventListener("wheel", preventScroll);
+    };
+  }, []);
 
   function renderButton(label: string, handler: () => void, className?: string) {
     return (
@@ -431,6 +450,7 @@ export function DobInput(props: { value: string; onChange: (value: string) => vo
     const formatted = formatDigitsAsDate(limitedDigits);
     setDisplayValue(formatted);
     props.onChange(limitedDigits.length === 8 ? parseMmDdYyyy(formatted) : "");
+    field.refreshPosition();
   }
 
   function handlePress(digit: string) {
@@ -490,6 +510,7 @@ export function BloodPressureInput(props: { value: string; onChange: (value: str
   function syncValue(next: string, closeAfterSync = false) {
     setDisplayValue(next);
     props.onChange(next);
+    field.refreshPosition();
     if (closeAfterSync) {
       props.onChange(formatBloodPressure(next));
       field.close();
@@ -576,17 +597,20 @@ export function NumericInput(props: { value: string | number; onChange: (value: 
     const next = `${field.allSelected ? "" : display}${digit}`;
     field.clearSelection();
     props.onChange(next);
+    field.refreshPosition();
   }
 
   function handleBackspace() {
     const next = field.allSelected ? "" : display.slice(0, -1);
     field.clearSelection();
     props.onChange(next);
+    field.refreshPosition();
   }
 
   function handleClear() {
     field.clearSelection();
     props.onChange("");
+    field.refreshPosition();
   }
 
   return (
@@ -632,6 +656,7 @@ function FormattedNumericInput(props: {
   function syncValue(next: string) {
     setDisplayValue(next);
     props.onChange(next);
+    field.refreshPosition();
   }
 
   function handlePress(digit: string) {
@@ -735,6 +760,7 @@ export function PinInput(props: { value: string; onChange: (value: string) => vo
     const next = `${field.allSelected ? "" : props.value}${digit}`.slice(0, 8);
     field.clearSelection();
     props.onChange(next);
+    field.refreshPosition();
     if (next.length >= 8) {
       field.close();
     }
@@ -744,11 +770,13 @@ export function PinInput(props: { value: string; onChange: (value: string) => vo
     const next = field.allSelected ? "" : props.value.slice(0, -1);
     field.clearSelection();
     props.onChange(next);
+    field.refreshPosition();
   }
 
   function handleClear() {
     field.clearSelection();
     props.onChange("");
+    field.refreshPosition();
   }
 
   function handleDone() {
