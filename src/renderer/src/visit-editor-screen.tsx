@@ -257,7 +257,7 @@ export function VisitEditorScreen(props: {
             {editor.note.noteType !== "consult_sim" && (
               <label>
                 Treatment Number
-                <input type="number" min={1} max={15} value={editor.note.treatmentNumber ?? ""} onChange={(event) => {
+                <input type="number" inputMode="numeric" min={1} max={15} value={editor.note.treatmentNumber ?? ""} onChange={(event) => {
                   const num = event.target.value ? Number(event.target.value) : null;
                   props.onUpdate((current) => ({
                     ...current,
@@ -346,6 +346,7 @@ export function VisitEditorScreen(props: {
                             {formatFractionLabel("Actual Projected Fractions", site.siteNumber, site.bodyLocation, index)}
                             <input
                               type="number"
+                              inputMode="numeric"
                               min={1}
                               max={30}
                               value={currentFractions ?? ""}
@@ -456,6 +457,7 @@ export function VisitEditorScreen(props: {
                             {formatFractionLabel("Actual Prescribed Fractions", site.siteNumber, site.bodyLocation, index)}
                             <input
                               type="number"
+                              inputMode="numeric"
                               min={1}
                               max={30}
                               value={currentFractions ?? ""}
@@ -504,6 +506,7 @@ export function VisitEditorScreen(props: {
                     {formatDoseFieldLabel("Daily Dose (cGy)", isTwoLesionLayout, site.siteNumber, site.bodyLocation, index)}
                     <input
                       type="number"
+                      inputMode="numeric"
                       min={0}
                       value={site.dailyDose > 0 ? site.dailyDose : ""}
                       onChange={(event) => {
@@ -537,6 +540,7 @@ export function VisitEditorScreen(props: {
                     {formatDoseFieldLabel("Total Dose (cGy)", isTwoLesionLayout, site.siteNumber, site.bodyLocation, index)}
                     <input
                       type="number"
+                      inputMode="numeric"
                       min={0}
                       value={site.totalDose > 0 ? site.totalDose : ""}
                       onChange={(event) => {
