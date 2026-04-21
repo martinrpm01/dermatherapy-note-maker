@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import type { PatientArchiveExportResult, PatientArchivePreflightResult, PatientArchiveRestoreBlocker, PatientArchiveRestoreResult, PatientArchiveValidationIssue } from "../../shared/archive";
 import { TEMPLATE_PLACEHOLDERS } from "../../shared/templates";
 import type {
@@ -97,7 +98,184 @@ function formatDigitsAsDate(digits: string): string {
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
 }
 
-function NumPad({ onPress, onBackspace, extraKey }: { onPress: (c: string) => void; onBackspace: () => void; extraKey?: string }) {
+let activeNumPadFieldId: string | null = null;
+let numPadFieldCounter = 0;
+const numPadFieldListeners = new Set<() => void>();
+
+function setActiveNumPadField(nextId: string | null) {
+  if (activeNumPadFieldId === nextId) {
+    return;
+  }
+
+  activeNumPadFieldId = nextId;
+  numPadFieldListeners.forEach((listener) => listener());
+}
+
+function useNumPadActivation(fieldId: string) {
+  const [isActive, setIsActive] = useState(() => activeNumPadFieldId === fieldId);
+
+  useEffect(() => {
+    const listener = () => setIsActive(activeNumPadFieldId === fieldId);
+    numPadFieldListeners.add(listener);
+    return () => {
+      numPadFieldListeners.delete(listener);
+    };
+  }, [fieldId]);
+
+  return {
+    isActive,
+    activate: () => setActiveNumPadField(fieldId),
+    deactivate: () => {
+      if (activeNumPadFieldId === fieldId) {
+        setActiveNumPadField(null);
+      }
+    }
+  };
+}
+
+function useNumPadField() {
+  const fieldIdRef = useRef<string | null>(null);
+  if (!fieldIdRef.current) {
+    numPadFieldCounter += 1;
+    fieldIdRef.current = `numpad-field-${numPadFieldCounter}`;
+  }
+
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [allSelected, setAllSelected] = useState(false);
+  const activation = useNumPadActivation(fieldIdRef.current!);
+
+  useEffect(() => {
+    if (!activation.isActive) {
+      setAllSelected(false);
+    }
+  }, [activation.isActive]);
+
+  function focusInput(selectAll = false) {
+    requestAnimationFrame(() => {
+      const input = inputRef.current;
+      if (!input) {
+        return;
+      }
+      input.focus();
+      if (selectAll && input.value) {
+        input.select();
+      }
+    });
+  }
+
+  function open() {
+    setAllSelected(false);
+    activation.activate();
+    focusInput(false);
+  }
+
+  function clearSelection() {
+    setAllSelected(false);
+    requestAnimationFrame(() => {
+      const input = inputRef.current;
+      if (!input) {
+        return;
+      }
+      const end = input.value.length;
+      input.setSelectionRange(end, end);
+    });
+  }
+
+  function handleInputPointerDown(event: ReactPointerEvent<HTMLInputElement>) {
+    event.preventDefault();
+    if (activation.isActive && inputRef.current?.value) {
+      setAllSelected(true);
+      activation.activate();
+      focusInput(true);
+      return;
+    }
+    open();
+  }
+
+  function handleInputFocus() {
+    if (!activation.isActive) {
+      open();
+    }
+  }
+
+  return {
+    isActive: activation.isActive,
+    wrapperRef,
+    inputRef,
+    allSelected,
+    close: activation.deactivate,
+    clearSelection,
+    handleInputPointerDown,
+    handleInputFocus
+  };
+}
+
+function DockedNumPad(props: {
+  anchorRef: RefObject<HTMLElement | null>;
+  onPress: (c: string) => void;
+  onBackspace: () => void;
+  onClear: () => void;
+  onClose: () => void;
+  extraKey?: string;
+}) {
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target as Node | null;
+      if (!target) {
+        return;
+      }
+
+      if (props.anchorRef.current?.contains(target) || panelRef.current?.contains(target)) {
+        return;
+      }
+
+      props.onClose();
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+    };
+  }, [props]);
+
+  function renderButton(label: string, handler: () => void, className?: string) {
+    return (
+      <button
+        key={label}
+        type="button"
+        className={className}
+        onPointerDown={(event) => {
+          event.preventDefault();
+          handler();
+        }}
+      >
+        {label}
+      </button>
+    );
+  }
+
+  return createPortal(
+    <div className="numpad-dock">
+      <div ref={panelRef} className="numpad-panel">
+        <div className="numpad-toolbar">
+          {renderButton("Clear", props.onClear, "numpad-toolbar-button")}
+        </div>
+        <div className="numpad">
+          {"123456789".split("").map((digit) => renderButton(digit, () => props.onPress(digit)))}
+          {props.extraKey ? renderButton(props.extraKey, () => props.onPress(props.extraKey)) : <span className="numpad-spacer" />}
+          {renderButton("0", () => props.onPress("0"))}
+          {renderButton("Del", props.onBackspace)}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function NumPadToReplace({ onPress, onBackspace, extraKey }: { onPress: (c: string) => void; onBackspace: () => void; extraKey?: string }) {
   function btn(label: string, handler: () => void) {
     return (
       <button key={label} type="button" onPointerDown={(e) => { e.preventDefault(); handler(); }}>
@@ -117,32 +295,62 @@ function NumPad({ onPress, onBackspace, extraKey }: { onPress: (c: string) => vo
 
 export function DobInput(props: { value: string; onChange: (value: string) => void }) {
   const [displayValue, setDisplayValue] = useState(() => props.value ? formatDisplayDate(props.value) : "");
-  const [focused, setFocused] = useState(false);
+  const field = useNumPadField();
 
   useEffect(() => {
-    if (!focused) setDisplayValue(props.value ? formatDisplayDate(props.value) : "");
-  }, [props.value, focused]);
+    if (!field.isActive) {
+      setDisplayValue(props.value ? formatDisplayDate(props.value) : "");
+    }
+  }, [field.isActive, props.value]);
 
-  function handlePress(d: string) {
-    const digits = (displayValue.replace(/\D/g, "") + d).slice(0, 8);
-    const formatted = formatDigitsAsDate(digits);
+  function updateFromDigits(digits: string, closeAfterUpdate = false) {
+    const limitedDigits = digits.slice(0, 8);
+    const formatted = formatDigitsAsDate(limitedDigits);
     setDisplayValue(formatted);
-    props.onChange(digits.length === 8 ? parseMmDdYyyy(formatted) : "");
+    props.onChange(limitedDigits.length === 8 ? parseMmDdYyyy(formatted) : "");
+    if (closeAfterUpdate) {
+      field.close();
+    }
+  }
+
+  function handlePress(digit: string) {
+    const baseDigits = field.allSelected ? "" : displayValue.replace(/\D/g, "");
+    const nextDigits = (baseDigits + digit).slice(0, 8);
+    field.clearSelection();
+    updateFromDigits(nextDigits, nextDigits.length === 8);
   }
 
   function handleBackspace() {
-    const digits = displayValue.replace(/\D/g, "").slice(0, -1);
-    const formatted = formatDigitsAsDate(digits);
-    setDisplayValue(formatted);
-    props.onChange(digits.length === 8 ? parseMmDdYyyy(formatted) : "");
+    const nextDigits = field.allSelected ? "" : displayValue.replace(/\D/g, "").slice(0, -1);
+    field.clearSelection();
+    updateFromDigits(nextDigits);
+  }
+
+  function handleClear() {
+    field.clearSelection();
+    updateFromDigits("");
   }
 
   return (
-    <div className="numpad-field">
-      <input type="text" readOnly placeholder="MM/DD/YYYY" value={displayValue}
-        onFocus={() => setFocused(true)} onClick={() => setFocused(true)}
-        onBlur={() => setTimeout(() => setFocused(false), 150)} />
-      {focused && <NumPad onPress={handlePress} onBackspace={handleBackspace} />}
+    <div ref={field.wrapperRef} className={`numpad-field${field.isActive ? " is-active" : ""}`}>
+      <input
+        ref={field.inputRef}
+        type="text"
+        readOnly
+        placeholder="MM/DD/YYYY"
+        value={displayValue}
+        onPointerDown={field.handleInputPointerDown}
+        onFocus={field.handleInputFocus}
+      />
+      {field.isActive ? (
+        <DockedNumPad
+          anchorRef={field.wrapperRef}
+          onPress={handlePress}
+          onBackspace={handleBackspace}
+          onClear={handleClear}
+          onClose={field.close}
+        />
+      ) : null}
     </div>
   );
 }
@@ -153,63 +361,157 @@ export function VisitDateInput(props: { value: string; onChange: (value: string)
 
 export function BloodPressureInput(props: { value: string; onChange: (value: string) => void }) {
   const [displayValue, setDisplayValue] = useState(() => props.value.replace(/\s*mmhg\s*$/i, "").trim());
-  const [focused, setFocused] = useState(false);
+  const field = useNumPadField();
 
   useEffect(() => {
-    if (!focused) setDisplayValue(props.value.replace(/\s*mmhg\s*$/i, "").trim());
-  }, [props.value, focused]);
+    if (!field.isActive) setDisplayValue(props.value.replace(/\s*mmhg\s*$/i, "").trim());
+  }, [field.isActive, props.value]);
 
-  function handlePress(c: string) {
-    const next = displayValue + c;
+  function syncValue(next: string, closeAfterSync = false) {
     setDisplayValue(next);
     props.onChange(next);
+    if (closeAfterSync) {
+      props.onChange(formatBloodPressure(next));
+      field.close();
+    }
+  }
+
+  function handlePress(character: string) {
+    const next = `${field.allSelected ? "" : displayValue}${character}`;
+    field.clearSelection();
+    syncValue(next, /^\d{2,3}\/\d{2,3}$/.test(next));
   }
 
   function handleBackspace() {
-    const next = displayValue.slice(0, -1);
-    setDisplayValue(next);
-    props.onChange(next);
+    const next = field.allSelected ? "" : displayValue.slice(0, -1);
+    field.clearSelection();
+    syncValue(next);
+  }
+
+  function handleClear() {
+    field.clearSelection();
+    syncValue("");
+  }
+
+  function handleClose() {
+    props.onChange(formatBloodPressure(displayValue));
+    field.close();
   }
 
   return (
-    <div className="numpad-field">
-      <input type="text" readOnly placeholder="e.g. 120/80" value={displayValue}
-        onFocus={() => setFocused(true)} onClick={() => setFocused(true)}
-        onBlur={() => setTimeout(() => { setFocused(false); props.onChange(formatBloodPressure(displayValue)); }, 150)} />
-      {focused && <NumPad onPress={handlePress} onBackspace={handleBackspace} extraKey="/" />}
+    <div ref={field.wrapperRef} className={`numpad-field${field.isActive ? " is-active" : ""}`}>
+      <input
+        ref={field.inputRef}
+        type="text"
+        readOnly
+        placeholder="e.g. 120/80"
+        value={displayValue}
+        onPointerDown={field.handleInputPointerDown}
+        onFocus={field.handleInputFocus}
+      />
+      {field.isActive ? (
+        <DockedNumPad
+          anchorRef={field.wrapperRef}
+          onPress={handlePress}
+          onBackspace={handleBackspace}
+          onClear={handleClear}
+          onClose={handleClose}
+          extraKey="/"
+        />
+      ) : null}
     </div>
   );
 }
 
 export function NumericInput(props: { value: string | number; onChange: (value: string) => void; placeholder?: string }) {
-  const [focused, setFocused] = useState(false);
+  const field = useNumPadField();
   const display = props.value === "" || props.value == null ? "" : String(props.value);
 
-  function handlePress(d: string) { props.onChange(display + d); }
-  function handleBackspace() { props.onChange(display.slice(0, -1)); }
+  function handlePress(digit: string) {
+    const next = `${field.allSelected ? "" : display}${digit}`;
+    field.clearSelection();
+    props.onChange(next);
+  }
+
+  function handleBackspace() {
+    const next = field.allSelected ? "" : display.slice(0, -1);
+    field.clearSelection();
+    props.onChange(next);
+  }
+
+  function handleClear() {
+    field.clearSelection();
+    props.onChange("");
+  }
 
   return (
-    <div className="numpad-field">
-      <input type="text" readOnly placeholder={props.placeholder} value={display}
-        onFocus={() => setFocused(true)} onClick={() => setFocused(true)}
-        onBlur={() => setTimeout(() => setFocused(false), 150)} />
-      {focused && <NumPad onPress={handlePress} onBackspace={handleBackspace} />}
+    <div ref={field.wrapperRef} className={`numpad-field${field.isActive ? " is-active" : ""}`}>
+      <input
+        ref={field.inputRef}
+        type="text"
+        readOnly
+        placeholder={props.placeholder}
+        value={display}
+        onPointerDown={field.handleInputPointerDown}
+        onFocus={field.handleInputFocus}
+      />
+      {field.isActive ? (
+        <DockedNumPad
+          anchorRef={field.wrapperRef}
+          onPress={handlePress}
+          onBackspace={handleBackspace}
+          onClear={handleClear}
+          onClose={field.close}
+        />
+      ) : null}
     </div>
   );
 }
 
 export function PinInput(props: { value: string; onChange: (value: string) => void; placeholder?: string }) {
-  const [focused, setFocused] = useState(false);
+  const field = useNumPadField();
 
-  function handlePress(d: string) { props.onChange(props.value + d); }
-  function handleBackspace() { props.onChange(props.value.slice(0, -1)); }
+  function handlePress(digit: string) {
+    const next = `${field.allSelected ? "" : props.value}${digit}`.slice(0, 8);
+    field.clearSelection();
+    props.onChange(next);
+    if (next.length >= 8) {
+      field.close();
+    }
+  }
+
+  function handleBackspace() {
+    const next = field.allSelected ? "" : props.value.slice(0, -1);
+    field.clearSelection();
+    props.onChange(next);
+  }
+
+  function handleClear() {
+    field.clearSelection();
+    props.onChange("");
+  }
 
   return (
-    <div className="numpad-field">
-      <input type="password" readOnly autoComplete="off" placeholder={props.placeholder ?? "PIN"} value={props.value}
-        onFocus={() => setFocused(true)} onClick={() => setFocused(true)}
-        onBlur={() => setTimeout(() => setFocused(false), 150)} />
-      {focused && <NumPad onPress={handlePress} onBackspace={handleBackspace} />}
+    <div ref={field.wrapperRef} className={`numpad-field${field.isActive ? " is-active" : ""}`}>
+      <input
+        ref={field.inputRef}
+        type="password"
+        readOnly
+        autoComplete="off"
+        placeholder={props.placeholder ?? "PIN"}
+        value={props.value}
+        onPointerDown={field.handleInputPointerDown}
+        onFocus={field.handleInputFocus}
+      />
+      {field.isActive ? (
+        <DockedNumPad
+          anchorRef={field.wrapperRef}
+          onPress={handlePress}
+          onBackspace={handleBackspace}
+          onClear={handleClear}
+          onClose={field.close}
+        />
+      ) : null}
     </div>
   );
 }
