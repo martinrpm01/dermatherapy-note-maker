@@ -14,7 +14,7 @@ import {
   shouldIncludeExamVitals
 } from "../../shared/note-rules";
 import { useResolvedAssetUrl } from "./asset-url";
-import { VisitDateInput } from "./screen-components";
+import { BloodPressureInput, VisitDateInput } from "./screen-components";
 
 const STANDARD_PRESCRIBED_FRACTION_OPTIONS = [8, 10, 12, 15] as const;
 
@@ -257,7 +257,7 @@ export function VisitEditorScreen(props: {
             {editor.note.noteType !== "consult_sim" && (
               <label>
                 Treatment Number
-                <input type="number" inputMode="numeric" min={1} max={15} value={editor.note.treatmentNumber ?? ""} onChange={(event) => {
+                <input type="number" inputMode="tel" min={1} max={15} value={editor.note.treatmentNumber ?? ""} onChange={(event) => {
                   const num = event.target.value ? Number(event.target.value) : null;
                   props.onUpdate((current) => ({
                     ...current,
@@ -346,7 +346,7 @@ export function VisitEditorScreen(props: {
                             {formatFractionLabel("Actual Projected Fractions", site.siteNumber, site.bodyLocation, index)}
                             <input
                               type="number"
-                              inputMode="numeric"
+                              inputMode="tel"
                               min={1}
                               max={30}
                               value={currentFractions ?? ""}
@@ -457,7 +457,7 @@ export function VisitEditorScreen(props: {
                             {formatFractionLabel("Actual Prescribed Fractions", site.siteNumber, site.bodyLocation, index)}
                             <input
                               type="number"
-                              inputMode="numeric"
+                              inputMode="tel"
                               min={1}
                               max={30}
                               value={currentFractions ?? ""}
@@ -506,7 +506,7 @@ export function VisitEditorScreen(props: {
                     {formatDoseFieldLabel("Daily Dose (cGy)", isTwoLesionLayout, site.siteNumber, site.bodyLocation, index)}
                     <input
                       type="number"
-                      inputMode="numeric"
+                      inputMode="tel"
                       min={0}
                       value={site.dailyDose > 0 ? site.dailyDose : ""}
                       onChange={(event) => {
@@ -540,7 +540,7 @@ export function VisitEditorScreen(props: {
                     {formatDoseFieldLabel("Total Dose (cGy)", isTwoLesionLayout, site.siteNumber, site.bodyLocation, index)}
                     <input
                       type="number"
-                      inputMode="numeric"
+                      inputMode="tel"
                       min={0}
                       value={site.totalDose > 0 ? site.totalDose : ""}
                       onChange={(event) => {
@@ -742,16 +742,15 @@ export function VisitEditorScreen(props: {
                   <div className="form-grid">
                     <label>
                       Blood Pressure
-                      <input
-                        placeholder="e.g. 120/80 mmHg"
+                      <BloodPressureInput
                         value={editor.note.vitals.bloodPressure}
-                        onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, bloodPressure: event.target.value } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
-                        onBlur={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, bloodPressure: formatBloodPressure(event.target.value) } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                        onChange={(next) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, bloodPressure: next } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
                       />
                     </label>
                     <label>
                       Heart Rate
                       <input
+                        inputMode="tel"
                         placeholder="e.g. 72 BPM"
                         value={editor.note.vitals.heartRate}
                         onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, heartRate: event.target.value } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
@@ -761,6 +760,7 @@ export function VisitEditorScreen(props: {
                     <label>
                       O2 Saturation
                       <input
+                        inputMode="tel"
                         placeholder="e.g. 98%"
                         value={editor.note.vitals.oxygenSaturation}
                         onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, oxygenSaturation: event.target.value } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
@@ -770,6 +770,7 @@ export function VisitEditorScreen(props: {
                     <label>
                       Weight
                       <input
+                        inputMode="tel"
                         placeholder="e.g. 165 lbs"
                         value={editor.note.vitals.weight}
                         onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, weight: event.target.value } } }), { regenerate: true, overwriteEdited: !props.textDirty })}

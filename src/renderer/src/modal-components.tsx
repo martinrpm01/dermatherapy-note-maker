@@ -887,7 +887,7 @@ export function PendingCourseIntakeModal(props: {
                     {isTwoSite ? `Actual Projected Fractions Lesion ${site.siteNumber}` : "Actual Projected Fractions"}
                     <input
                       type="number"
-                      inputMode="numeric"
+                      inputMode="tel"
                       min={1}
                       max={30}
                       placeholder="Enter fractions"
@@ -1237,7 +1237,7 @@ export function DocumentOnlyWorksheetModal(props: {
                       Actual Projected Fractions
                       <input
                         type="number"
-                        inputMode="numeric"
+                        inputMode="tel"
                         min={1}
                         max={30}
                         placeholder="Enter fractions"
@@ -1717,7 +1717,7 @@ export function CourseModal(props: {
             {fractionMode === "other" ? (
               <input
                 type="number"
-                inputMode="numeric"
+                inputMode="tel"
                 placeholder="Enter fractions"
                 value={customFractions}
                 style={{ marginTop: "0.4rem" }}
@@ -1768,7 +1768,7 @@ export function CourseModal(props: {
                   {getSiteFractionMode(index) === "other" && (
                     <input
                       type="number"
-                      inputMode="numeric"
+                      inputMode="tel"
                       placeholder="Enter fractions"
                       value={siteFractionModes[index]?.custom ?? ""}
                       style={{ marginTop: "0.4rem" }}

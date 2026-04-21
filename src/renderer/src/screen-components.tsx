@@ -12,7 +12,7 @@ import type {
   TemplateDefinitionRecord,
   AppSettingsView
 } from "../../shared/types";
-import { NOTE_TYPE_LABELS, formatDisplayDate } from "../../shared/note-rules";
+import { NOTE_TYPE_LABELS, formatBloodPressure, formatDisplayDate } from "../../shared/note-rules";
 import { useResolvedAssetUrl } from "./asset-url";
 
 function patientDisplayName(detail: PatientDetail["patient"]) {
@@ -124,7 +124,7 @@ export function DobInput(props: { value: string; onChange: (value: string) => vo
   return (
     <input
       type="text"
-      inputMode="numeric"
+      inputMode="tel"
       placeholder="MM/DD/YYYY"
       maxLength={10}
       value={displayValue}
@@ -161,9 +161,48 @@ export function VisitDateInput(props: { value: string; onChange: (value: string)
   return (
     <input
       type="text"
-      inputMode="numeric"
+      inputMode="tel"
       placeholder="MM/DD/YYYY"
       maxLength={10}
+      value={displayValue}
+      onChange={handleChange}
+      onBlur={handleBlur}
+    />
+  );
+}
+
+function formatBpDigits(digits: string): string {
+  const d = digits.slice(0, 6);
+  if (d.length <= 3) return d;
+  return `${d.slice(0, 3)}/${d.slice(3)}`;
+}
+
+export function BloodPressureInput(props: { value: string; onChange: (value: string) => void }) {
+  const [displayValue, setDisplayValue] = useState(() =>
+    props.value.replace(/\s*mmhg\s*$/i, "").trim()
+  );
+
+  useEffect(() => {
+    setDisplayValue(props.value.replace(/\s*mmhg\s*$/i, "").trim());
+  }, [props.value]);
+
+  function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const digits = event.target.value.replace(/\D/g, "");
+    const formatted = formatBpDigits(digits);
+    setDisplayValue(formatted);
+    props.onChange(formatted);
+  }
+
+  function handleBlur() {
+    const result = formatBloodPressure(displayValue);
+    props.onChange(result);
+  }
+
+  return (
+    <input
+      type="text"
+      inputMode="tel"
+      placeholder="e.g. 120/80"
       value={displayValue}
       onChange={handleChange}
       onBlur={handleBlur}
@@ -533,8 +572,8 @@ export function LockScreen(props: {
             </div>
             <div className="panel lock-setup-pin-panel">
               <h3>Set PIN</h3>
-              <input type="password" inputMode="numeric" pattern="[0-9]*" placeholder="New PIN" value={props.setupPin} onChange={(event) => props.onSetupPinChange(event.target.value)} />
-              <input type="password" inputMode="numeric" pattern="[0-9]*" placeholder="Confirm PIN" value={props.confirmPin} onChange={(event) => props.onConfirmPinChange(event.target.value)} />
+              <input type="password" inputMode="tel" pattern="[0-9]*" placeholder="New PIN" value={props.setupPin} onChange={(event) => props.onSetupPinChange(event.target.value)} />
+              <input type="password" inputMode="tel" pattern="[0-9]*" placeholder="Confirm PIN" value={props.confirmPin} onChange={(event) => props.onConfirmPinChange(event.target.value)} />
               <button className="primary" onClick={props.onSetup}>
                 Save Setup
               </button>
@@ -542,7 +581,7 @@ export function LockScreen(props: {
           </div>
         ) : (
           <>
-            <input type="password" inputMode="numeric" pattern="[0-9]*" placeholder="PIN" value={props.unlockPin} onChange={(event) => props.onUnlockPinChange(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") props.onUnlock(); }} />
+            <input type="password" inputMode="tel" pattern="[0-9]*" placeholder="PIN" value={props.unlockPin} onChange={(event) => props.onUnlockPinChange(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") props.onUnlock(); }} />
             <button className="primary" onClick={props.onUnlock}>
               Unlock
             </button>
@@ -655,14 +694,14 @@ export function PinRecoveryScreen(props: {
         />
         <input
           type="password"
-          inputMode="numeric"
+          inputMode="tel"
           placeholder="New PIN"
           value={props.nextPin}
           onChange={(event) => props.onNextPinChange(event.target.value)}
         />
         <input
           type="password"
-          inputMode="numeric"
+          inputMode="tel"
           placeholder="Confirm New PIN"
           value={props.confirmPin}
           onChange={(event) => props.onConfirmPinChange(event.target.value)}
@@ -1744,9 +1783,9 @@ export function SettingsScreen(props: {
         </div>
         <div className="panel">
           <h3>Change PIN</h3>
-          <input type="password" inputMode="numeric" pattern="[0-9]*" placeholder="Current PIN" value={props.changePin.currentPin} onChange={(event) => props.onChangePin({ ...props.changePin, currentPin: event.target.value })} />
-          <input type="password" inputMode="numeric" pattern="[0-9]*" placeholder="New PIN" value={props.changePin.nextPin} onChange={(event) => props.onChangePin({ ...props.changePin, nextPin: event.target.value })} />
-          <input type="password" inputMode="numeric" pattern="[0-9]*" placeholder="Confirm New PIN" value={props.changePin.confirmPin} onChange={(event) => props.onChangePin({ ...props.changePin, confirmPin: event.target.value })} />
+          <input type="password" inputMode="tel" pattern="[0-9]*" placeholder="Current PIN" value={props.changePin.currentPin} onChange={(event) => props.onChangePin({ ...props.changePin, currentPin: event.target.value })} />
+          <input type="password" inputMode="tel" pattern="[0-9]*" placeholder="New PIN" value={props.changePin.nextPin} onChange={(event) => props.onChangePin({ ...props.changePin, nextPin: event.target.value })} />
+          <input type="password" inputMode="tel" pattern="[0-9]*" placeholder="Confirm New PIN" value={props.changePin.confirmPin} onChange={(event) => props.onChangePin({ ...props.changePin, confirmPin: event.target.value })} />
           <button onClick={props.onSubmitPin}>Update PIN</button>
           <button className="ghost" onClick={props.onLockApp}>Lock App</button>
         </div>
