@@ -1444,3 +1444,28 @@ input.search {
     grid-template-columns: 1fr;
   }
 }
+
+.visit-date-input {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.date-quick-buttons {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.date-quick-buttons button {
+  flex: 1 1 auto;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.82rem;
+  border-radius: 10px;
+  min-width: 60px;
+}
+
+.date-quick-buttons button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}

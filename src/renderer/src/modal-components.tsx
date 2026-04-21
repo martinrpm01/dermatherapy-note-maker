@@ -28,6 +28,7 @@ import type {
   TreatmentCourseRecord,
   TreatmentSiteRecord
 } from "../../shared/types";
+import { DobInput, VisitDateInput } from "./screen-components";
 
 const FRACTION_PRESETS = [8, 10, 12, 15];
 const DEPTH_OPTIONS = ["3", "4", "5"];
@@ -161,7 +162,7 @@ export function PatientModal(props: {
           </label>
           <label>
             DOB
-            <input type="date" value={props.patientForm.dob} onChange={(event) => props.onChange({ ...props.patientForm, dob: event.target.value })} />
+            <DobInput value={props.patientForm.dob} onChange={(next) => props.onChange({ ...props.patientForm, dob: next })} />
           </label>
             <label>
               Sex
@@ -517,11 +518,7 @@ export function ConsentSigningModal(props: {
             <div className="form-grid consent-step-grid">
               <label>
                 Sign Date
-                <input
-                  type="date"
-                  value={props.signingInput.signDate}
-                  onChange={(event) => props.onChange({ ...props.signingInput, signDate: event.target.value })}
-                />
+                <VisitDateInput value={props.signingInput.signDate} onChange={(next) => props.onChange({ ...props.signingInput, signDate: next })} />
               </label>
               <label>
                 Patient Printed Name
@@ -619,11 +616,7 @@ export function ConsentSigningModal(props: {
             <div className="form-grid consent-step-grid">
               <label>
                 Sign Date
-                <input
-                  type="date"
-                  value={props.signingInput.signDate}
-                  onChange={(event) => props.onChange({ ...props.signingInput, signDate: event.target.value })}
-                />
+                <VisitDateInput value={props.signingInput.signDate} onChange={(next) => props.onChange({ ...props.signingInput, signDate: next })} />
               </label>
               <label>
                 Witness Name
@@ -821,19 +814,11 @@ export function PendingCourseIntakeModal(props: {
             </label>
             <label>
               Biopsy Date
-              <input
-                type="date"
-                value={courseForm.startDate}
-                onChange={(event) => props.onChange({ ...courseForm, startDate: event.target.value })}
-              />
+              <VisitDateInput value={courseForm.startDate} onChange={(next) => props.onChange({ ...courseForm, startDate: next })} />
             </label>
             <label>
               Sim / Consult Date
-              <input
-                type="date"
-                value={courseForm.simConsultDate ?? ""}
-                onChange={(event) => props.onChange({ ...courseForm, simConsultDate: event.target.value })}
-              />
+              <VisitDateInput value={courseForm.simConsultDate ?? ""} onChange={(next) => props.onChange({ ...courseForm, simConsultDate: next })} />
             </label>
           </div>
         <div className={`site-grid${isTwoSite ? " two-site-course-grid" : ""}`}>
@@ -985,7 +970,7 @@ export function DocumentOnlyRecordModal(props: {
           </label>
           <label>
             DOB
-            <input type="date" value={recordForm.dob} onChange={(event) => props.onChange({ ...recordForm, dob: event.target.value })} />
+            <DobInput value={recordForm.dob} onChange={(next) => props.onChange({ ...recordForm, dob: next })} />
           </label>
           <label>
             Sex
@@ -1017,11 +1002,7 @@ export function DocumentOnlyRecordModal(props: {
           </label>
           <label>
             Sim / Consult Date
-            <input
-              type="date"
-              value={recordForm.simConsultDate}
-              onChange={(event) => props.onChange({ ...recordForm, simConsultDate: event.target.value })}
-            />
+            <VisitDateInput value={recordForm.simConsultDate} onChange={(next) => props.onChange({ ...recordForm, simConsultDate: next })} />
           </label>
         </div>
         <div className={`site-grid${isTwoSite ? " two-site-course-grid" : ""}`}>

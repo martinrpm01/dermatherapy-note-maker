@@ -79,6 +79,131 @@ function getPathFileName(value: string) {
   return segments[segments.length - 1] || value;
 }
 
+function localDateString(offsetDays: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - offsetDays);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function parseMmDdYyyy(display: string): string {
+  const digits = display.replace(/\D/g, "");
+  if (digits.length !== 8) return "";
+  const mm = digits.slice(0, 2);
+  const dd = digits.slice(2, 4);
+  const yyyy = digits.slice(4, 8);
+  const iso = `${yyyy}-${mm}-${dd}`;
+  const parsed = new Date(iso);
+  if (isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== iso) return "";
+  return iso;
+}
+
+function formatDigitsAsDate(digits: string): string {
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
+}
+
+export function DobInput(props: { value: string; onChange: (value: string) => void }) {
+  const [displayValue, setDisplayValue] = useState(() =>
+    props.value ? formatDisplayDate(props.value) : ""
+  );
+
+  useEffect(() => {
+    setDisplayValue(props.value ? formatDisplayDate(props.value) : "");
+  }, [props.value]);
+
+  function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const digits = event.target.value.replace(/\D/g, "").slice(0, 8);
+    const formatted = formatDigitsAsDate(digits);
+    setDisplayValue(formatted);
+    props.onChange(digits.length === 8 ? parseMmDdYyyy(formatted) : "");
+  }
+
+  function handleBlur() {
+    const digits = displayValue.replace(/\D/g, "");
+    if (digits.length > 0 && digits.length < 8) {
+      setDisplayValue("");
+      props.onChange("");
+    }
+  }
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      placeholder="MM/DD/YYYY"
+      maxLength={10}
+      value={displayValue}
+      onChange={handleChange}
+      onBlur={handleBlur}
+    />
+  );
+}
+
+const QUICK_SELECT_OFFSETS = [
+  { label: "Yesterday", offset: 1 },
+  { label: "Today", offset: 0 },
+  { label: "Tomorrow", offset: -1 },
+] as const;
+
+export function VisitDateInput(props: { value: string; onChange: (value: string) => void }) {
+  const [displayValue, setDisplayValue] = useState(() =>
+    props.value ? formatDisplayDate(props.value) : ""
+  );
+
+  useEffect(() => {
+    setDisplayValue(props.value ? formatDisplayDate(props.value) : "");
+  }, [props.value]);
+
+  function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const digits = event.target.value.replace(/\D/g, "").slice(0, 8);
+    const formatted = formatDigitsAsDate(digits);
+    setDisplayValue(formatted);
+    props.onChange(digits.length === 8 ? parseMmDdYyyy(formatted) : "");
+  }
+
+  function handleBlur() {
+    const digits = displayValue.replace(/\D/g, "");
+    if (digits.length > 0 && digits.length < 8) {
+      setDisplayValue("");
+      props.onChange("");
+    }
+  }
+
+  function handleQuickSelect(offset: number) {
+    props.onChange(localDateString(offset));
+  }
+
+  return (
+    <div className="visit-date-input">
+      <div className="date-quick-buttons">
+        {QUICK_SELECT_OFFSETS.map(({ label, offset }) => (
+          <button
+            key={offset}
+            type="button"
+            className={props.value === localDateString(offset) ? "active" : ""}
+            onClick={() => handleQuickSelect(offset)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <input
+        type="text"
+        inputMode="numeric"
+        placeholder="MM/DD/YYYY"
+        maxLength={10}
+        value={displayValue}
+        onChange={handleChange}
+        onBlur={handleBlur}
+      />
+    </div>
+  );
+}
+
 function formatRestoreModeLabel(result: PatientArchivePreflightResult) {
   if (result.restoreMode === "merge_existing_patient") {
     return `Merge completed history into existing patient ${result.targetPatientId}`;

@@ -14,6 +14,7 @@ import {
   shouldIncludeExamVitals
 } from "../../shared/note-rules";
 import { useResolvedAssetUrl } from "./asset-url";
+import { VisitDateInput } from "./screen-components";
 
 const STANDARD_PRESCRIBED_FRACTION_OPTIONS = [8, 10, 12, 15] as const;
 
@@ -191,7 +192,7 @@ export function VisitEditorScreen(props: {
           <div className="form-grid">
             <label>
               Visit Date
-              <input type="date" value={editor.note.visitDate} onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, visitDate: event.target.value } }), { regenerate: true, overwriteEdited: !props.textDirty })} />
+              <VisitDateInput value={editor.note.visitDate} onChange={(next) => props.onUpdate((current) => ({ ...current, note: { ...current.note, visitDate: next } }), { regenerate: true, overwriteEdited: !props.textDirty })} />
             </label>
             <label>
               Visit Type
@@ -627,15 +628,14 @@ export function VisitEditorScreen(props: {
                   {editor.note.structuredFields.siteSnapshots.length === 1
                     ? "Biopsy Date"
                     : `Biopsy Date Lesion ${index + 1}${site.bodyLocation ? ` (${site.bodyLocation})` : ""}`}
-                  <input
-                    type="date"
+                  <VisitDateInput
                     value={site.biopsyDate || editor.note.structuredFields.biopsyDate || ""}
-                    onChange={(event) =>
+                    onChange={(next) =>
                       props.onUpdate(
                         (current) => {
                           const nextSiteSnapshots = current.note.structuredFields.siteSnapshots.map((snapshot) =>
                             snapshot.siteNumber === site.siteNumber
-                              ? { ...snapshot, biopsyDate: event.target.value }
+                              ? { ...snapshot, biopsyDate: next }
                               : snapshot
                           );
                           return {
@@ -659,16 +659,15 @@ export function VisitEditorScreen(props: {
               ))}
               <label>
                 Treatment Start Date
-                <input
-                  type="date"
+                <VisitDateInput
                   value={editor.note.structuredFields.startRadiationDate}
-                  onChange={(event) => props.onUpdate((current) => ({
+                  onChange={(next) => props.onUpdate((current) => ({
                     ...current,
                     note: {
                       ...current.note,
                       structuredFields: {
                         ...current.note.structuredFields,
-                        startRadiationDate: event.target.value
+                        startRadiationDate: next
                       }
                     }
                   }), { regenerate: true, overwriteEdited: !props.textDirty })}
@@ -679,10 +678,9 @@ export function VisitEditorScreen(props: {
             <div className="form-grid">
               <label>
                 {editor.note.noteType === "first_fraction" ? "Consult Date" : "Previous Treatment Date"}
-                <input
-                  type="date"
+                <VisitDateInput
                   value={editor.note.structuredFields.lastTreatmentDate ?? ""}
-                  onChange={(event) =>
+                  onChange={(next) =>
                     props.onUpdate(
                       (current) => ({
                         ...current,
@@ -690,7 +688,7 @@ export function VisitEditorScreen(props: {
                           ...current.note,
                           structuredFields: {
                             ...current.note.structuredFields,
-                            lastTreatmentDate: event.target.value
+                            lastTreatmentDate: next
                           }
                         }
                       }),
