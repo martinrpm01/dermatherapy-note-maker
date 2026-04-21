@@ -13,7 +13,7 @@ import type {
   TemplateDefinitionRecord,
   AppSettingsView
 } from "../../shared/types";
-import { NOTE_TYPE_LABELS, formatBloodPressure, formatDisplayDate } from "../../shared/note-rules";
+import { NOTE_TYPE_LABELS, formatBloodPressure, formatDisplayDate, formatHeartRate, formatOxygenSaturation, formatWeight } from "../../shared/note-rules";
 import { useResolvedAssetUrl } from "./asset-url";
 
 function patientDisplayName(detail: PatientDetail["patient"]) {
@@ -98,6 +98,39 @@ function formatDigitsAsDate(digits: string): string {
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
 }
 
+function formatLesionSize(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const normalized = trimmed.replace(/\s+/g, " ");
+  const mmMatch = normalized.match(/^(\d+(?:\.\d+)?)\s*mm$/i);
+  if (mmMatch) {
+    return `${mmMatch[1]}mm`;
+  }
+
+  const numericMatch = normalized.match(/^(\d+(?:\.\d+)?)$/);
+  if (numericMatch) {
+    return `${numericMatch[1]}mm`;
+  }
+
+  return normalized;
+}
+
+function findScrollableParent(element: HTMLElement | null): HTMLElement | null {
+  let current = element?.parentElement ?? null;
+  while (current) {
+    const style = window.getComputedStyle(current);
+    const overflowY = style.overflowY;
+    if ((overflowY === "auto" || overflowY === "scroll") && current.scrollHeight > current.clientHeight) {
+      return current;
+    }
+    current = current.parentElement;
+  }
+  return null;
+}
+
 let activeNumPadFieldId: string | null = null;
 let numPadFieldCounter = 0;
 const numPadFieldListeners = new Set<() => void>();
@@ -149,6 +182,56 @@ function useNumPadField() {
     if (!activation.isActive) {
       setAllSelected(false);
     }
+  }, [activation.isActive]);
+
+  useEffect(() => {
+    if (!activation.isActive) {
+      document.body.classList.remove("numpad-open");
+      document.documentElement.style.removeProperty("--numpad-offset");
+      return;
+    }
+
+    function positionActiveField() {
+      const wrapper = wrapperRef.current;
+      if (!wrapper) {
+        return;
+      }
+
+      const panel = document.querySelector<HTMLElement>(".numpad-panel");
+      const dockHeight = (panel?.getBoundingClientRect().height ?? 220) + 24;
+      document.body.classList.add("numpad-open");
+      document.documentElement.style.setProperty("--numpad-offset", `${dockHeight}px`);
+
+      const wrapperRect = wrapper.getBoundingClientRect();
+      const visibleTop = 24;
+      const visibleBottom = window.innerHeight - dockHeight - 16;
+
+      if (wrapperRect.top >= visibleTop && wrapperRect.bottom <= visibleBottom) {
+        return;
+      }
+
+      const scrollParent = findScrollableParent(wrapper);
+      const delta =
+        wrapperRect.bottom > visibleBottom
+          ? wrapperRect.bottom - visibleBottom
+          : wrapperRect.top - visibleTop;
+
+      if (scrollParent) {
+        scrollParent.scrollBy({ top: delta, behavior: "smooth" });
+      } else {
+        window.scrollBy({ top: delta, behavior: "smooth" });
+      }
+    }
+
+    const rafId = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(positionActiveField);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      document.body.classList.remove("numpad-open");
+      document.documentElement.style.removeProperty("--numpad-offset");
+    };
   }, [activation.isActive]);
 
   function focusInput(selectAll = false) {
@@ -263,6 +346,7 @@ function DockedNumPad(props: {
       <div ref={panelRef} className="numpad-panel">
         <div className="numpad-toolbar">
           {renderButton("Clear", props.onClear, "numpad-toolbar-button")}
+          {props.extraKey ? renderButton(props.extraKey, () => props.onPress(props.extraKey!), "numpad-toolbar-button") : null}
         </div>
         <div className="numpad">
           {"123456789".split("").map((digit) => renderButton(digit, () => props.onPress(digit)))}
@@ -374,10 +458,35 @@ export function BloodPressureInput(props: { value: string; onChange: (value: str
     }
   }
 
+  function normalizeEditableValue(value: string) {
+    const cleaned = value.replace(/[^\d/]/g, "");
+    const slashIndex = cleaned.indexOf("/");
+    if (slashIndex === -1) {
+      return cleaned;
+    }
+    return `${cleaned.slice(0, slashIndex).replace(/\//g, "")}/${cleaned.slice(slashIndex + 1).replace(/\//g, "")}`;
+  }
+
   function handlePress(character: string) {
-    const next = `${field.allSelected ? "" : displayValue}${character}`;
+    const currentValue = normalizeEditableValue(field.allSelected ? "" : displayValue);
+    let next = currentValue;
+
+    if (character === "/") {
+      if (!currentValue.includes("/")) {
+        const digits = currentValue.replace(/\D/g, "");
+        next = digits ? `${digits}/` : currentValue;
+      }
+    } else {
+      const digitsOnly = currentValue.replace(/\D/g, "");
+      if (!currentValue.includes("/") && digitsOnly.length === 3) {
+        next = `${digitsOnly}/${character}`;
+      } else {
+        next = `${currentValue}${character}`;
+      }
+    }
+
     field.clearSelection();
-    syncValue(next, /^\d{2,3}\/\d{2,3}$/.test(next));
+    syncValue(normalizeEditableValue(next), false);
   }
 
   function handleBackspace() {
@@ -463,6 +572,121 @@ export function NumericInput(props: { value: string | number; onChange: (value: 
         />
       ) : null}
     </div>
+  );
+}
+
+function FormattedNumericInput(props: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  toEditable: (value: string) => string;
+  formatter: (value: string) => string;
+}) {
+  const [displayValue, setDisplayValue] = useState(() => props.toEditable(props.value));
+  const field = useNumPadField();
+
+  useEffect(() => {
+    if (!field.isActive) {
+      setDisplayValue(props.toEditable(props.value));
+    }
+  }, [field.isActive, props.value, props.toEditable]);
+
+  function syncValue(next: string) {
+    setDisplayValue(next);
+    props.onChange(next);
+  }
+
+  function handlePress(digit: string) {
+    const next = `${field.allSelected ? "" : displayValue}${digit}`;
+    field.clearSelection();
+    syncValue(next);
+  }
+
+  function handleBackspace() {
+    const next = field.allSelected ? "" : displayValue.slice(0, -1);
+    field.clearSelection();
+    syncValue(next);
+  }
+
+  function handleClear() {
+    field.clearSelection();
+    syncValue("");
+  }
+
+  function handleClose() {
+    props.onChange(props.formatter(displayValue));
+    field.close();
+  }
+
+  return (
+    <div ref={field.wrapperRef} className={`numpad-field${field.isActive ? " is-active" : ""}`}>
+      <input
+        ref={field.inputRef}
+        type="text"
+        readOnly
+        placeholder={props.placeholder}
+        value={displayValue}
+        onPointerDown={field.handleInputPointerDown}
+        onFocus={field.handleInputFocus}
+      />
+      {field.isActive ? (
+        <DockedNumPad
+          anchorRef={field.wrapperRef}
+          onPress={handlePress}
+          onBackspace={handleBackspace}
+          onClear={handleClear}
+          onClose={handleClose}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+export function HeartRateInput(props: { value: string; onChange: (value: string) => void }) {
+  return (
+    <FormattedNumericInput
+      value={props.value}
+      onChange={props.onChange}
+      placeholder="e.g. 72 BPM"
+      toEditable={(value) => value.replace(/\s*bpm\s*$/i, "").trim()}
+      formatter={formatHeartRate}
+    />
+  );
+}
+
+export function OxygenSaturationInput(props: { value: string; onChange: (value: string) => void }) {
+  return (
+    <FormattedNumericInput
+      value={props.value}
+      onChange={props.onChange}
+      placeholder="e.g. 98%"
+      toEditable={(value) => value.replace(/\s*%\s*$/i, "").trim()}
+      formatter={formatOxygenSaturation}
+    />
+  );
+}
+
+export function WeightInput(props: { value: string; onChange: (value: string) => void }) {
+  return (
+    <FormattedNumericInput
+      value={props.value}
+      onChange={props.onChange}
+      placeholder="e.g. 165 lbs"
+      toEditable={(value) => value.replace(/\s*lbs?\s*$/i, "").trim()}
+      formatter={formatWeight}
+    />
+  );
+}
+
+export function LesionSizeInput(props: { value: string; onChange: (value: string) => void }) {
+  return (
+    <FormattedNumericInput
+      value={props.value}
+      onChange={props.onChange}
+      placeholder="e.g. 10mm"
+      toEditable={(value) => value.replace(/\s*mm\s*$/i, "").trim()}
+      formatter={formatLesionSize}
+    />
   );
 }
 

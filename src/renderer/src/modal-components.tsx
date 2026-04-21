@@ -28,7 +28,7 @@ import type {
   TreatmentCourseRecord,
   TreatmentSiteRecord
 } from "../../shared/types";
-import { DobInput, NumericInput, VisitDateInput } from "./screen-components";
+import { DobInput, LesionSizeInput, NumericInput, VisitDateInput } from "./screen-components";
 
 const FRACTION_PRESETS = [8, 10, 12, 15];
 const DEPTH_OPTIONS = ["3", "4", "5"];
@@ -1258,10 +1258,9 @@ export function DocumentOnlyWorksheetModal(props: {
                   </label>
                   <label>
                     Lesion Size (mm)
-                    <input
-                      placeholder="e.g. 10mm"
+                    <LesionSizeInput
                       value={site.lesionSize}
-                      onChange={(event) => updateSite(index, { lesionSize: normalizeMeasurementInput(event.target.value) })}
+                      onChange={(next) => updateSite(index, { lesionSize: next })}
                     />
                   </label>
                   <label>
@@ -1823,11 +1822,9 @@ export function CourseModal(props: {
                 </label>
                 <label>
                   Lesion Size (mm)
-                  <input
-                    placeholder="e.g. 10mm"
+                  <LesionSizeInput
                     value={site.lesionSize}
-                    onChange={(event) => updateSite(index, { lesionSize: event.target.value })}
-                    onBlur={(event) => updateSite(index, { lesionSize: normalizeMeasurementInput(event.target.value) })}
+                    onChange={(next) => updateSite(index, { lesionSize: next })}
                   />
                 </label>
                 <label>

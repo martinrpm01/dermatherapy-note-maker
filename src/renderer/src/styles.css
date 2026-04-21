@@ -26,6 +26,10 @@ body {
   color: var(--text);
 }
 
+body.numpad-open {
+  padding-bottom: var(--numpad-offset, 0px);
+}
+
 button,
 input,
 textarea,
