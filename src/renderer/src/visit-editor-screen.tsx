@@ -178,7 +178,7 @@ export function VisitEditorScreen(props: {
           </button>
           <button onClick={props.onSaveDraft}>Save Draft</button>
           <button className="primary" onClick={props.onSaveAndGeneratePdf}>
-            Save + Generate PDF
+                  Finalize
           </button>
         </div>
       </div>
