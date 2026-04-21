@@ -323,9 +323,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
       return;
     }
 
-    const preferredMimeType = ["image/png", "image/jpeg", "image/webp"].includes(logoCropState.file.type)
-      ? logoCropState.file.type
-      : "image/png";
+    const preferredMimeType = "image/png";
 
     try {
       const upload = await renderImageFileToUpload(
@@ -342,7 +340,10 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
         },
         undefined,
         preferredMimeType,
-        { trimWhitespace: selection.shape === "square" }
+        {
+          trimWhitespace: selection.shape === "square",
+          backgroundColor: "#ffffff"
+        }
       );
 
       if (logoCropState.target === "setup") {
