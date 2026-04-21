@@ -181,6 +181,7 @@ function useNumPadField() {
 
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const repositionTimeoutRef = useRef<number | null>(null);
   const [allSelected, setAllSelected] = useState(false);
   const activation = useNumPadActivation(fieldIdRef.current!);
 
@@ -222,10 +223,25 @@ function useNumPadField() {
         : wrapperRect.top - visibleTop;
 
     if (scrollParent) {
-      scrollParent.scrollBy({ top: delta, behavior: "smooth" });
+      scrollParent.scrollBy({ top: delta, behavior: "auto" });
     } else {
-      window.scrollBy({ top: delta, behavior: "smooth" });
+      window.scrollBy({ top: delta, behavior: "auto" });
     }
+  }
+
+  function scheduleReposition() {
+    if (repositionTimeoutRef.current !== null) {
+      window.clearTimeout(repositionTimeoutRef.current);
+    }
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(positionFieldIntoView);
+    });
+
+    repositionTimeoutRef.current = window.setTimeout(() => {
+      requestAnimationFrame(positionFieldIntoView);
+      repositionTimeoutRef.current = null;
+    }, 120);
   }
 
   useEffect(() => {
@@ -242,12 +258,13 @@ function useNumPadField() {
       return;
     }
 
-    const rafId = window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(positionFieldIntoView);
-    });
+    scheduleReposition();
 
     return () => {
-      window.cancelAnimationFrame(rafId);
+      if (repositionTimeoutRef.current !== null) {
+        window.clearTimeout(repositionTimeoutRef.current);
+        repositionTimeoutRef.current = null;
+      }
       if (!activeNumPadFieldId) {
         clearNumPadViewportState();
       }
@@ -270,9 +287,7 @@ function useNumPadField() {
   function open() {
     setAllSelected(false);
     activation.activate();
-    requestAnimationFrame(() => {
-      requestAnimationFrame(positionFieldIntoView);
-    });
+    scheduleReposition();
     focusInput(false);
   }
 
