@@ -825,6 +825,12 @@ export class RadiationNoteService {
     }
 
     const noteType = mode === "consult_sim" || shouldStartWithConsult ? "consult_sim" : getSuggestedNoteType(treatmentNumber);
+    const existingSlotVisit = visits
+      .filter((visit) => (visit.note.treatmentNumber ?? null) === (treatmentNumber ?? null))
+      .sort((left, right) => right.note.updatedAt.localeCompare(left.note.updatedAt))[0];
+    if (existingSlotVisit) {
+      return this.loadExistingVisit(existingSlotVisit.note.id);
+    }
       const courseDocuments = noteType === "consult_sim" ? this.repository.fetchCourseDocuments(courseId) : [];
       let siteSnapshots = applyAutoNumberOfBlocks(noteType, buildSiteSnapshots(sites, treatmentNumber));
       const settings = this.repository.getSettingsRecord();

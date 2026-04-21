@@ -1052,6 +1052,12 @@ export class BrowserAppClient implements AppClient {
     }
 
     const noteType = mode === "consult_sim" || shouldStartWithConsult ? "consult_sim" : getSuggestedNoteType(treatmentNumber);
+    const existingSlotVisit = visits
+      .filter((visit) => (visit.note.treatmentNumber ?? null) === (treatmentNumber ?? null))
+      .sort((left, right) => right.note.updatedAt.localeCompare(left.note.updatedAt))[0];
+    if (existingSlotVisit) {
+      return this.loadExistingVisit(existingSlotVisit.note.id);
+    }
     const courseDocuments = noteType === "consult_sim" ? structuredDataStore.fetchCourseDocuments(course.id) : [];
       let siteSnapshots = applyAutoNumberOfBlocks(noteType, buildSiteSnapshots(sites, treatmentNumber));
       const settings = structuredDataStore.getSettingsRecord();
@@ -1241,6 +1247,19 @@ export class BrowserAppClient implements AppClient {
 
     const normalizedInput: VisitInput = {
       ...input,
+      id: (() => {
+        const slotVisits = structuredDataStore
+          .fetchVisitsByCourseIds([input.courseId])
+          .filter((visit) =>
+            visit.note.courseId === input.courseId &&
+            (visit.note.treatmentNumber ?? null) === (input.treatmentNumber ?? null)
+          )
+          .sort((left, right) => right.note.updatedAt.localeCompare(left.note.updatedAt));
+        const targetSlotVisit = input.id
+          ? slotVisits.find((visit) => visit.note.id === input.id) ?? slotVisits[0] ?? null
+          : slotVisits[0] ?? null;
+        return targetSlotVisit?.note.id ?? input.id;
+      })(),
       therapistName: input.therapistName.trim(),
       vitals: formatVitals(input.vitals),
       structuredFields
@@ -1309,6 +1328,18 @@ export class BrowserAppClient implements AppClient {
         upload.name
       );
     });
+
+    const duplicateSlotVisits = structuredDataStore
+      .fetchVisitsByCourseIds([input.courseId])
+      .filter((visit) =>
+        visit.note.id !== savedVisit.id &&
+        visit.note.courseId === input.courseId &&
+        (visit.note.treatmentNumber ?? null) === (savedVisit.treatmentNumber ?? null)
+      );
+
+    for (const duplicate of duplicateSlotVisits) {
+      await this.deleteVisit(duplicate.note.id);
+    }
 
     await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
     return structuredDataStore.fetchVisit(savedVisit.id)!;
