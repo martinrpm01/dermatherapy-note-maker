@@ -79,15 +79,6 @@ function getPathFileName(value: string) {
   return segments[segments.length - 1] || value;
 }
 
-function localDateString(offsetDays: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - offsetDays);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
 function parseMmDdYyyy(display: string): string {
   const digits = display.replace(/\D/g, "");
   if (digits.length !== 8) return "";
@@ -143,12 +134,6 @@ export function DobInput(props: { value: string; onChange: (value: string) => vo
   );
 }
 
-const QUICK_SELECT_OFFSETS = [
-  { label: "Yesterday", offset: 1 },
-  { label: "Today", offset: 0 },
-  { label: "Tomorrow", offset: -1 },
-] as const;
-
 export function VisitDateInput(props: { value: string; onChange: (value: string) => void }) {
   const [displayValue, setDisplayValue] = useState(() =>
     props.value ? formatDisplayDate(props.value) : ""
@@ -173,34 +158,16 @@ export function VisitDateInput(props: { value: string; onChange: (value: string)
     }
   }
 
-  function handleQuickSelect(offset: number) {
-    props.onChange(localDateString(offset));
-  }
-
   return (
-    <div className="visit-date-input">
-      <div className="date-quick-buttons">
-        {QUICK_SELECT_OFFSETS.map(({ label, offset }) => (
-          <button
-            key={offset}
-            type="button"
-            className={props.value === localDateString(offset) ? "active" : ""}
-            onClick={() => handleQuickSelect(offset)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      <input
-        type="text"
-        inputMode="numeric"
-        placeholder="MM/DD/YYYY"
-        maxLength={10}
-        value={displayValue}
-        onChange={handleChange}
-        onBlur={handleBlur}
-      />
-    </div>
+    <input
+      type="text"
+      inputMode="numeric"
+      placeholder="MM/DD/YYYY"
+      maxLength={10}
+      value={displayValue}
+      onChange={handleChange}
+      onBlur={handleBlur}
+    />
   );
 }
 
