@@ -1444,3 +1444,21 @@ input.search {
     grid-template-columns: 1fr;
   }
 }
+
+.numpad-field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.numpad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.numpad button {
+  font-size: 1.3rem;
+  font-weight: 500;
+  min-height: 58px;
+  border-radius: 12px;
+}

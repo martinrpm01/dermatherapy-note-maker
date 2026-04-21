@@ -14,7 +14,7 @@ import {
   shouldIncludeExamVitals
 } from "../../shared/note-rules";
 import { useResolvedAssetUrl } from "./asset-url";
-import { BloodPressureInput, VisitDateInput } from "./screen-components";
+import { BloodPressureInput, NumericInput, VisitDateInput } from "./screen-components";
 
 const STANDARD_PRESCRIBED_FRACTION_OPTIONS = [8, 10, 12, 15] as const;
 
@@ -257,8 +257,8 @@ export function VisitEditorScreen(props: {
             {editor.note.noteType !== "consult_sim" && (
               <label>
                 Treatment Number
-                <input type="number" inputMode="tel" min={1} max={15} value={editor.note.treatmentNumber ?? ""} onChange={(event) => {
-                  const num = event.target.value ? Number(event.target.value) : null;
+                <NumericInput value={editor.note.treatmentNumber ?? ""} onChange={(value) => {
+                  const num = value ? Number(value) : null;
                   props.onUpdate((current) => ({
                     ...current,
                     note: {
@@ -344,14 +344,8 @@ export function VisitEditorScreen(props: {
                       ? [
                           <label key={`projected-fractions-manual-${site.siteNumber}`}>
                             {formatFractionLabel("Actual Projected Fractions", site.siteNumber, site.bodyLocation, index)}
-                            <input
-                              type="number"
-                              inputMode="tel"
-                              min={1}
-                              max={30}
-                              value={currentFractions ?? ""}
-                              onChange={(event) => {
-                                const projectedFractions = event.target.value ? Number(event.target.value) : null;
+                            <NumericInput value={currentFractions ?? ""} onChange={(value) => {
+                                const projectedFractions = value ? Number(value) : null;
                                 props.onUpdate((current) => {
                                   const nextSiteSnapshots = current.note.structuredFields.siteSnapshots.map((snapshot) =>
                                     snapshot.siteNumber === site.siteNumber
@@ -359,20 +353,9 @@ export function VisitEditorScreen(props: {
                                       : snapshot
                                   );
                                   const overallProjectedFractions = getMaxSitePrescribedFractions(nextSiteSnapshots);
-                                  return {
-                                    ...current,
-                                    note: {
-                                      ...current.note,
-                                      structuredFields: {
-                                        ...current.note.structuredFields,
-                                        projectedFractionsInput: overallProjectedFractions,
-                                        siteSnapshots: nextSiteSnapshots
-                                      }
-                                    }
-                                  };
+                                  return { ...current, note: { ...current.note, structuredFields: { ...current.note.structuredFields, projectedFractionsInput: overallProjectedFractions, siteSnapshots: nextSiteSnapshots } } };
                                 }, { regenerate: true, overwriteEdited: !props.textDirty });
-                              }}
-                            />
+                              }} />
                           </label>
                         ]
                       : [])
@@ -455,43 +438,18 @@ export function VisitEditorScreen(props: {
                       ? [
                           <label key={`prescribed-fractions-manual-${site.siteNumber}`}>
                             {formatFractionLabel("Actual Prescribed Fractions", site.siteNumber, site.bodyLocation, index)}
-                            <input
-                              type="number"
-                              inputMode="tel"
-                              min={1}
-                              max={30}
-                              value={currentFractions ?? ""}
-                              onChange={(event) => {
-                                const prescribedFractions = event.target.value ? Number(event.target.value) : null;
+                            <NumericInput value={currentFractions ?? ""} onChange={(value) => {
+                                const prescribedFractions = value ? Number(value) : null;
                                 props.onUpdate((current) => {
                                   const nextSiteSnapshots = current.note.structuredFields.siteSnapshots.map((snapshot) =>
                                     snapshot.siteNumber === site.siteNumber
-                                      ? {
-                                          ...snapshot,
-                                          prescribedFractions: prescribedFractions ?? undefined,
-                                          doseManuallyAdjusted: true
-                                        }
+                                      ? { ...snapshot, prescribedFractions: prescribedFractions ?? undefined, doseManuallyAdjusted: true }
                                       : snapshot
                                   );
                                   const overallPrescribedFractions = getMaxSitePrescribedFractions(nextSiteSnapshots);
-                                  return {
-                                    ...current,
-                                    course: {
-                                      ...current.course,
-                                      prescribedFractions: overallPrescribedFractions ?? 0
-                                    },
-                                    note: {
-                                      ...current.note,
-                                      structuredFields: {
-                                        ...current.note.structuredFields,
-                                        prescribedFractionsInput: overallPrescribedFractions,
-                                        siteSnapshots: nextSiteSnapshots
-                                      }
-                                    }
-                                  };
+                                  return { ...current, course: { ...current.course, prescribedFractions: overallPrescribedFractions ?? 0 }, note: { ...current.note, structuredFields: { ...current.note.structuredFields, prescribedFractionsInput: overallPrescribedFractions, siteSnapshots: nextSiteSnapshots } } };
                                 }, { regenerate: true, overwriteEdited: !props.textDirty });
-                              }}
-                            />
+                              }} />
                           </label>
                         ]
                       : [])
@@ -504,13 +462,9 @@ export function VisitEditorScreen(props: {
                     ? [
                   <label key={`daily-dose-${site.siteNumber}`}>
                     {formatDoseFieldLabel("Daily Dose (cGy)", isTwoLesionLayout, site.siteNumber, site.bodyLocation, index)}
-                    <input
-                      type="number"
-                      inputMode="tel"
-                      min={0}
-                      value={site.dailyDose > 0 ? site.dailyDose : ""}
-                      onChange={(event) => {
-                        const dailyDose = event.target.value ? Number(event.target.value) : 0;
+                    <NumericInput value={site.dailyDose > 0 ? site.dailyDose : ""}
+                      onChange={(value) => {
+                        const dailyDose = value ? Number(value) : 0;
                         props.onUpdate((current) => {
                           const treatmentNumber = current.note.treatmentNumber ?? 0;
                           return {
@@ -521,12 +475,7 @@ export function VisitEditorScreen(props: {
                                 ...current.note.structuredFields,
                                 siteSnapshots: current.note.structuredFields.siteSnapshots.map((snapshot) =>
                                   snapshot.siteNumber === site.siteNumber
-                                    ? {
-                                        ...snapshot,
-                                        dailyDose,
-                                        cumulativeDose: dailyDose * treatmentNumber,
-                                        doseManuallyAdjusted: true
-                                      }
+                                    ? { ...snapshot, dailyDose, cumulativeDose: dailyDose * treatmentNumber, doseManuallyAdjusted: true }
                                     : snapshot
                                 )
                               }
@@ -538,30 +487,12 @@ export function VisitEditorScreen(props: {
                   </label>,
                   <label key={`total-dose-${site.siteNumber}`}>
                     {formatDoseFieldLabel("Total Dose (cGy)", isTwoLesionLayout, site.siteNumber, site.bodyLocation, index)}
-                    <input
-                      type="number"
-                      inputMode="tel"
-                      min={0}
-                      value={site.totalDose > 0 ? site.totalDose : ""}
-                      onChange={(event) => {
-                        const totalDose = event.target.value ? Number(event.target.value) : 0;
+                    <NumericInput value={site.totalDose > 0 ? site.totalDose : ""}
+                      onChange={(value) => {
+                        const totalDose = value ? Number(value) : 0;
                         props.onUpdate((current) => ({
                           ...current,
-                          note: {
-                            ...current.note,
-                            structuredFields: {
-                              ...current.note.structuredFields,
-                              siteSnapshots: current.note.structuredFields.siteSnapshots.map((snapshot) =>
-                                snapshot.siteNumber === site.siteNumber
-                                  ? {
-                                      ...snapshot,
-                                      totalDose,
-                                      doseManuallyAdjusted: true
-                                    }
-                                  : snapshot
-                              )
-                            }
-                          }
+                          note: { ...current.note, structuredFields: { ...current.note.structuredFields, siteSnapshots: current.note.structuredFields.siteSnapshots.map((snapshot) => snapshot.siteNumber === site.siteNumber ? { ...snapshot, totalDose, doseManuallyAdjusted: true } : snapshot) } }
                         }), { regenerate: true, overwriteEdited: !props.textDirty });
                       }}
                     />

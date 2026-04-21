@@ -28,7 +28,7 @@ import type {
   TreatmentCourseRecord,
   TreatmentSiteRecord
 } from "../../shared/types";
-import { DobInput, VisitDateInput } from "./screen-components";
+import { DobInput, NumericInput, VisitDateInput } from "./screen-components";
 
 const FRACTION_PRESETS = [8, 10, 12, 15];
 const DEPTH_OPTIONS = ["3", "4", "5"];
@@ -885,18 +885,10 @@ export function PendingCourseIntakeModal(props: {
                 {(projectedFractionModes[index] ?? getFractionSelection(site.prescribedFractions, FRACTION_PRESETS)) === "other" ? (
                   <label>
                     {isTwoSite ? `Actual Projected Fractions Lesion ${site.siteNumber}` : "Actual Projected Fractions"}
-                    <input
-                      type="number"
-                      inputMode="tel"
-                      min={1}
-                      max={30}
+                    <NumericInput
                       placeholder="Enter fractions"
                       value={site.prescribedFractions ?? ""}
-                      onChange={(event) =>
-                        updateSite(index, {
-                          prescribedFractions: event.target.value ? Number(event.target.value) : undefined
-                        })
-                      }
+                      onChange={(value) => updateSite(index, { prescribedFractions: value ? Number(value) : undefined })}
                     />
                   </label>
                 ) : null}
@@ -1235,16 +1227,10 @@ export function DocumentOnlyWorksheetModal(props: {
                   {(projectedFractionModes[index] ?? getFractionSelection(site.projectedFractions, FRACTION_PRESETS)) === "other" ? (
                     <label>
                       Actual Projected Fractions
-                      <input
-                        type="number"
-                        inputMode="tel"
-                        min={1}
-                        max={30}
+                      <NumericInput
                         placeholder="Enter fractions"
                         value={site.projectedFractions ?? ""}
-                        onChange={(event) =>
-                          updateSite(index, { projectedFractions: event.target.value ? Number(event.target.value) : null })
-                        }
+                        onChange={(value) => updateSite(index, { projectedFractions: value ? Number(value) : null })}
                       />
                     </label>
                   ) : null}
@@ -1715,15 +1701,12 @@ export function CourseModal(props: {
               <option value="other">Other</option>
             </select>
             {fractionMode === "other" ? (
-              <input
-                type="number"
-                inputMode="tel"
+              <NumericInput
                 placeholder="Enter fractions"
                 value={customFractions}
-                style={{ marginTop: "0.4rem" }}
-                onChange={(event) => {
-                  setCustomFractions(event.target.value);
-                  props.onChange({ ...courseForm, prescribedFractions: Number(event.target.value || 0) });
+                onChange={(value) => {
+                  setCustomFractions(value);
+                  props.onChange({ ...courseForm, prescribedFractions: Number(value || 0) });
                 }}
               />
             ) : null}
@@ -1766,15 +1749,12 @@ export function CourseModal(props: {
                     <option value="other">Other</option>
                   </select>
                   {getSiteFractionMode(index) === "other" && (
-                    <input
-                      type="number"
-                      inputMode="tel"
+                    <NumericInput
                       placeholder="Enter fractions"
                       value={siteFractionModes[index]?.custom ?? ""}
-                      style={{ marginTop: "0.4rem" }}
-                      onChange={(event) => {
-                        setSiteFractionModes((prev) => ({ ...prev, [index]: { ...prev[index], mode: "other", custom: event.target.value } }));
-                        updateSiteFractions(index, Number(event.target.value || 0));
+                      onChange={(value) => {
+                        setSiteFractionModes((prev) => ({ ...prev, [index]: { ...prev[index], mode: "other", custom: value } }));
+                        updateSiteFractions(index, Number(value || 0));
                       }}
                     />
                   )}

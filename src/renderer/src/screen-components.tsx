@@ -97,116 +97,120 @@ function formatDigitsAsDate(digits: string): string {
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
 }
 
-export function DobInput(props: { value: string; onChange: (value: string) => void }) {
-  const [displayValue, setDisplayValue] = useState(() =>
-    props.value ? formatDisplayDate(props.value) : ""
+function NumPad({ onPress, onBackspace, extraKey }: { onPress: (c: string) => void; onBackspace: () => void; extraKey?: string }) {
+  function btn(label: string, handler: () => void) {
+    return (
+      <button key={label} type="button" onPointerDown={(e) => { e.preventDefault(); handler(); }}>
+        {label}
+      </button>
+    );
+  }
+  return (
+    <div className="numpad">
+      {"123456789".split("").map((d) => btn(d, () => onPress(d)))}
+      {extraKey ? btn(extraKey, () => onPress(extraKey)) : <span />}
+      {btn("0", () => onPress("0"))}
+      {btn("⌫", onBackspace)}
+    </div>
   );
+}
+
+export function DobInput(props: { value: string; onChange: (value: string) => void }) {
+  const [displayValue, setDisplayValue] = useState(() => props.value ? formatDisplayDate(props.value) : "");
+  const [focused, setFocused] = useState(false);
 
   useEffect(() => {
-    setDisplayValue(props.value ? formatDisplayDate(props.value) : "");
-  }, [props.value]);
+    if (!focused) setDisplayValue(props.value ? formatDisplayDate(props.value) : "");
+  }, [props.value, focused]);
 
-  function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const digits = event.target.value.replace(/\D/g, "").slice(0, 8);
+  function handlePress(d: string) {
+    const digits = (displayValue.replace(/\D/g, "") + d).slice(0, 8);
     const formatted = formatDigitsAsDate(digits);
     setDisplayValue(formatted);
     props.onChange(digits.length === 8 ? parseMmDdYyyy(formatted) : "");
   }
 
-  function handleBlur() {
-    const digits = displayValue.replace(/\D/g, "");
-    if (digits.length > 0 && digits.length < 8) {
-      setDisplayValue("");
-      props.onChange("");
-    }
+  function handleBackspace() {
+    const digits = displayValue.replace(/\D/g, "").slice(0, -1);
+    const formatted = formatDigitsAsDate(digits);
+    setDisplayValue(formatted);
+    props.onChange(digits.length === 8 ? parseMmDdYyyy(formatted) : "");
   }
 
   return (
-    <input
-      type="text"
-      inputMode="tel"
-      placeholder="MM/DD/YYYY"
-      maxLength={10}
-      value={displayValue}
-      onChange={handleChange}
-      onBlur={handleBlur}
-    />
+    <div className="numpad-field">
+      <input type="text" readOnly placeholder="MM/DD/YYYY" value={displayValue}
+        onFocus={() => setFocused(true)} onClick={() => setFocused(true)}
+        onBlur={() => setTimeout(() => setFocused(false), 150)} />
+      {focused && <NumPad onPress={handlePress} onBackspace={handleBackspace} />}
+    </div>
   );
 }
 
 export function VisitDateInput(props: { value: string; onChange: (value: string) => void }) {
-  const [displayValue, setDisplayValue] = useState(() =>
-    props.value ? formatDisplayDate(props.value) : ""
-  );
-
-  useEffect(() => {
-    setDisplayValue(props.value ? formatDisplayDate(props.value) : "");
-  }, [props.value]);
-
-  function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const digits = event.target.value.replace(/\D/g, "").slice(0, 8);
-    const formatted = formatDigitsAsDate(digits);
-    setDisplayValue(formatted);
-    props.onChange(digits.length === 8 ? parseMmDdYyyy(formatted) : "");
-  }
-
-  function handleBlur() {
-    const digits = displayValue.replace(/\D/g, "");
-    if (digits.length > 0 && digits.length < 8) {
-      setDisplayValue("");
-      props.onChange("");
-    }
-  }
-
-  return (
-    <input
-      type="text"
-      inputMode="tel"
-      placeholder="MM/DD/YYYY"
-      maxLength={10}
-      value={displayValue}
-      onChange={handleChange}
-      onBlur={handleBlur}
-    />
-  );
-}
-
-function formatBpDigits(digits: string): string {
-  const d = digits.slice(0, 6);
-  if (d.length <= 3) return d;
-  return `${d.slice(0, 3)}/${d.slice(3)}`;
+  return <DobInput {...props} />;
 }
 
 export function BloodPressureInput(props: { value: string; onChange: (value: string) => void }) {
-  const [displayValue, setDisplayValue] = useState(() =>
-    props.value.replace(/\s*mmhg\s*$/i, "").trim()
-  );
+  const [displayValue, setDisplayValue] = useState(() => props.value.replace(/\s*mmhg\s*$/i, "").trim());
+  const [focused, setFocused] = useState(false);
 
   useEffect(() => {
-    setDisplayValue(props.value.replace(/\s*mmhg\s*$/i, "").trim());
-  }, [props.value]);
+    if (!focused) setDisplayValue(props.value.replace(/\s*mmhg\s*$/i, "").trim());
+  }, [props.value, focused]);
 
-  function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const digits = event.target.value.replace(/\D/g, "");
-    const formatted = formatBpDigits(digits);
-    setDisplayValue(formatted);
-    props.onChange(formatted);
+  function handlePress(c: string) {
+    const next = displayValue + c;
+    setDisplayValue(next);
+    props.onChange(next);
   }
 
-  function handleBlur() {
-    const result = formatBloodPressure(displayValue);
-    props.onChange(result);
+  function handleBackspace() {
+    const next = displayValue.slice(0, -1);
+    setDisplayValue(next);
+    props.onChange(next);
   }
 
   return (
-    <input
-      type="text"
-      inputMode="tel"
-      placeholder="e.g. 120/80"
-      value={displayValue}
-      onChange={handleChange}
-      onBlur={handleBlur}
-    />
+    <div className="numpad-field">
+      <input type="text" readOnly placeholder="e.g. 120/80" value={displayValue}
+        onFocus={() => setFocused(true)} onClick={() => setFocused(true)}
+        onBlur={() => setTimeout(() => { setFocused(false); props.onChange(formatBloodPressure(displayValue)); }, 150)} />
+      {focused && <NumPad onPress={handlePress} onBackspace={handleBackspace} extraKey="/" />}
+    </div>
+  );
+}
+
+export function NumericInput(props: { value: string | number; onChange: (value: string) => void; placeholder?: string }) {
+  const [focused, setFocused] = useState(false);
+  const display = props.value === "" || props.value == null ? "" : String(props.value);
+
+  function handlePress(d: string) { props.onChange(display + d); }
+  function handleBackspace() { props.onChange(display.slice(0, -1)); }
+
+  return (
+    <div className="numpad-field">
+      <input type="text" readOnly placeholder={props.placeholder} value={display}
+        onFocus={() => setFocused(true)} onClick={() => setFocused(true)}
+        onBlur={() => setTimeout(() => setFocused(false), 150)} />
+      {focused && <NumPad onPress={handlePress} onBackspace={handleBackspace} />}
+    </div>
+  );
+}
+
+export function PinInput(props: { value: string; onChange: (value: string) => void; placeholder?: string }) {
+  const [focused, setFocused] = useState(false);
+
+  function handlePress(d: string) { props.onChange(props.value + d); }
+  function handleBackspace() { props.onChange(props.value.slice(0, -1)); }
+
+  return (
+    <div className="numpad-field">
+      <input type="password" readOnly autoComplete="off" placeholder={props.placeholder ?? "PIN"} value={props.value}
+        onFocus={() => setFocused(true)} onClick={() => setFocused(true)}
+        onBlur={() => setTimeout(() => setFocused(false), 150)} />
+      {focused && <NumPad onPress={handlePress} onBackspace={handleBackspace} />}
+    </div>
   );
 }
 
@@ -572,8 +576,8 @@ export function LockScreen(props: {
             </div>
             <div className="panel lock-setup-pin-panel">
               <h3>Set PIN</h3>
-              <input type="password" inputMode="tel" pattern="[0-9]*" placeholder="New PIN" value={props.setupPin} onChange={(event) => props.onSetupPinChange(event.target.value)} />
-              <input type="password" inputMode="tel" pattern="[0-9]*" placeholder="Confirm PIN" value={props.confirmPin} onChange={(event) => props.onConfirmPinChange(event.target.value)} />
+              <PinInput placeholder="New PIN" value={props.setupPin} onChange={props.onSetupPinChange} />
+              <PinInput placeholder="Confirm PIN" value={props.confirmPin} onChange={props.onConfirmPinChange} />
               <button className="primary" onClick={props.onSetup}>
                 Save Setup
               </button>
@@ -581,7 +585,7 @@ export function LockScreen(props: {
           </div>
         ) : (
           <>
-            <input type="password" inputMode="tel" pattern="[0-9]*" placeholder="PIN" value={props.unlockPin} onChange={(event) => props.onUnlockPinChange(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") props.onUnlock(); }} />
+            <PinInput placeholder="PIN" value={props.unlockPin} onChange={props.onUnlockPinChange} />
             <button className="primary" onClick={props.onUnlock}>
               Unlock
             </button>
@@ -692,20 +696,8 @@ export function PinRecoveryScreen(props: {
           value={props.recoveryCode}
           onChange={(event) => props.onRecoveryCodeChange(event.target.value.toUpperCase())}
         />
-        <input
-          type="password"
-          inputMode="tel"
-          placeholder="New PIN"
-          value={props.nextPin}
-          onChange={(event) => props.onNextPinChange(event.target.value)}
-        />
-        <input
-          type="password"
-          inputMode="tel"
-          placeholder="Confirm New PIN"
-          value={props.confirmPin}
-          onChange={(event) => props.onConfirmPinChange(event.target.value)}
-        />
+        <PinInput placeholder="New PIN" value={props.nextPin} onChange={props.onNextPinChange} />
+        <PinInput placeholder="Confirm New PIN" value={props.confirmPin} onChange={props.onConfirmPinChange} />
         <div className="button-row">
           <button className="primary" onClick={props.onSubmit}>
             Reset PIN
@@ -1783,9 +1775,9 @@ export function SettingsScreen(props: {
         </div>
         <div className="panel">
           <h3>Change PIN</h3>
-          <input type="password" inputMode="tel" pattern="[0-9]*" placeholder="Current PIN" value={props.changePin.currentPin} onChange={(event) => props.onChangePin({ ...props.changePin, currentPin: event.target.value })} />
-          <input type="password" inputMode="tel" pattern="[0-9]*" placeholder="New PIN" value={props.changePin.nextPin} onChange={(event) => props.onChangePin({ ...props.changePin, nextPin: event.target.value })} />
-          <input type="password" inputMode="tel" pattern="[0-9]*" placeholder="Confirm New PIN" value={props.changePin.confirmPin} onChange={(event) => props.onChangePin({ ...props.changePin, confirmPin: event.target.value })} />
+          <PinInput placeholder="Current PIN" value={props.changePin.currentPin} onChange={(next) => props.onChangePin({ ...props.changePin, currentPin: next })} />
+          <PinInput placeholder="New PIN" value={props.changePin.nextPin} onChange={(next) => props.onChangePin({ ...props.changePin, nextPin: next })} />
+          <PinInput placeholder="Confirm New PIN" value={props.changePin.confirmPin} onChange={(next) => props.onChangePin({ ...props.changePin, confirmPin: next })} />
           <button onClick={props.onSubmitPin}>Update PIN</button>
           <button className="ghost" onClick={props.onLockApp}>Lock App</button>
         </div>
