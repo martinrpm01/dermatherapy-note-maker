@@ -105,6 +105,17 @@ textarea {
   overflow: hidden;
 }
 
+.lock-shell.numpad-open-context {
+  place-items: start center;
+  overflow-y: auto;
+  padding-bottom: calc(0.75rem + var(--numpad-offset, 0px));
+}
+
+.lock-shell.numpad-open-context .lock-card {
+  margin-top: 1.5rem;
+  margin-bottom: 0;
+}
+
 .loading-error {
   margin-top: 0.85rem;
   max-width: 520px;

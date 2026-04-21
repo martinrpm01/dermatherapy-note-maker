@@ -187,6 +187,7 @@ function useNumPadField() {
   useEffect(() => {
     if (!activation.isActive) {
       document.body.classList.remove("numpad-open");
+      document.querySelector(".lock-shell")?.classList.remove("numpad-open-context");
       document.documentElement.style.removeProperty("--numpad-offset");
       return;
     }
@@ -197,10 +198,20 @@ function useNumPadField() {
         return;
       }
 
+      if (wrapper.closest(".modal-backdrop")) {
+        return;
+      }
+
       const panel = document.querySelector<HTMLElement>(".numpad-panel");
       const dockHeight = (panel?.getBoundingClientRect().height ?? 220) + 24;
-      document.body.classList.add("numpad-open");
       document.documentElement.style.setProperty("--numpad-offset", `${dockHeight}px`);
+      const lockShell = wrapper.closest<HTMLElement>(".lock-shell");
+
+      if (lockShell) {
+        lockShell.classList.add("numpad-open-context");
+      } else {
+        document.body.classList.add("numpad-open");
+      }
 
       const wrapperRect = wrapper.getBoundingClientRect();
       const visibleTop = 24;
@@ -230,6 +241,7 @@ function useNumPadField() {
     return () => {
       window.cancelAnimationFrame(rafId);
       document.body.classList.remove("numpad-open");
+      document.querySelector(".lock-shell")?.classList.remove("numpad-open-context");
       document.documentElement.style.removeProperty("--numpad-offset");
     };
   }, [activation.isActive]);
