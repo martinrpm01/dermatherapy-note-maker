@@ -566,8 +566,8 @@ export function LockScreen(props: {
             </div>
             <div className="panel lock-setup-pin-panel">
               <h3>Set PIN</h3>
-              <input type="password" inputMode="numeric" placeholder="New PIN" value={props.setupPin} onChange={(event) => props.onSetupPinChange(event.target.value)} />
-              <input type="password" inputMode="numeric" placeholder="Confirm PIN" value={props.confirmPin} onChange={(event) => props.onConfirmPinChange(event.target.value)} />
+              <input type="password" inputMode="numeric" pattern="[0-9]*" placeholder="New PIN" value={props.setupPin} onChange={(event) => props.onSetupPinChange(event.target.value)} />
+              <input type="password" inputMode="numeric" pattern="[0-9]*" placeholder="Confirm PIN" value={props.confirmPin} onChange={(event) => props.onConfirmPinChange(event.target.value)} />
               <button className="primary" onClick={props.onSetup}>
                 Save Setup
               </button>
@@ -575,7 +575,7 @@ export function LockScreen(props: {
           </div>
         ) : (
           <>
-            <input type="password" inputMode="numeric" placeholder="PIN" value={props.unlockPin} onChange={(event) => props.onUnlockPinChange(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") props.onUnlock(); }} />
+            <input type="password" inputMode="numeric" pattern="[0-9]*" placeholder="PIN" value={props.unlockPin} onChange={(event) => props.onUnlockPinChange(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") props.onUnlock(); }} />
             <button className="primary" onClick={props.onUnlock}>
               Unlock
             </button>
@@ -1777,9 +1777,9 @@ export function SettingsScreen(props: {
         </div>
         <div className="panel">
           <h3>Change PIN</h3>
-          <input type="password" inputMode="numeric" placeholder="Current PIN" value={props.changePin.currentPin} onChange={(event) => props.onChangePin({ ...props.changePin, currentPin: event.target.value })} />
-          <input type="password" inputMode="numeric" placeholder="New PIN" value={props.changePin.nextPin} onChange={(event) => props.onChangePin({ ...props.changePin, nextPin: event.target.value })} />
-          <input type="password" inputMode="numeric" placeholder="Confirm New PIN" value={props.changePin.confirmPin} onChange={(event) => props.onChangePin({ ...props.changePin, confirmPin: event.target.value })} />
+          <input type="password" inputMode="numeric" pattern="[0-9]*" placeholder="Current PIN" value={props.changePin.currentPin} onChange={(event) => props.onChangePin({ ...props.changePin, currentPin: event.target.value })} />
+          <input type="password" inputMode="numeric" pattern="[0-9]*" placeholder="New PIN" value={props.changePin.nextPin} onChange={(event) => props.onChangePin({ ...props.changePin, nextPin: event.target.value })} />
+          <input type="password" inputMode="numeric" pattern="[0-9]*" placeholder="Confirm New PIN" value={props.changePin.confirmPin} onChange={(event) => props.onChangePin({ ...props.changePin, confirmPin: event.target.value })} />
           <button onClick={props.onSubmitPin}>Update PIN</button>
           <button className="ghost" onClick={props.onLockApp}>Lock App</button>
         </div>
