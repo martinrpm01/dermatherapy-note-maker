@@ -1050,6 +1050,10 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
 
   async function saveVisit(generatePdf = false) {
     if (!visitEditor) return;
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
     setBusy(true);
     try {
       if (!appClient) return;
@@ -1058,6 +1062,13 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
         ? { ...visitEditor.note, status: "finalized" as const }
         : visitEditor.note;
       const saved = await appClient.saveVisit(noteInput);
+      autosaveSignatureRef.current = JSON.stringify({
+        ...buildAutosaveVisitInput(noteInput),
+        id: saved.id,
+        status: saved.status,
+        generatedText: saved.generatedText,
+        editedText: noteInput.editedText
+      });
       let revealTarget = null;
       if (generatePdf) {
         const pdfResult = await appClient.generatePdf(saved.id);
