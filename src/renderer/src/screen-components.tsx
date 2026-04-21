@@ -417,6 +417,286 @@ function DockedNumPad(props: {
   );
 }
 
+export type LogoCropShape = "wide" | "square";
+
+export interface LogoCropSelection {
+  shape: LogoCropShape;
+  outputWidth: number;
+  outputHeight: number;
+  imageX: number;
+  imageY: number;
+  imageWidth: number;
+  imageHeight: number;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+export function LogoCropModal(props: {
+  sourceDataUrl: string;
+  onCancel: () => void;
+  onConfirm: (selection: LogoCropSelection) => void;
+}) {
+  const [shape, setShape] = useState<LogoCropShape>("wide");
+  const frameRef = useRef<HTMLDivElement | null>(null);
+  const dragStateRef = useRef<{ pointerId: number; startX: number; startY: number; offsetX: number; offsetY: number } | null>(null);
+  const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
+  const [frameWidth, setFrameWidth] = useState(520);
+  const [zoom, setZoom] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const aspectRatio = shape === "square" ? 1 : 16 / 5;
+  const outputSize = shape === "square"
+    ? { width: 900, height: 900 }
+    : { width: 1280, height: 400 };
+  const frameHeight = frameWidth / aspectRatio;
+
+  useEffect(() => {
+    function measureFrame() {
+      const width = frameRef.current?.clientWidth;
+      if (!width) {
+        return;
+      }
+      setFrameWidth(width);
+    }
+
+    measureFrame();
+    window.addEventListener("resize", measureFrame);
+    return () => window.removeEventListener("resize", measureFrame);
+  }, []);
+
+  function getScaledMetrics(nextZoom = zoom) {
+    if (!imageSize) {
+      return null;
+    }
+
+    const baseScale = Math.max(frameWidth / imageSize.width, frameHeight / imageSize.height);
+    const scale = baseScale * nextZoom;
+    const scaledWidth = imageSize.width * scale;
+    const scaledHeight = imageSize.height * scale;
+    const maxOffsetX = Math.max(0, (scaledWidth - frameWidth) / 2);
+    const maxOffsetY = Math.max(0, (scaledHeight - frameHeight) / 2);
+
+    return {
+      scale,
+      scaledWidth,
+      scaledHeight,
+      maxOffsetX,
+      maxOffsetY
+    };
+  }
+
+  function clampOffset(nextOffset: { x: number; y: number }, nextZoom = zoom) {
+    const metrics = getScaledMetrics(nextZoom);
+    if (!metrics) {
+      return nextOffset;
+    }
+
+    return {
+      x: clamp(nextOffset.x, -metrics.maxOffsetX, metrics.maxOffsetX),
+      y: clamp(nextOffset.y, -metrics.maxOffsetY, metrics.maxOffsetY)
+    };
+  }
+
+  function buildCropSelection(nextOffset = offset, nextZoom = zoom): LogoCropSelection | null {
+    const metrics = getScaledMetrics(nextZoom);
+    if (!metrics || !imageSize) {
+      return null;
+    }
+    const scaleToOutput = outputSize.width / frameWidth;
+    const imageLeft = ((frameWidth - metrics.scaledWidth) / 2) + nextOffset.x;
+    const imageTop = ((frameHeight - metrics.scaledHeight) / 2) + nextOffset.y;
+
+    return {
+      shape,
+      outputWidth: outputSize.width,
+      outputHeight: outputSize.height,
+      imageX: imageLeft * scaleToOutput,
+      imageY: imageTop * scaleToOutput,
+      imageWidth: metrics.scaledWidth * scaleToOutput,
+      imageHeight: metrics.scaledHeight * scaleToOutput
+    };
+  }
+
+  useEffect(() => {
+    setOffset((current) => clampOffset(current));
+  }, [frameWidth, frameHeight, imageSize, zoom]);
+
+  const metrics = getScaledMetrics();
+  const imageLeft = metrics ? ((frameWidth - metrics.scaledWidth) / 2) + offset.x : 0;
+  const imageTop = metrics ? ((frameHeight - metrics.scaledHeight) / 2) + offset.y : 0;
+  const previewSelection = buildCropSelection();
+  const previewWidth = 220;
+  const previewScale = previewSelection ? previewWidth / previewSelection.outputWidth : 1;
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal-card wide logo-crop-modal">
+        <h3>Crop Logo</h3>
+        <p className="muted" style={{ marginTop: 0 }}>
+          Drag the logo until it looks right inside the blue frame. The shaded outer area will not be shown.
+        </p>
+        <div className="logo-crop-layout">
+          <div className="logo-crop-workspace">
+            <div className="logo-crop-stage">
+              <div className="button-row logo-crop-shape-toggle">
+                <button
+                  type="button"
+                  className={shape === "wide" ? "primary" : ""}
+                  onClick={() => {
+                    setShape("wide");
+                    setZoom(1);
+                    setOffset({ x: 0, y: 0 });
+                  }}
+                >
+                  Wide Logo
+                </button>
+                <button
+                  type="button"
+                  className={shape === "square" ? "primary" : ""}
+                  onClick={() => {
+                    setShape("square");
+                    setZoom(1);
+                    setOffset({ x: 0, y: 0 });
+                  }}
+                >
+                  Square Logo
+                </button>
+              </div>
+              <div className="logo-crop-stage-copy">
+                Visible logo area
+              </div>
+              <div className="logo-crop-field">
+                <div
+                  ref={frameRef}
+                  className="logo-crop-frame"
+                  style={{ aspectRatio: `${aspectRatio}` }}
+                  onPointerDown={(event) => {
+                    if (!metrics) {
+                      return;
+                    }
+                    event.preventDefault();
+                    dragStateRef.current = {
+                      pointerId: event.pointerId,
+                      startX: event.clientX,
+                      startY: event.clientY,
+                      offsetX: offset.x,
+                      offsetY: offset.y
+                    };
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                  }}
+                  onPointerMove={(event) => {
+                    const drag = dragStateRef.current;
+                    if (!drag || drag.pointerId !== event.pointerId) {
+                      return;
+                    }
+                    event.preventDefault();
+                    setOffset(clampOffset({
+                      x: drag.offsetX + (event.clientX - drag.startX),
+                      y: drag.offsetY + (event.clientY - drag.startY)
+                    }));
+                  }}
+                  onPointerUp={(event) => {
+                    if (dragStateRef.current?.pointerId === event.pointerId) {
+                      dragStateRef.current = null;
+                    }
+                    event.currentTarget.releasePointerCapture(event.pointerId);
+                  }}
+                  onPointerCancel={(event) => {
+                    if (dragStateRef.current?.pointerId === event.pointerId) {
+                      dragStateRef.current = null;
+                    }
+                    event.currentTarget.releasePointerCapture(event.pointerId);
+                  }}
+                >
+                  <img
+                    className="logo-crop-image"
+                    src={props.sourceDataUrl}
+                    alt="Logo crop preview"
+                    draggable={false}
+                    onLoad={(event) => {
+                      setImageSize({
+                        width: event.currentTarget.naturalWidth,
+                        height: event.currentTarget.naturalHeight
+                      });
+                    }}
+                    style={metrics ? {
+                      width: `${metrics.scaledWidth}px`,
+                      height: `${metrics.scaledHeight}px`,
+                      left: `${imageLeft}px`,
+                      top: `${imageTop}px`
+                    } : undefined}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="logo-crop-sidebar">
+            <div className="logo-crop-preview-card">
+              <span className="strong">Live Preview</span>
+              <div className="logo-crop-preview-window" style={{ aspectRatio: `${aspectRatio}` }}>
+                {previewSelection ? (
+                  <div
+                    className="logo-crop-preview-image"
+                    style={{
+                      backgroundImage: `url(${props.sourceDataUrl})`,
+                      backgroundSize: `${previewSelection.imageWidth * previewScale}px ${previewSelection.imageHeight * previewScale}px`,
+                      backgroundPosition: `${previewSelection.imageX * previewScale}px ${previewSelection.imageY * previewScale}px`
+                    }}
+                  />
+                ) : null}
+              </div>
+            </div>
+            <label className="logo-crop-zoom">
+              Zoom
+              <input
+                type="range"
+                min="0.45"
+                max="3"
+                step="0.01"
+                value={zoom}
+                onChange={(event) => {
+                  const nextZoom = Number(event.target.value);
+                  setZoom(nextZoom);
+                  setOffset((current) => clampOffset(current, nextZoom));
+                }}
+              />
+            </label>
+            <div className="button-row">
+              <button
+                type="button"
+                onClick={() => {
+                  setZoom(1);
+                  setOffset({ x: 0, y: 0 });
+                }}
+              >
+                Re-center
+              </button>
+              <button type="button" onClick={props.onCancel}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="primary"
+                disabled={!previewSelection}
+                onClick={() => {
+                  const selection = buildCropSelection();
+                  if (!selection) {
+                    return;
+                  }
+                  props.onConfirm(selection);
+                }}
+              >
+                Use Crop
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function NumPadToReplace({ onPress, onBackspace, extraKey }: { onPress: (c: string) => void; onBackspace: () => void; extraKey?: string }) {
   function btn(label: string, handler: () => void) {
     return (
@@ -1175,7 +1455,14 @@ export function LockScreen(props: {
                 <div className="button-row">
                   <label className="logo-upload-button">
                     Upload Logo
-                    <input type="file" accept="image/*" onChange={(event) => props.onSetupLogoSelected(event.target.files?.[0])} />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) => {
+                        props.onSetupLogoSelected(event.target.files?.[0]);
+                        event.currentTarget.value = "";
+                      }}
+                    />
                   </label>
                   <button type="button" onClick={props.onRemoveSetupLogo}>
                     Use Default Logo
@@ -1859,6 +2146,7 @@ export function PatientScreen(props: {
           </div>
           <div className="visit-list">
             {courseDetail.visits.map((visit) => {
+              const isFinalizedVisit = visit.note.status === "finalized" && Boolean(visit.note.pdfAsset);
               return (
                 <div className="visit-row" key={visit.note.id}>
                 <div>
@@ -1867,7 +2155,15 @@ export function PatientScreen(props: {
                   {visit.note.treatmentNumber ? <span style={{ marginLeft: "0.4rem" }}>{`· Fraction ${visit.note.treatmentNumber}`}</span> : null}
                 </div>
                 <div className="button-row">
-                  <button onClick={() => props.onOpenVisit(courseDetail.course.id, "next_treatment", visit.note.id)}>Open Note</button>
+                  {isFinalizedVisit && visit.note.pdfAsset ? (
+                    <button onClick={() => props.onOpenPdf(visit.note.pdfAsset!)}>
+                      Open Finalized Note
+                    </button>
+                  ) : (
+                    <button onClick={() => props.onOpenVisit(courseDetail.course.id, "next_treatment", visit.note.id)}>
+                      Open Note
+                    </button>
+                  )}
                   <button
                     style={{ color: "var(--danger)", borderColor: "var(--danger)" }}
                     onClick={() => {
@@ -2376,7 +2672,14 @@ export function SettingsScreen(props: {
             <div className="button-row">
               <label className="logo-upload-button">
                 Upload Logo
-                <input type="file" accept="image/*" onChange={(event) => props.onLogoSelected(event.target.files?.[0])} />
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => {
+                    props.onLogoSelected(event.target.files?.[0]);
+                    event.currentTarget.value = "";
+                  }}
+                />
               </label>
               <button onClick={props.onRemoveLogo}>Use Default Logo</button>
             </div>

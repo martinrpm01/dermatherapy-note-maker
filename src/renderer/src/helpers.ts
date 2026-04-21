@@ -461,13 +461,161 @@ export async function fileToCompressedUpload(file: File, maxDimension: number, c
   };
 }
 
-export async function fileToUpload(file: File, caption?: string) {
-  const dataUrl = await new Promise<string>((resolve, reject) => {
+export async function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ""));
     reader.onerror = () => reject(reader.error ?? new Error("Could not read file."));
     reader.readAsDataURL(file);
   });
+}
+
+export async function cropImageFileToUpload(
+  file: File,
+  cropRect: { x: number; y: number; width: number; height: number },
+  outputSize: { width: number; height: number },
+  caption?: string,
+  preferredMimeType?: string
+) {
+  const imageBitmap = await createImageBitmap(file);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(outputSize.width));
+  canvas.height = Math.max(1, Math.round(outputSize.height));
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("Could not create image canvas.");
+  }
+
+  const clampedX = Math.max(0, Math.min(cropRect.x, imageBitmap.width));
+  const clampedY = Math.max(0, Math.min(cropRect.y, imageBitmap.height));
+  const clampedWidth = Math.max(1, Math.min(cropRect.width, imageBitmap.width - clampedX));
+  const clampedHeight = Math.max(1, Math.min(cropRect.height, imageBitmap.height - clampedY));
+
+  context.drawImage(
+    imageBitmap,
+    clampedX,
+    clampedY,
+    clampedWidth,
+    clampedHeight,
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
+
+  const mimeType = preferredMimeType || file.type || "image/png";
+  const quality = mimeType === "image/png" ? undefined : 0.92;
+  const dataUrl = canvas.toDataURL(mimeType, quality);
+  imageBitmap.close?.();
+  return {
+    name: file.name,
+    mimeType,
+    dataUrl,
+    caption
+  };
+}
+
+export async function renderImageFileToUpload(
+  file: File,
+  placement: { x: number; y: number; width: number; height: number },
+  outputSize: { width: number; height: number },
+  caption?: string,
+  preferredMimeType?: string,
+  options?: { trimWhitespace?: boolean }
+) {
+  const imageBitmap = await createImageBitmap(file);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(outputSize.width));
+  canvas.height = Math.max(1, Math.round(outputSize.height));
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("Could not create image canvas.");
+  }
+
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(
+    imageBitmap,
+    0,
+    0,
+    imageBitmap.width,
+    imageBitmap.height,
+    placement.x,
+    placement.y,
+    placement.width,
+    placement.height
+  );
+
+  let exportCanvas = canvas;
+  if (options?.trimWhitespace) {
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    const { data, width, height } = imageData;
+    let minX = width;
+    let minY = height;
+    let maxX = -1;
+    let maxY = -1;
+
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const index = (y * width + x) * 4;
+        const alpha = data[index + 3];
+        const red = data[index];
+        const green = data[index + 1];
+        const blue = data[index + 2];
+        const isVisible = alpha > 16;
+        const isNearWhite = red >= 248 && green >= 248 && blue >= 248;
+        if (!isVisible || isNearWhite) {
+          continue;
+        }
+
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    }
+
+    if (maxX >= minX && maxY >= minY) {
+      const padding = Math.max(10, Math.round(Math.min(width, height) * 0.035));
+      const trimmedX = Math.max(0, minX - padding);
+      const trimmedY = Math.max(0, minY - padding);
+      const trimmedWidth = Math.min(width - trimmedX, (maxX - minX + 1) + (padding * 2));
+      const trimmedHeight = Math.min(height - trimmedY, (maxY - minY + 1) + (padding * 2));
+      const trimmedCanvas = document.createElement("canvas");
+      trimmedCanvas.width = Math.max(1, trimmedWidth);
+      trimmedCanvas.height = Math.max(1, trimmedHeight);
+      const trimmedContext = trimmedCanvas.getContext("2d");
+      if (!trimmedContext) {
+        throw new Error("Could not create trimmed image canvas.");
+      }
+      trimmedContext.drawImage(
+        canvas,
+        trimmedX,
+        trimmedY,
+        trimmedWidth,
+        trimmedHeight,
+        0,
+        0,
+        trimmedWidth,
+        trimmedHeight
+      );
+      exportCanvas = trimmedCanvas;
+    }
+  }
+
+  const mimeType = preferredMimeType || file.type || "image/png";
+  const quality = mimeType === "image/png" ? undefined : 0.92;
+  const dataUrl = exportCanvas.toDataURL(mimeType, quality);
+  imageBitmap.close?.();
+  return {
+    name: file.name,
+    mimeType,
+    dataUrl,
+    caption
+  };
+}
+
+export async function fileToUpload(file: File, caption?: string) {
+  const dataUrl = await readFileAsDataUrl(file);
 
   return {
     name: file.name,

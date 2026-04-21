@@ -1101,6 +1101,9 @@ export class RadiationNoteService {
     if (!visit) {
       throw new Error("Visit not found.");
     }
+    if (visit.status === "finalized") {
+      this.removeSupersededFinalizedVisits(visit);
+    }
 
     const patient = this.repository.fetchPatient(visit.patientId);
     const course = this.repository.fetchCourse(visit.courseId);
@@ -1992,6 +1995,21 @@ export class RadiationNoteService {
     const patientName = `${patient.firstName} ${patient.lastName}`.trim() || patient.id;
     const treatmentLabel = visit.treatmentNumber === null ? "consult" : `tx${visit.treatmentNumber}`;
     return sanitizeNamePart(`${patientName} ${treatmentLabel} note`) || `visit-${visit.id}`;
+  }
+
+  private removeSupersededFinalizedVisits(currentVisit: VisitNoteRecord) {
+    const duplicateVisits = this.repository
+      .fetchVisitsByCourseIds([currentVisit.courseId])
+      .filter((visit) =>
+        visit.note.id !== currentVisit.id &&
+        visit.note.status === "finalized" &&
+        visit.note.noteType === currentVisit.noteType &&
+        (visit.note.treatmentNumber ?? null) === (currentVisit.treatmentNumber ?? null)
+      );
+
+    for (const duplicate of duplicateVisits) {
+      this.deleteVisit(duplicate.note.id);
+    }
   }
 
   private getPatientNoteLibraryRoot() {

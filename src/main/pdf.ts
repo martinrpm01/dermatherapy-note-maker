@@ -62,6 +62,21 @@ function scaleToFit(width: number, height: number, maxWidth: number, maxHeight: 
   };
 }
 
+function getLogoPlacement(logo: PDFImage, variant: "brand" | "visit") {
+  const aspectRatio = logo.width / Math.max(logo.height, 1);
+  const isSquareish = aspectRatio <= 1.35;
+
+  if (variant === "visit") {
+    return isSquareish
+      ? { maxWidth: 114, maxHeight: 100, yOffset: 8 }
+      : { maxWidth: 158, maxHeight: 68, yOffset: 0 };
+  }
+
+  return isSquareish
+    ? { maxWidth: 98, maxHeight: 86, yOffset: 6 }
+    : { maxWidth: 124, maxHeight: 60, yOffset: 0 };
+}
+
 function getAssetExtension(input?: PdfBinaryAssetInput | null) {
   const fileName = input?.fileName ?? "";
   if (fileName) {
@@ -369,8 +384,9 @@ function drawBrandHeader(
   let contentTop = page.getHeight() - margin;
 
   if (logo) {
-    const fitted = scaleToFit(logo.width, logo.height, 118, 56);
-    const logoY = headerTop - fitted.height;
+    const placement = getLogoPlacement(logo, "brand");
+    const fitted = scaleToFit(logo.width, logo.height, placement.maxWidth, placement.maxHeight);
+    const logoY = headerTop - fitted.height + placement.yOffset;
     page.drawImage(logo, {
       x: margin,
       y: logoY,
@@ -397,8 +413,9 @@ function drawVisitPageHeader(
   let logoBottomY = page.getHeight() - margin;
 
   if (logo) {
-    const fitted = scaleToFit(logo.width, logo.height, 150, 62);
-    const logoY = headerTop - fitted.height;
+    const placement = getLogoPlacement(logo, "visit");
+    const fitted = scaleToFit(logo.width, logo.height, placement.maxWidth, placement.maxHeight);
+    const logoY = headerTop - fitted.height + placement.yOffset;
     page.drawImage(logo, {
       x: margin,
       y: logoY,
@@ -448,15 +465,16 @@ function drawVisitPageHeader(
     });
   });
 
+  const dividerY = Math.min(infoY - 36, logoBottomY - 12);
   page.drawRectangle({
     x: 0,
-    y: infoY - 36,
+    y: dividerY,
     width: page.getWidth(),
     height: 6,
     color: rgb(0.92, 0.92, 0.94)
   });
 
-  return infoY - 58;
+  return dividerY - 22;
 }
 
 function findNextNonEmptyLine(lines: string[], startIndex: number) {

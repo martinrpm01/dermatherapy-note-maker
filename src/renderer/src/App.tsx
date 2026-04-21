@@ -14,7 +14,9 @@ import {
   createEmptyCourseForm,
   createEmptyPatientForm,
   fileToCompressedUpload,
-  fileToUpload
+  fileToUpload,
+  renderImageFileToUpload,
+  readFileAsDataUrl
 } from "./helpers";
 import {
   ArchiveScreen,
@@ -23,6 +25,7 @@ import {
   DocumentOnlyScreen,
   InstallPromptBanner,
   LockScreen,
+  LogoCropModal,
   PatientScreen,
   PinRecoveryScreen,
   RecoveryCodeScreen,
@@ -102,6 +105,12 @@ type DocumentOnlyConsentSigningState = {
 type CourseConsentActionsState = {
   patientId: string;
   courseId: string;
+};
+
+type LogoCropState = {
+  target: "setup" | "settings";
+  file: File;
+  sourceDataUrl: string;
 };
 
 type InstallAwareNavigator = Navigator & {
@@ -280,8 +289,105 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
   const [archiveRestoreResult, setArchiveRestoreResult] = useState<PatientArchiveRestoreResult | null>(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [updateReady, setUpdateReady] = useState(false);
+  const [logoCropState, setLogoCropState] = useState<LogoCropState | null>(null);
   const autosaveTimerRef = useRef<number | null>(null);
   const autosaveSignatureRef = useRef("");
+
+  async function startLogoCrop(file: File | undefined, target: LogoCropState["target"]) {
+    if (!file) {
+      return;
+    }
+
+    try {
+      const sourceDataUrl = await readFileAsDataUrl(file);
+      setLogoCropState({
+        target,
+        file,
+        sourceDataUrl
+      });
+    } catch {
+      showToast("Could not open that logo file.");
+    }
+  }
+
+  async function applyLogoCrop(selection: {
+    shape: "wide" | "square";
+    outputWidth: number;
+    outputHeight: number;
+    imageX: number;
+    imageY: number;
+    imageWidth: number;
+    imageHeight: number;
+  }) {
+    if (!logoCropState) {
+      return;
+    }
+
+    const preferredMimeType = ["image/png", "image/jpeg", "image/webp"].includes(logoCropState.file.type)
+      ? logoCropState.file.type
+      : "image/png";
+
+    try {
+      const upload = await renderImageFileToUpload(
+        logoCropState.file,
+        {
+          x: selection.imageX,
+          y: selection.imageY,
+          width: selection.imageWidth,
+          height: selection.imageHeight
+        },
+        {
+          width: selection.outputWidth,
+          height: selection.outputHeight
+        },
+        undefined,
+        preferredMimeType,
+        { trimWhitespace: selection.shape === "square" }
+      );
+
+      if (logoCropState.target === "setup") {
+        setSetupSettings((current) => current ? {
+          ...current,
+          dermatologyOfficeLogoUpload: upload,
+          dermatologyOfficeLogoAsset: current.dermatologyOfficeLogoAsset,
+          removeDermatologyOfficeLogo: false
+        } : current);
+      }
+
+      if (logoCropState.target === "settings") {
+        const nextPayload = settingsPayload ? {
+          ...settingsPayload,
+          settings: {
+            ...settingsPayload.settings,
+            dermatologyOfficeLogoUpload: upload,
+            dermatologyOfficeLogoAsset: settingsPayload.settings.dermatologyOfficeLogoAsset,
+            removeDermatologyOfficeLogo: false
+          }
+        } : null;
+
+        if (nextPayload && appClient) {
+          const savedSettings = await appClient.saveSettings(nextPayload.settings);
+          setSettingsPayload((current) => current ? { ...current, settings: savedSettings } : current);
+          setBoot((current) => current ? { ...current, settings: savedSettings } : current);
+          showToast("Settings updated.");
+        } else {
+          setSettingsPayload((current) => current ? {
+            ...current,
+            settings: {
+              ...current.settings,
+              dermatologyOfficeLogoUpload: upload,
+              dermatologyOfficeLogoAsset: current.settings.dermatologyOfficeLogoAsset,
+              removeDermatologyOfficeLogo: false
+            }
+          } : current);
+        }
+      }
+
+      setLogoCropState(null);
+    } catch {
+      showToast("Could not crop that logo.");
+    }
+  }
   const resolvedNoteLogoSrc = useResolvedAssetUrl(appClient, boot?.settings.dermatologyOfficeLogoAsset);
   const authGateActive = Boolean(pendingRecoveryCode) || browserRecoveryFlow !== "auth";
 
@@ -946,13 +1052,20 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     setBusy(true);
     try {
       if (!appClient) return;
-      const saved = await appClient.saveVisit(visitEditor.note);
+      const currentPatientId = visitEditor.patient.id;
+      const noteInput = generatePdf
+        ? { ...visitEditor.note, status: "finalized" as const }
+        : visitEditor.note;
+      const saved = await appClient.saveVisit(noteInput);
       let revealTarget = null;
       if (generatePdf) {
         const pdfResult = await appClient.generatePdf(saved.id);
         revealTarget = pdfResult.pdfAsset;
+        await loadPatient(currentPatientId);
+        setScreen({ name: "patient", patientId: currentPatientId });
+      } else {
+        await loadVisit(visitEditor.course.id, "next_treatment", saved.id);
       }
-      await loadVisit(visitEditor.course.id, "next_treatment", saved.id);
       showToast(generatePdf ? "Visit saved and PDF generated." : "Visit saved.");
       if (revealTarget) {
         await appClient.revealAsset(revealTarget);
@@ -1220,16 +1333,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
           onConfirmPinChange={setConfirmPin}
           onSetupSettingsChange={setSetupSettings}
           onSetupLogoSelected={(file) => {
-            void (async () => {
-              if (!file || !setupSettings) return;
-              const upload = await fileToCompressedUpload(file, 1400);
-              setSetupSettings({
-                ...setupSettings,
-                dermatologyOfficeLogoUpload: upload,
-                dermatologyOfficeLogoAsset: setupSettings.dermatologyOfficeLogoAsset,
-                removeDermatologyOfficeLogo: false
-              });
-            })();
+            void startLogoCrop(file, "setup");
           }}
           onRemoveSetupLogo={() =>
             setupSettings
@@ -1270,6 +1374,13 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
               }
               setShowInstallPrompt(false);
             }}
+          />
+        ) : null}
+        {logoCropState ? (
+          <LogoCropModal
+            sourceDataUrl={logoCropState.sourceDataUrl}
+            onCancel={() => setLogoCropState(null)}
+            onConfirm={(selection) => void applyLogoCrop(selection)}
           />
         ) : null}
       </>
@@ -1600,19 +1711,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
             onSubmitPin={() => void submitPinChange()}
             onLockApp={() => void lockApp()}
             onLogoSelected={(file) => {
-              void (async () => {
-                if (!file || !settingsPayload) return;
-                const upload = await fileToCompressedUpload(file, 1400);
-                setSettingsPayload({
-                  ...settingsPayload,
-                  settings: {
-                    ...settingsPayload.settings,
-                    dermatologyOfficeLogoUpload: upload,
-                    dermatologyOfficeLogoAsset: settingsPayload.settings.dermatologyOfficeLogoAsset,
-                    removeDermatologyOfficeLogo: false
-                  }
-                });
-              })();
+              void startLogoCrop(file, "settings");
             }}
             onRemoveLogo={() =>
               setSettingsPayload({
@@ -1782,6 +1881,13 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
             }
             setShowInstallPrompt(false);
           }}
+        />
+      ) : null}
+      {logoCropState ? (
+        <LogoCropModal
+          sourceDataUrl={logoCropState.sourceDataUrl}
+          onCancel={() => setLogoCropState(null)}
+          onConfirm={(selection) => void applyLogoCrop(selection)}
         />
       ) : null}
     </>
