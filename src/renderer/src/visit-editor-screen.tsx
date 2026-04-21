@@ -11,7 +11,7 @@ import {
   shouldIncludeExamVitals
 } from "../../shared/note-rules";
 import { useResolvedAssetUrl } from "./asset-url";
-import { BloodPressureInput, HeartRateInput, NumericInput, OxygenSaturationInput, VisitDateInput, WeightInput } from "./screen-components";
+import { BloodPressureInput, CalendarDateInput, HeartRateInput, NumericInput, OxygenSaturationInput, VisitDateInput, WeightInput } from "./screen-components";
 
 const STANDARD_PRESCRIBED_FRACTION_OPTIONS = [8, 10, 12, 15] as const;
 
@@ -189,7 +189,7 @@ const showProjectedFractionsInput = false;
           <div className="form-grid">
             <label>
               Visit Date
-              <VisitDateInput value={editor.note.visitDate} onChange={(next) => props.onUpdate((current) => ({ ...current, note: { ...current.note, visitDate: next } }), { regenerate: true, overwriteEdited: !props.textDirty })} />
+              <CalendarDateInput value={editor.note.visitDate} onChange={(next) => props.onUpdate((current) => ({ ...current, note: { ...current.note, visitDate: next } }), { regenerate: true, overwriteEdited: !props.textDirty })} />
             </label>
             <label>
               Visit Type
@@ -560,7 +560,7 @@ const showProjectedFractionsInput = false;
                   {editor.note.structuredFields.siteSnapshots.length === 1
                     ? "Biopsy Date"
                     : `Biopsy Date Lesion ${index + 1}${site.bodyLocation ? ` (${site.bodyLocation})` : ""}`}
-                  <VisitDateInput
+                  <CalendarDateInput
                     value={site.biopsyDate || editor.note.structuredFields.biopsyDate || ""}
                     onChange={(next) =>
                       props.onUpdate(
@@ -591,7 +591,7 @@ const showProjectedFractionsInput = false;
               ))}
               <label>
                 Treatment Start Date
-                <VisitDateInput
+                <CalendarDateInput
                   value={editor.note.structuredFields.startRadiationDate}
                   onChange={(next) => props.onUpdate((current) => ({
                     ...current,

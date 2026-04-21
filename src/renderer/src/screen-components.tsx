@@ -499,6 +499,20 @@ export function VisitDateInput(props: { value: string; onChange: (value: string)
   return <DobInput {...props} />;
 }
 
+export function CalendarDateInput(props: { value: string; onChange: (value: string) => void }) {
+  return (
+    <input
+      type="date"
+      value={props.value || ""}
+      onChange={(event) => props.onChange(event.target.value)}
+      onClick={(event) => {
+        const input = event.currentTarget as HTMLInputElement & { showPicker?: () => void };
+        input.showPicker?.();
+      }}
+    />
+  );
+}
+
 export function BloodPressureInput(props: { value: string; onChange: (value: string) => void }) {
   const [displayValue, setDisplayValue] = useState(() => props.value.replace(/\s*mmhg\s*$/i, "").trim());
   const field = useNumPadField();

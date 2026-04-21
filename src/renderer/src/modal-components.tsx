@@ -28,7 +28,7 @@ import type {
   TreatmentCourseRecord,
   TreatmentSiteRecord
 } from "../../shared/types";
-import { DobInput, LesionSizeInput, NumericInput, VisitDateInput } from "./screen-components";
+import { CalendarDateInput, DobInput, LesionSizeInput, NumericInput } from "./screen-components";
 
 const FRACTION_PRESETS = [8, 10, 12, 15];
 const DEPTH_OPTIONS = ["3", "4", "5"];
@@ -518,7 +518,7 @@ export function ConsentSigningModal(props: {
             <div className="form-grid consent-step-grid">
               <label>
                 Sign Date
-                <VisitDateInput value={props.signingInput.signDate} onChange={(next) => props.onChange({ ...props.signingInput, signDate: next })} />
+                <CalendarDateInput value={props.signingInput.signDate} onChange={(next) => props.onChange({ ...props.signingInput, signDate: next })} />
               </label>
               <label>
                 Patient Printed Name
@@ -616,7 +616,7 @@ export function ConsentSigningModal(props: {
             <div className="form-grid consent-step-grid">
               <label>
                 Sign Date
-                <VisitDateInput value={props.signingInput.signDate} onChange={(next) => props.onChange({ ...props.signingInput, signDate: next })} />
+                <CalendarDateInput value={props.signingInput.signDate} onChange={(next) => props.onChange({ ...props.signingInput, signDate: next })} />
               </label>
               <label>
                 Witness Name
@@ -814,11 +814,11 @@ export function PendingCourseIntakeModal(props: {
             </label>
             <label>
               Biopsy Date
-              <VisitDateInput value={courseForm.startDate} onChange={(next) => props.onChange({ ...courseForm, startDate: next })} />
+              <CalendarDateInput value={courseForm.startDate} onChange={(next) => props.onChange({ ...courseForm, startDate: next })} />
             </label>
             <label>
               Sim / Consult Date
-              <VisitDateInput value={courseForm.simConsultDate ?? ""} onChange={(next) => props.onChange({ ...courseForm, simConsultDate: next })} />
+              <CalendarDateInput value={courseForm.simConsultDate ?? ""} onChange={(next) => props.onChange({ ...courseForm, simConsultDate: next })} />
             </label>
           </div>
         <div className={`site-grid${isTwoSite ? " two-site-course-grid" : ""}`}>
@@ -995,7 +995,7 @@ export function DocumentOnlyRecordModal(props: {
           </label>
           <label>
             Sim / Consult Date
-            <VisitDateInput value={recordForm.simConsultDate} onChange={(next) => props.onChange({ ...recordForm, simConsultDate: next })} />
+            <CalendarDateInput value={recordForm.simConsultDate} onChange={(next) => props.onChange({ ...recordForm, simConsultDate: next })} />
           </label>
         </div>
         <div className={`site-grid${isTwoSite ? " two-site-course-grid" : ""}`}>
