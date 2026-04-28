@@ -158,7 +158,18 @@ function applyWhereClause<T extends object>(rows: T[], whereClause?: string, par
 }
 
 function sortVisits(a: VisitNoteRecord, b: VisitNoteRecord) {
-  return `${b.visitDate}|${b.createdAt}`.localeCompare(`${a.visitDate}|${a.createdAt}`);
+  const leftTreatment = a.treatmentNumber ?? 0;
+  const rightTreatment = b.treatmentNumber ?? 0;
+  if (leftTreatment !== rightTreatment) {
+    return leftTreatment - rightTreatment;
+  }
+
+  const dateComparison = a.visitDate.localeCompare(b.visitDate);
+  if (dateComparison !== 0) {
+    return dateComparison;
+  }
+
+  return a.createdAt.localeCompare(b.createdAt);
 }
 
 export class BrowserStructuredDataStore implements StructuredDataStore {

@@ -1426,7 +1426,7 @@ export class RadiationNoteRepository implements StructuredDataStore {
          updated_at AS updatedAt
        FROM visit_notes
        WHERE course_id IN (${this.placeholders(courseIds.length)})
-       ORDER BY visit_date DESC, created_at DESC`,
+       ORDER BY COALESCE(treatment_number, 0) ASC, visit_date ASC, created_at ASC`,
       courseIds
     );
 
@@ -1475,7 +1475,7 @@ export class RadiationNoteRepository implements StructuredDataStore {
          updated_at AS updatedAt
        FROM visit_notes
        WHERE patient_id IN (${this.placeholders(patientIds.length)})
-       ORDER BY visit_date DESC, created_at DESC`,
+       ORDER BY COALESCE(treatment_number, 0) ASC, visit_date ASC, created_at ASC`,
       patientIds
     );
 
@@ -1702,7 +1702,19 @@ export class RadiationNoteRepository implements StructuredDataStore {
     for (const visit of visits) {
       const list = visitsByCourse.get(visit.note.courseId) || [];
       list.push(visit);
-      list.sort((left, right) => right.note.visitDate.localeCompare(left.note.visitDate));
+      list.sort((left, right) => {
+        const treatmentComparison = (left.note.treatmentNumber ?? 0) - (right.note.treatmentNumber ?? 0);
+        if (treatmentComparison !== 0) {
+          return treatmentComparison;
+        }
+
+        const dateComparison = left.note.visitDate.localeCompare(right.note.visitDate);
+        if (dateComparison !== 0) {
+          return dateComparison;
+        }
+
+        return left.note.createdAt.localeCompare(right.note.createdAt);
+      });
       visitsByCourse.set(visit.note.courseId, list);
     }
 

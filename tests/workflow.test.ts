@@ -1246,6 +1246,29 @@ describe("RadiationNoteService workflow", () => {
     expect(savedSecond.treatmentNumber).toBe(2);
   });
 
+  it("sorts course visits by sim consult then treatment number after amendments", async () => {
+    const { patient, course } = await createPatientAndCourse();
+
+    const consultDraft = service.buildVisitDraft(course.id, "consult_sim");
+    service.saveVisit(consultDraft.note);
+
+    const firstDraft = service.buildVisitDraft(course.id, "next_treatment");
+    service.saveVisit(firstDraft.note);
+
+    const secondDraft = service.buildVisitDraft(course.id, "next_treatment");
+    const savedSecond = service.saveVisit(secondDraft.note);
+
+    const thirdDraft = service.buildVisitDraft(course.id, "next_treatment");
+    service.saveVisit(thirdDraft.note);
+
+    const amendedSecond = service.buildVisitDraft(course.id, "next_treatment", savedSecond.id);
+    amendedSecond.note.editedText = `${amendedSecond.note.editedText}\nAmended treatment 2.`;
+    service.saveVisit(amendedSecond.note);
+
+    const detail = service.getPatientDetail(patient.id);
+    expect(detail.courses[0].visits.map((visit) => visit.note.treatmentNumber ?? 0)).toEqual([0, 1, 2, 3]);
+  });
+
   it("calculates cumulative dose from treatment number and daily dose", async () => {
     const { course } = await createPatientAndCourse();
     const draft = service.buildVisitDraft(course.id, "next_treatment");
