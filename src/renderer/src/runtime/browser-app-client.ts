@@ -195,6 +195,22 @@ export class BrowserAppClient implements AppClient {
     );
   }
 
+  private isAppleTouchBrowser() {
+    const platform = navigator.platform || "";
+    return /iPad|iPhone|iPod/i.test(platform) || (platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  }
+
+  private canShareFile(file: File) {
+    return Boolean(navigator.share && navigator.canShare?.({ files: [file] }));
+  }
+
+  private async shareFile(file: File) {
+    await navigator.share({
+      files: [file],
+      title: file.name
+    });
+  }
+
   private deleteStoredFiles(binaryAssetStore: BrowserBinaryAssetStore, filePaths: Array<string | null | undefined>) {
     const uniquePaths = [...new Set(filePaths.filter((filePath): filePath is string => Boolean(filePath)))];
     if (uniquePaths.length === 0) {
@@ -2130,6 +2146,22 @@ export class BrowserAppClient implements AppClient {
   async openAsset(asset: Parameters<AppClient["openAsset"]>[0]) {
     const binaryAssetStore = await this.getBinaryAssetStore();
     const fileName = await this.getOpenFileName(asset, binaryAssetStore);
+    const blob = binaryAssetStore.getStoredBlob(asset.assetId);
+    const isPdf = blob?.type.toLowerCase().includes("pdf") || fileName.toLowerCase().endsWith(".pdf");
+    if (blob && isPdf && this.isAppleTouchBrowser()) {
+      const file = new File([blob], fileName, { type: blob.type || "application/pdf" });
+      if (this.canShareFile(file)) {
+        try {
+          await this.shareFile(file);
+          return;
+        } catch (error) {
+          if (error instanceof DOMException && error.name === "AbortError") {
+            return;
+          }
+        }
+      }
+    }
+
     const assetUrl = binaryAssetStore.resolveNamedAssetUrl(asset.assetId, fileName) ?? await this.resolveAssetUrl(asset);
     if (!assetUrl) {
       throw new Error("Could not resolve asset.");
