@@ -211,6 +211,97 @@ export class BrowserAppClient implements AppClient {
     });
   }
 
+  private openApplePdfPreview(file: File, previewUrl: string) {
+    const previewWindow = window.open("", "_blank");
+    if (!previewWindow) {
+      return false;
+    }
+
+    previewWindow.document.title = file.name;
+    previewWindow.document.body.innerHTML = "";
+    const style = previewWindow.document.createElement("style");
+    style.textContent = `
+      html, body {
+        height: 100%;
+        margin: 0;
+        background: #f5f5f2;
+        color: #1f2933;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      body {
+        display: grid;
+        grid-template-rows: auto 1fr;
+      }
+
+      .toolbar {
+        align-items: center;
+        background: #ffffff;
+        border-bottom: 1px solid #d8d6d0;
+        box-sizing: border-box;
+        display: flex;
+        gap: 12px;
+        min-height: 56px;
+        padding: 10px 14px;
+      }
+
+      .title {
+        flex: 1;
+        font-size: 15px;
+        font-weight: 650;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      button {
+        appearance: none;
+        background: #163f58;
+        border: 0;
+        border-radius: 6px;
+        color: white;
+        font: inherit;
+        font-size: 15px;
+        font-weight: 650;
+        min-height: 40px;
+        padding: 8px 14px;
+      }
+
+      iframe {
+        border: 0;
+        height: 100%;
+        width: 100%;
+      }
+    `;
+
+    const toolbar = previewWindow.document.createElement("div");
+    toolbar.className = "toolbar";
+
+    const title = previewWindow.document.createElement("div");
+    title.className = "title";
+    title.textContent = file.name;
+
+    const saveButton = previewWindow.document.createElement("button");
+    saveButton.type = "button";
+    saveButton.textContent = "Save to Files";
+    saveButton.addEventListener("click", () => {
+      void this.shareFile(file).catch((error) => {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          previewWindow.alert("Unable to open the iPad share sheet for this PDF.");
+        }
+      });
+    });
+
+    const frame = previewWindow.document.createElement("iframe");
+    frame.src = previewUrl;
+    frame.title = file.name;
+
+    toolbar.append(title, saveButton);
+    previewWindow.document.head.append(style);
+    previewWindow.document.body.append(toolbar, frame);
+    return true;
+  }
+
   private deleteStoredFiles(binaryAssetStore: BrowserBinaryAssetStore, filePaths: Array<string | null | undefined>) {
     const uniquePaths = [...new Set(filePaths.filter((filePath): filePath is string => Boolean(filePath)))];
     if (uniquePaths.length === 0) {
@@ -2150,15 +2241,9 @@ export class BrowserAppClient implements AppClient {
     const isPdf = blob?.type.toLowerCase().includes("pdf") || fileName.toLowerCase().endsWith(".pdf");
     if (blob && isPdf && this.isAppleTouchBrowser()) {
       const file = new File([blob], fileName, { type: blob.type || "application/pdf" });
-      if (this.canShareFile(file)) {
-        try {
-          await this.shareFile(file);
-          return;
-        } catch (error) {
-          if (error instanceof DOMException && error.name === "AbortError") {
-            return;
-          }
-        }
+      const previewUrl = binaryAssetStore.resolveNamedAssetUrl(asset.assetId, fileName) ?? await this.resolveAssetUrl(asset);
+      if (previewUrl && this.canShareFile(file) && this.openApplePdfPreview(file, previewUrl)) {
+        return;
       }
     }
 
