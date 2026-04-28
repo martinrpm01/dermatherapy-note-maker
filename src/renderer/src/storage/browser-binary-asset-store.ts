@@ -163,19 +163,6 @@ export class BrowserBinaryAssetStore implements BinaryAssetStore {
     return this.objectUrlByAssetId.get(assetId) ?? null;
   }
 
-  resolveNamedAssetUrl(assetId: string, fileName: string) {
-    const blob = this.blobByAssetId.get(assetId);
-    if (!blob) {
-      return null;
-    }
-
-    this.revokeObjectUrl(assetId);
-    const file = new File([blob], fileName, { type: blob.type || "application/octet-stream" });
-    const objectUrl = URL.createObjectURL(file);
-    this.objectUrlByAssetId.set(assetId, objectUrl);
-    return objectUrl;
-  }
-
   writeBinaryFile(filePath: string, data: Uint8Array) {
     const assetId = extractAssetIdFromBrowserPath(filePath) ?? this.assetIdByPath.get(filePath) ?? makeAssetId();
     this.writeAssetBlobInternal({
