@@ -173,6 +173,56 @@ export class BrowserAppClient implements AppClient {
     return asset ? binaryAssetStore.getStoredPath(asset.assetId) : null;
   }
 
+  private getFileNameFromStoredPath(filePath: string | null) {
+    if (!filePath) {
+      return null;
+    }
+
+    const encodedName = filePath.slice(filePath.lastIndexOf("/") + 1);
+    try {
+      return decodeURIComponent(encodedName);
+    } catch {
+      return encodedName || null;
+    }
+  }
+
+  private async getOpenFileName(asset: AssetReference, binaryAssetStore: BrowserBinaryAssetStore) {
+    const structuredDataStore = await this.getStructuredDataStore();
+    return (
+      structuredDataStore.findOriginalNameForAsset(asset.assetId) ??
+      this.getFileNameFromStoredPath(binaryAssetStore.getStoredPath(asset.assetId)) ??
+      `${asset.assetId}.pdf`
+    );
+  }
+
+  private async waitForServiceWorkerController() {
+    if (!("serviceWorker" in navigator)) {
+      return false;
+    }
+
+    if (navigator.serviceWorker.controller) {
+      return true;
+    }
+
+    await Promise.race([
+      navigator.serviceWorker.ready.catch(() => undefined),
+      new Promise<void>((resolve) => {
+        const finish = () => {
+          window.clearTimeout(timeoutId);
+          navigator.serviceWorker.removeEventListener("controllerchange", handleControllerChange);
+          resolve();
+        };
+        const timeoutId = window.setTimeout(finish, 1500);
+        const handleControllerChange = () => {
+          finish();
+        };
+        navigator.serviceWorker.addEventListener("controllerchange", handleControllerChange);
+      })
+    ]);
+
+    return Boolean(navigator.serviceWorker.controller);
+  }
+
   private deleteStoredFiles(binaryAssetStore: BrowserBinaryAssetStore, filePaths: Array<string | null | undefined>) {
     const uniquePaths = [...new Set(filePaths.filter((filePath): filePath is string => Boolean(filePath)))];
     if (uniquePaths.length === 0) {
@@ -2106,7 +2156,12 @@ export class BrowserAppClient implements AppClient {
   // browser-alternative-needed: desktop opens an asset with the OS shell.
   // Browser implementation should open an object URL, download, or render inline when safe.
   async openAsset(asset: Parameters<AppClient["openAsset"]>[0]) {
-    const assetUrl = await this.resolveAssetUrl(asset);
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    const fileName = await this.getOpenFileName(asset, binaryAssetStore);
+    const assetUrl =
+      await this.waitForServiceWorkerController()
+        ? binaryAssetStore.resolveNamedAssetUrl(asset.assetId, fileName)
+        : await this.resolveAssetUrl(asset);
     if (!assetUrl) {
       throw new Error("Could not resolve asset.");
     }

@@ -54,8 +54,8 @@ function buildConsentDocumentIdentity(patient: PatientRecord) {
   const safeName = sanitizeDocumentName(patientName || "patient");
   return {
     patientName,
-    caption: `${patientName} Radiation Consent`.trim(),
-    fileName: `${safeName} Radiation Consent.pdf`
+    caption: `${patientName} - Consent`.trim(),
+    fileName: `${safeName} - Consent.pdf`
   };
 }
 

@@ -648,6 +648,21 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
     return this.courseDocuments.get(documentId) ?? null;
   }
 
+  findOriginalNameForAsset(assetId: string) {
+    this.ensureInitialized();
+    const courseDocument = [...this.courseDocuments.values()].find((document) => document.fileAsset.assetId === assetId);
+    if (courseDocument?.originalName) {
+      return courseDocument.originalName;
+    }
+
+    const visitAttachment = [...this.visitAttachments.values()].find((attachment) => attachment.fileAsset.assetId === assetId);
+    if (visitAttachment?.originalName) {
+      return visitAttachment.originalName;
+    }
+
+    return null;
+  }
+
   fetchVisit(visitId: string) {
     this.ensureInitialized();
     return this.visitNotes.get(visitId) ?? null;

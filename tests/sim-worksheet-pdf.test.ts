@@ -136,8 +136,8 @@ describe("buildSimWorksheetPdfFromTemplateBytes", () => {
       visit: createVisit([createSiteSnapshot(1, { additionalDevices: "Eye Shield", worksheetEyeShieldType: "External" })])
     });
 
-    expect(worksheet.fileName).toBe("Sim Worksheet John Smith.pdf");
-    expect(worksheet.caption).toBe("Sim Worksheet John Smith");
+    expect(worksheet.fileName).toBe("John Smith - Sim Worksheet.pdf");
+    expect(worksheet.caption).toBe("John Smith - Sim Worksheet");
 
     const pdfDoc = await PDFDocument.load(worksheet.bytes);
     expect(pdfDoc.getPageCount()).toBe(1);
