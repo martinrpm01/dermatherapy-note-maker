@@ -2156,9 +2156,22 @@ export function PatientScreen(props: {
                 </div>
                 <div className="button-row">
                   {isFinalizedVisit && visit.note.pdfAsset ? (
-                    <button onClick={() => props.onOpenPdf(visit.note.pdfAsset!)}>
-                      Open Finalized Note
-                    </button>
+                    <>
+                      <button onClick={() => props.onOpenPdf(visit.note.pdfAsset!)}>
+                        Open Finalized Note
+                      </button>
+                      <button
+                        onClick={() =>
+                          props.onOpenVisit(
+                            courseDetail.course.id,
+                            visit.note.noteType === "consult_sim" ? "consult_sim" : "next_treatment",
+                            visit.note.id
+                          )
+                        }
+                      >
+                        Amend
+                      </button>
+                    </>
                   ) : (
                     <button onClick={() => props.onOpenVisit(courseDetail.course.id, "next_treatment", visit.note.id)}>
                       Open Note
