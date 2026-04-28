@@ -1532,6 +1532,24 @@ describe("RadiationNoteService workflow", () => {
     expect(detail.courses[0].visits.some((visit) => visit.note.id === saved.id)).toBe(false);
   });
 
+  it("keeps only one sim consult visit per course", async () => {
+    const { patient, course } = await createPatientAndCourse();
+    const firstConsultDraft = service.buildVisitDraft(course.id, "consult_sim");
+    firstConsultDraft.note.newPhotoUploads = [{ name: "sim-photo-a.png", mimeType: "image/png", dataUrl: pngDataUrl }];
+    const firstConsult = service.saveVisit(firstConsultDraft.note);
+
+    const secondConsultDraft = service.buildVisitDraft(course.id, "consult_sim");
+    expect(secondConsultDraft.note.id).toBe(firstConsult.id);
+    secondConsultDraft.note.newPhotoUploads = [{ name: "sim-photo-b.png", mimeType: "image/png", dataUrl: pngDataUrl }];
+    const secondConsult = service.saveVisit(secondConsultDraft.note);
+
+    const detail = service.getPatientDetail(patient.id);
+    const consultVisits = detail.courses[0].visits.filter((visit) => visit.note.noteType === "consult_sim");
+    expect(consultVisits).toHaveLength(1);
+    expect(consultVisits[0].note.id).toBe(secondConsult.id);
+    expect(secondConsult.id).toBe(firstConsult.id);
+  });
+
   it("removes empty patient note folders after the last PDF-backed visit is deleted", async () => {
     const { course } = await createPatientAndCourse();
     const draft = service.buildVisitDraft(course.id, "next_treatment");
