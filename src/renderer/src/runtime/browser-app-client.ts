@@ -576,6 +576,10 @@ export class BrowserAppClient implements AppClient {
     queueMicrotask(() => URL.revokeObjectURL(objectUrl));
   }
 
+  private triggerPdfDownload(fileName: string, bytes: Uint8Array) {
+    this.triggerDownload(fileName, new Blob([Uint8Array.from(bytes)], { type: "application/pdf" }));
+  }
+
   private pickZipFile(): Promise<File | null> {
     return new Promise((resolve) => {
       const input = document.createElement("input");
@@ -1601,8 +1605,7 @@ export class BrowserAppClient implements AppClient {
     );
     structuredDataStore.insertGeneratedPdf(visitId, filePath, versionNumber);
 
-    const downloadBlob = new Blob([Uint8Array.from(pdfBytes)], { type: "application/pdf" });
-    this.triggerDownload(pdfFileName, downloadBlob);
+    this.triggerPdfDownload(pdfFileName, pdfBytes);
 
     await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
     const persistedPdf = structuredDataStore.fetchGeneratedPdfs(visitId).find((pdf) => pdf.versionNumber === versionNumber);
@@ -1691,6 +1694,7 @@ export class BrowserAppClient implements AppClient {
       "application/pdf",
       worksheet.fileName
     );
+    this.triggerPdfDownload(worksheet.fileName, worksheet.bytes);
 
     await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
     const created = structuredDataStore
@@ -1744,6 +1748,7 @@ export class BrowserAppClient implements AppClient {
       this.deleteStoredFiles(binaryAssetStore, [previousPath]);
     }
 
+    this.triggerPdfDownload(consentForm.fileName, consentForm.bytes);
     await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
     return persistedFile;
   }
@@ -1790,6 +1795,7 @@ export class BrowserAppClient implements AppClient {
       this.deleteStoredFiles(binaryAssetStore, [previousPath]);
     }
 
+    this.triggerPdfDownload(consentForm.fileName, consentForm.bytes);
     await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
     return persistedFile;
   }
@@ -1844,6 +1850,7 @@ export class BrowserAppClient implements AppClient {
       this.deleteStoredFiles(binaryAssetStore, [previousPath]);
     }
 
+    this.triggerPdfDownload(worksheet.fileName, worksheet.bytes);
     await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
     return persistedFile;
   }
@@ -1896,9 +1903,10 @@ export class BrowserAppClient implements AppClient {
       this.deleteStoredFiles(binaryAssetStore, [previousPath]);
     }
 
-      await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
-      return persistedDocument;
-    }
+    this.triggerPdfDownload(consentForm.fileName, consentForm.bytes);
+    await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
+    return persistedDocument;
+  }
 
   async generateCourseSimWorksheet(courseId: string) {
     this.assertUnlocked();
@@ -1979,6 +1987,7 @@ export class BrowserAppClient implements AppClient {
       this.deleteStoredFiles(binaryAssetStore, [previousPath]);
     }
 
+    this.triggerPdfDownload(worksheet.fileName, worksheet.bytes);
     await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
     return persistedDocument;
   }
@@ -2032,6 +2041,7 @@ export class BrowserAppClient implements AppClient {
       this.deleteStoredFiles(binaryAssetStore, [previousPath]);
     }
 
+    this.triggerPdfDownload(consentForm.fileName, consentForm.bytes);
     await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
     return persistedDocument;
   }
@@ -2079,6 +2089,7 @@ export class BrowserAppClient implements AppClient {
       this.deleteStoredFiles(binaryAssetStore, [previousPath]);
     }
 
+    this.triggerPdfDownload(consentForm.fileName, consentForm.bytes);
     await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
     return persistedDocument;
   }
