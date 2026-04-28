@@ -260,6 +260,27 @@ export class BrowserAppClient implements AppClient {
         padding: 8px 14px;
       }
 
+      .preview {
+        align-items: center;
+        box-sizing: border-box;
+        display: flex;
+        justify-content: center;
+        min-height: 0;
+        overflow: hidden;
+        padding: 14px;
+      }
+
+      .pdf-shell {
+        aspect-ratio: 8.5 / 11;
+        background: #ffffff;
+        box-shadow: 0 10px 32px rgba(31, 41, 51, 0.18);
+        height: min(100%, calc((100dvw - 28px) * 1.294));
+        max-height: 100%;
+        max-width: 980px;
+        overflow: hidden;
+        width: min(calc(100dvw - 28px), calc((100dvh - 86px) * 0.773), 980px);
+      }
+
       iframe {
         border: 0;
         height: 100%;
@@ -296,9 +317,16 @@ export class BrowserAppClient implements AppClient {
     frame.src = previewUrl;
     frame.title = file.name;
 
+    const preview = previewWindow.document.createElement("div");
+    preview.className = "preview";
+    const pdfShell = previewWindow.document.createElement("div");
+    pdfShell.className = "pdf-shell";
+    pdfShell.append(frame);
+    preview.append(pdfShell);
+
     toolbar.append(title, saveButton);
     previewWindow.document.head.append(style);
-    previewWindow.document.body.append(toolbar, frame);
+    previewWindow.document.body.append(toolbar, preview);
     return true;
   }
 
