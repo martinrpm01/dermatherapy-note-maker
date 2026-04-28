@@ -285,7 +285,7 @@ export class BrowserAppClient implements AppClient {
         return;
       }
 
-      void previewNavigator.share({ files: [previewFile], title: previewFile.name }).catch((error) => {
+      void previewNavigator.share({ files: [previewFile] }).catch((error) => {
         if (!(error instanceof DOMException && error.name === "AbortError")) {
           previewWindow.alert("Unable to open the iPad share sheet for this PDF.");
         }
