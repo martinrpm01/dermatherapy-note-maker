@@ -204,13 +204,6 @@ export class BrowserAppClient implements AppClient {
     return Boolean(navigator.share && navigator.canShare?.({ files: [file] }));
   }
 
-  private async shareFile(file: File) {
-    await navigator.share({
-      files: [file],
-      title: file.name
-    });
-  }
-
   private openApplePdfPreview(file: File, previewUrl: string) {
     const previewWindow = window.open("", "_blank");
     if (!previewWindow) {
@@ -285,7 +278,14 @@ export class BrowserAppClient implements AppClient {
     saveButton.type = "button";
     saveButton.textContent = "Save to Files";
     saveButton.addEventListener("click", () => {
-      void this.shareFile(file).catch((error) => {
+      const previewNavigator = previewWindow.navigator;
+      const previewFile = new previewWindow.File([file], file.name, { type: file.type || "application/pdf" });
+      if (!previewNavigator.share || !previewNavigator.canShare?.({ files: [previewFile] })) {
+        previewWindow.alert("This iPad browser cannot share this PDF directly.");
+        return;
+      }
+
+      void previewNavigator.share({ files: [previewFile], title: previewFile.name }).catch((error) => {
         if (!(error instanceof DOMException && error.name === "AbortError")) {
           previewWindow.alert("Unable to open the iPad share sheet for this PDF.");
         }
