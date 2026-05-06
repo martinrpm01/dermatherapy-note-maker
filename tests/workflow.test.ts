@@ -787,8 +787,9 @@ describe("RadiationNoteService workflow", () => {
     expect(savedConsult.generatedText).toContain("Tx site name: Bridge of nose");
     expect(savedConsult.generatedText).toContain("ICD10: C44.311");
     expect(savedConsult.generatedText).toContain("Total Fractions: 12");
-    expect(savedConsult.generatedText).toContain("Daily dose: 500");
-    expect(savedConsult.generatedText).toContain("Cumulative dose: 0");
+    expect(savedConsult.generatedText).toContain("Daily dose: 350");
+    expect(savedConsult.generatedText).toContain("Prescribed dose: 4200");
+    expect(savedConsult.generatedText).not.toContain("Cumulative dose:");
     expect(savedConsult.generatedText).toContain("Tx depth: 3mm");
     expect(savedConsult.generatedText).toContain("Cone size: 30mm");
     expect(savedConsult.generatedText).toContain("Cutout flex shield size: 18mm");
@@ -906,13 +907,15 @@ describe("RadiationNoteService workflow", () => {
     expect(savedConsult.generatedText).toContain("ICD10: C44.319");
     expect(savedConsult.generatedText).toContain("Total Fractions: 10");
     expect(savedConsult.generatedText).toContain("Daily dose: 400");
-    expect(savedConsult.generatedText).toContain("Cumulative dose: 0");
+    expect(savedConsult.generatedText).toContain("Prescribed dose: 4000");
     expect(savedConsult.generatedText).toContain("Tx depth: 3mm");
     expect(savedConsult.generatedText).toContain("Cone size: 20mm");
     expect(savedConsult.generatedText).toContain("Cutout flex shield size: 10mm");
     expect(savedConsult.generatedText).toContain("Tx site name: Right post auricular skin");
     expect(savedConsult.generatedText).toContain("ICD10: C44.222");
     expect(savedConsult.generatedText).toContain("Total Fractions: 12");
+    expect(savedConsult.generatedText).toContain("Daily dose: 350");
+    expect(savedConsult.generatedText).toContain("Prescribed dose: 4200");
     expect(savedConsult.generatedText).toContain("Cutout flex shield size: 12mm");
   });
 

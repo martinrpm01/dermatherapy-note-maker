@@ -1190,7 +1190,11 @@ export class BrowserAppClient implements AppClient {
         : input.structuredFields.siteSnapshots
     ).map((site) =>
       input.noteType === "consult_sim"
-        ? { ...site, doseManuallyAdjusted: Boolean(site.doseManuallyAdjusted) }
+        ? applyAutomaticDoseValuesToSiteSnapshot(
+            { ...site, doseManuallyAdjusted: Boolean(site.doseManuallyAdjusted) },
+            null,
+            site.prescribedFractions ?? input.structuredFields.projectedFractionsInput ?? null
+          )
         : applyAutomaticDoseValuesToSiteSnapshot(
             { ...site, doseManuallyAdjusted: Boolean(site.doseManuallyAdjusted) },
             input.treatmentNumber,

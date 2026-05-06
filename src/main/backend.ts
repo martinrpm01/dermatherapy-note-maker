@@ -934,7 +934,11 @@ export class RadiationNoteService {
         : input.structuredFields.siteSnapshots
     ).map((site) =>
       input.noteType === "consult_sim"
-        ? { ...site, doseManuallyAdjusted: Boolean(site.doseManuallyAdjusted) }
+        ? applyAutomaticDoseValuesToSiteSnapshot(
+            { ...site, doseManuallyAdjusted: Boolean(site.doseManuallyAdjusted) },
+            null,
+            site.prescribedFractions ?? input.structuredFields.projectedFractionsInput ?? null
+          )
         : applyAutomaticDoseValuesToSiteSnapshot(
             { ...site, doseManuallyAdjusted: Boolean(site.doseManuallyAdjusted) },
             input.treatmentNumber,
@@ -1916,59 +1920,67 @@ export class RadiationNoteService {
     const projectedFractionsInput = note.structuredFields.projectedFractionsInput ?? null;
     const courseFractions = course.prescribedFractions > 0 ? course.prescribedFractions : null;
     const getTxSiteName = (site: typeof site1) => site.treatmentLocationText.trim() || site.bodyLocation.trim();
+    const getTotalFractionValue = (site: typeof site1) =>
+      site.prescribedFractions ?? (note.noteType === "consult_sim" ? projectedFractionsInput : null) ?? courseFractions;
     const getTotalFractions = (site: typeof site1) => {
-      const fractions = site.prescribedFractions ?? (note.noteType === "consult_sim" ? projectedFractionsInput : null) ?? courseFractions;
+      const fractions = getTotalFractionValue(site);
       return fractions && fractions > 0 ? fractions : "";
     };
+    const getRenderableSite = (site: typeof site1) =>
+      note.noteType === "consult_sim"
+        ? applyAutomaticDoseValuesToSiteSnapshot(site, null, getTotalFractionValue(site))
+        : site;
     const getCumulativeDose = (site: typeof site1) => {
       if (site.cumulativeDose > 0) {
         return site.cumulativeDose;
       }
       return note.noteType === "consult_sim" ? 0 : "";
     };
+    const site1Base = getRenderableSite(site1);
+    const site2Base = getRenderableSite(site2);
     const site1Render = {
-      ...site1,
-      biopsyDate: formatDisplayDate(site1.biopsyDate || note.structuredFields.biopsyDate),
-      txSiteName: getTxSiteName(site1),
-      dailyDose: site1.dailyDose > 0 ? site1.dailyDose : "",
-      totalDose: site1.totalDose > 0 ? site1.totalDose : "",
-      cumulativeDose: getCumulativeDose(site1),
-      prescribedFractions: (site1.prescribedFractions ?? course.prescribedFractions) > 0 ? (site1.prescribedFractions ?? course.prescribedFractions) : "",
-      totalFractions: getTotalFractions(site1),
-      cutoutSize: normalizeCutoutSizeLabel(site1.cutoutSize),
-      shields: buildShieldSummary(site1.shields, site1.additionalDevices),
-      machine: getDefaultMachine(site1.machine),
-      treatmentDepth: getDefaultTreatmentDepth(site1.treatmentDepth),
-      coneSizeDisplay: formatMeasurement(site1.coneSize),
-      cutoutSizeDisplay: formatMeasurement(site1.cutoutSize),
-      flexShieldCutoutText: buildFlexShieldCutoutText(site1.cutoutSize, site1.coneSize),
-      lesionSizeDisplay: formatMeasurement(site1.lesionSize),
-      treatmentDepthDisplay: formatMeasurement(getDefaultTreatmentDepth(site1.treatmentDepth)),
-      simulationComplications: buildSimulationComplicationText(site1.additionalDevices),
-      simulationComplicationsLine: buildSimulationComplicationLine(site1.additionalDevices),
-        additionalDevices: formatAdditionalDevicesForSite(site1)
+      ...site1Base,
+      biopsyDate: formatDisplayDate(site1Base.biopsyDate || note.structuredFields.biopsyDate),
+      txSiteName: getTxSiteName(site1Base),
+      dailyDose: site1Base.dailyDose > 0 ? site1Base.dailyDose : "",
+      totalDose: site1Base.totalDose > 0 ? site1Base.totalDose : "",
+      cumulativeDose: getCumulativeDose(site1Base),
+      prescribedFractions: (site1Base.prescribedFractions ?? course.prescribedFractions) > 0 ? (site1Base.prescribedFractions ?? course.prescribedFractions) : "",
+      totalFractions: getTotalFractions(site1Base),
+      cutoutSize: normalizeCutoutSizeLabel(site1Base.cutoutSize),
+      shields: buildShieldSummary(site1Base.shields, site1Base.additionalDevices),
+      machine: getDefaultMachine(site1Base.machine),
+      treatmentDepth: getDefaultTreatmentDepth(site1Base.treatmentDepth),
+      coneSizeDisplay: formatMeasurement(site1Base.coneSize),
+      cutoutSizeDisplay: formatMeasurement(site1Base.cutoutSize),
+      flexShieldCutoutText: buildFlexShieldCutoutText(site1Base.cutoutSize, site1Base.coneSize),
+      lesionSizeDisplay: formatMeasurement(site1Base.lesionSize),
+      treatmentDepthDisplay: formatMeasurement(getDefaultTreatmentDepth(site1Base.treatmentDepth)),
+      simulationComplications: buildSimulationComplicationText(site1Base.additionalDevices),
+      simulationComplicationsLine: buildSimulationComplicationLine(site1Base.additionalDevices),
+        additionalDevices: formatAdditionalDevicesForSite(site1Base)
     };
     const site2Render = {
-      ...site2,
-      biopsyDate: formatDisplayDate(site2.biopsyDate || note.structuredFields.biopsyDate),
-      txSiteName: getTxSiteName(site2),
-      dailyDose: site2.dailyDose > 0 ? site2.dailyDose : "",
-      totalDose: site2.totalDose > 0 ? site2.totalDose : "",
-      cumulativeDose: getCumulativeDose(site2),
-      prescribedFractions: (site2.prescribedFractions ?? course.prescribedFractions) > 0 ? (site2.prescribedFractions ?? course.prescribedFractions) : "",
-      totalFractions: getTotalFractions(site2),
-      cutoutSize: normalizeCutoutSizeLabel(site2.cutoutSize),
-      shields: buildShieldSummary(site2.shields, site2.additionalDevices),
-      machine: getDefaultMachine(site2.machine),
-      treatmentDepth: getDefaultTreatmentDepth(site2.treatmentDepth),
-      coneSizeDisplay: formatMeasurement(site2.coneSize),
-      cutoutSizeDisplay: formatMeasurement(site2.cutoutSize),
-      flexShieldCutoutText: buildFlexShieldCutoutText(site2.cutoutSize, site2.coneSize),
-      lesionSizeDisplay: formatMeasurement(site2.lesionSize),
-      treatmentDepthDisplay: formatMeasurement(getDefaultTreatmentDepth(site2.treatmentDepth)),
-      simulationComplications: buildSimulationComplicationText(site2.additionalDevices),
-      simulationComplicationsLine: buildSimulationComplicationLine(site2.additionalDevices),
-        additionalDevices: formatAdditionalDevicesForSite(site2)
+      ...site2Base,
+      biopsyDate: formatDisplayDate(site2Base.biopsyDate || note.structuredFields.biopsyDate),
+      txSiteName: getTxSiteName(site2Base),
+      dailyDose: site2Base.dailyDose > 0 ? site2Base.dailyDose : "",
+      totalDose: site2Base.totalDose > 0 ? site2Base.totalDose : "",
+      cumulativeDose: getCumulativeDose(site2Base),
+      prescribedFractions: (site2Base.prescribedFractions ?? course.prescribedFractions) > 0 ? (site2Base.prescribedFractions ?? course.prescribedFractions) : "",
+      totalFractions: getTotalFractions(site2Base),
+      cutoutSize: normalizeCutoutSizeLabel(site2Base.cutoutSize),
+      shields: buildShieldSummary(site2Base.shields, site2Base.additionalDevices),
+      machine: getDefaultMachine(site2Base.machine),
+      treatmentDepth: getDefaultTreatmentDepth(site2Base.treatmentDepth),
+      coneSizeDisplay: formatMeasurement(site2Base.coneSize),
+      cutoutSizeDisplay: formatMeasurement(site2Base.cutoutSize),
+      flexShieldCutoutText: buildFlexShieldCutoutText(site2Base.cutoutSize, site2Base.coneSize),
+      lesionSizeDisplay: formatMeasurement(site2Base.lesionSize),
+      treatmentDepthDisplay: formatMeasurement(getDefaultTreatmentDepth(site2Base.treatmentDepth)),
+      simulationComplications: buildSimulationComplicationText(site2Base.additionalDevices),
+      simulationComplicationsLine: buildSimulationComplicationLine(site2Base.additionalDevices),
+        additionalDevices: formatAdditionalDevicesForSite(site2Base)
       };
 
     const finalTreatmentSection = buildFinalTreatmentSection(note.structuredFields.finalTreatment);

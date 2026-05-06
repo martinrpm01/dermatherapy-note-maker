@@ -161,7 +161,7 @@ Tx site name: {{site1.txSiteName}}
 ICD10: {{site1.icd10}}
 Total Fractions: {{site1.totalFractions}}
 Daily dose: {{site1.dailyDose}}
-Cumulative dose: {{site1.cumulativeDose}}
+Prescribed dose: {{site1.totalDose}}
 Tx depth: {{site1.treatmentDepthDisplay}}
 Cone size: {{site1.coneSizeDisplay}}
 Cutout flex shield size: {{site1.cutoutSizeDisplay}}
@@ -506,7 +506,7 @@ Tx site name: {{site1.txSiteName}}
 ICD10: {{site1.icd10}}
 Total Fractions: {{site1.totalFractions}}
 Daily dose: {{site1.dailyDose}}
-Cumulative dose: {{site1.cumulativeDose}}
+Prescribed dose: {{site1.totalDose}}
 Tx depth: {{site1.treatmentDepthDisplay}}
 Cone size: {{site1.coneSizeDisplay}}
 Cutout flex shield size: {{site1.cutoutSizeDisplay}}
@@ -547,7 +547,7 @@ Tx site name: {{site2.txSiteName}}
 ICD10: {{site2.icd10}}
 Total Fractions: {{site2.totalFractions}}
 Daily dose: {{site2.dailyDose}}
-Cumulative dose: {{site2.cumulativeDose}}
+Prescribed dose: {{site2.totalDose}}
 Tx depth: {{site2.treatmentDepthDisplay}}
 Cone size: {{site2.coneSizeDisplay}}
 Cutout flex shield size: {{site2.cutoutSizeDisplay}}
