@@ -161,8 +161,8 @@ Type of Blocks: Complex
 Tx site name: {{site1.txSiteName}}
 ICD10: {{site1.icd10}}
 Total Fractions: {{site1.totalFractions}}
-Daily dose: {{site1.dailyDose}}
-Prescribed dose: {{site1.totalDose}}
+Daily dose: {{site1.dailyDose}} cGy
+Prescribed dose: {{site1.totalDose}} cGy
 Tx depth: {{site1.treatmentDepthDisplay}}
 Cone size: {{site1.coneSizeDisplay}}
 Cutout flex shield size: {{site1.cutoutSizeDisplay}}
@@ -507,8 +507,8 @@ Type of Blocks: Complex
 Tx site name: {{site1.txSiteName}}
 ICD10: {{site1.icd10}}
 Total Fractions: {{site1.totalFractions}}
-Daily dose: {{site1.dailyDose}}
-Prescribed dose: {{site1.totalDose}}
+Daily dose: {{site1.dailyDose}} cGy
+Prescribed dose: {{site1.totalDose}} cGy
 Tx depth: {{site1.treatmentDepthDisplay}}
 Cone size: {{site1.coneSizeDisplay}}
 Cutout flex shield size: {{site1.cutoutSizeDisplay}}
@@ -549,8 +549,8 @@ Type of Blocks: Complex
 Tx site name: {{site2.txSiteName}}
 ICD10: {{site2.icd10}}
 Total Fractions: {{site2.totalFractions}}
-Daily dose: {{site2.dailyDose}}
-Prescribed dose: {{site2.totalDose}}
+Daily dose: {{site2.dailyDose}} cGy
+Prescribed dose: {{site2.totalDose}} cGy
 Tx depth: {{site2.treatmentDepthDisplay}}
 Cone size: {{site2.coneSizeDisplay}}
 Cutout flex shield size: {{site2.cutoutSizeDisplay}}
