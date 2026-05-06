@@ -157,6 +157,7 @@ Number of Treatment Areas: 1
 Number of Blocks: {{site1.numberOfBlocks}}
 Type of Blocks: Complex
 {{site1.simulationComplicationsLine}}
+
 Tx site name: {{site1.txSiteName}}
 ICD10: {{site1.icd10}}
 Total Fractions: {{site1.totalFractions}}
@@ -502,6 +503,7 @@ Number of Treatment Areas: 1
 Number of Blocks: {{site1.numberOfBlocks}}
 Type of Blocks: Complex
 {{site1.simulationComplicationsLine}}
+
 Tx site name: {{site1.txSiteName}}
 ICD10: {{site1.icd10}}
 Total Fractions: {{site1.totalFractions}}
@@ -543,6 +545,7 @@ Number of Treatment Areas: 1
 Number of Blocks: {{site2.numberOfBlocks}}
 Type of Blocks: Complex
 {{site2.simulationComplicationsLine}}
+
 Tx site name: {{site2.txSiteName}}
 ICD10: {{site2.icd10}}
 Total Fractions: {{site2.totalFractions}}
