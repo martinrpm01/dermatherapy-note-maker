@@ -231,15 +231,30 @@ export function buildVisitPreviewText(
   const normalizedSites = applyAutoNumberOfBlocks(note.noteType, note.structuredFields.siteSnapshots);
   const site1Base = normalizedSites.find((site) => site.siteNumber === 1) || emptySite(1);
   const site2Base = normalizedSites.find((site) => site.siteNumber === 2) || emptySite(2);
+  const projectedFractionsInput = note.structuredFields.projectedFractionsInput ?? null;
+  const courseFractions = course.prescribedFractions > 0 ? course.prescribedFractions : null;
+  const getTxSiteName = (site: typeof site1Base) => site.treatmentLocationText.trim() || site.bodyLocation.trim();
+  const getTotalFractions = (site: typeof site1Base) => {
+    const fractions = site.prescribedFractions ?? (note.noteType === "consult_sim" ? projectedFractionsInput : null) ?? courseFractions;
+    return fractions && fractions > 0 ? fractions : "";
+  };
+  const getCumulativeDose = (site: typeof site1Base) => {
+    if (site.cumulativeDose > 0) {
+      return site.cumulativeDose;
+    }
+    return note.noteType === "consult_sim" ? 0 : "";
+  };
   const site1 = {
     ...site1Base,
     biopsyDate: formatDisplayDate(site1Base.biopsyDate || note.structuredFields.biopsyDate),
+    txSiteName: getTxSiteName(site1Base),
     dailyDose: site1Base.dailyDose > 0 ? site1Base.dailyDose : "",
     totalDose: site1Base.totalDose > 0 ? site1Base.totalDose : "",
-    cumulativeDose: site1Base.cumulativeDose > 0 ? site1Base.cumulativeDose : "",
+    cumulativeDose: getCumulativeDose(site1Base),
     prescribedFractions: (site1Base.prescribedFractions ?? course.prescribedFractions) > 0
       ? (site1Base.prescribedFractions ?? course.prescribedFractions)
       : "",
+    totalFractions: getTotalFractions(site1Base),
     cutoutSize: normalizeCutoutSizeLabel(site1Base.cutoutSize),
     shields: buildShieldSummary(site1Base.shields, site1Base.additionalDevices),
     machine: getDefaultMachine(site1Base.machine),
@@ -256,12 +271,14 @@ export function buildVisitPreviewText(
   const site2 = {
     ...site2Base,
     biopsyDate: formatDisplayDate(site2Base.biopsyDate || note.structuredFields.biopsyDate),
+    txSiteName: getTxSiteName(site2Base),
     dailyDose: site2Base.dailyDose > 0 ? site2Base.dailyDose : "",
     totalDose: site2Base.totalDose > 0 ? site2Base.totalDose : "",
-    cumulativeDose: site2Base.cumulativeDose > 0 ? site2Base.cumulativeDose : "",
+    cumulativeDose: getCumulativeDose(site2Base),
     prescribedFractions: (site2Base.prescribedFractions ?? course.prescribedFractions) > 0
       ? (site2Base.prescribedFractions ?? course.prescribedFractions)
       : "",
+    totalFractions: getTotalFractions(site2Base),
     cutoutSize: normalizeCutoutSizeLabel(site2Base.cutoutSize),
     shields: buildShieldSummary(site2Base.shields, site2Base.additionalDevices),
     machine: getDefaultMachine(site2Base.machine),

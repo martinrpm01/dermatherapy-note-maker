@@ -15,6 +15,7 @@ export const TEMPLATE_PLACEHOLDERS: TemplatePlaceholderDefinition[] = [
   { token: "course.prescribedFractions", description: "Total prescribed fractions for the course." },
   { token: "site1.bodyLocation", description: "Body location text for site 1." },
   { token: "site1.treatmentLocationText", description: "Treatment location text for site 1." },
+  { token: "site1.txSiteName", description: "Treatment site name for site 1." },
   { token: "site1.diagnosisText", description: "Diagnosis text for site 1." },
   { token: "site1.biopsyDate", description: "Biopsy date for site 1." },
   { token: "site1.icd10", description: "ICD10 for site 1." },
@@ -38,8 +39,10 @@ export const TEMPLATE_PLACEHOLDERS: TemplatePlaceholderDefinition[] = [
   { token: "site1.totalDose", description: "Total target dose for site 1." },
   { token: "site1.cumulativeDose", description: "Cumulative dose to date for site 1." },
   { token: "site1.prescribedFractions", description: "Prescribed fractions for site 1." },
+  { token: "site1.totalFractions", description: "Total projected or prescribed fractions for site 1." },
   { token: "site2.bodyLocation", description: "Body location text for site 2." },
   { token: "site2.treatmentLocationText", description: "Treatment location text for site 2." },
+  { token: "site2.txSiteName", description: "Treatment site name for site 2." },
   { token: "site2.diagnosisText", description: "Diagnosis text for site 2." },
   { token: "site2.biopsyDate", description: "Biopsy date for site 2." },
   { token: "site2.icd10", description: "ICD10 for site 2." },
@@ -63,6 +66,7 @@ export const TEMPLATE_PLACEHOLDERS: TemplatePlaceholderDefinition[] = [
   { token: "site2.totalDose", description: "Total target dose for site 2." },
   { token: "site2.cumulativeDose", description: "Cumulative dose to date for site 2." },
   { token: "site2.prescribedFractions", description: "Prescribed fractions for site 2." },
+  { token: "site2.totalFractions", description: "Total projected or prescribed fractions for site 2." },
   { token: "vitals.bloodPressure", description: "Documented blood pressure." },
   { token: "vitals.heartRate", description: "Documented heart rate." },
   { token: "vitals.oxygenSaturation", description: "Documented oxygen saturation." },
@@ -153,12 +157,15 @@ Number of Treatment Areas: 1
 Number of Blocks: {{site1.numberOfBlocks}}
 Type of Blocks: Complex
 {{site1.simulationComplicationsLine}}
-Applicator: {{site1.coneSizeDisplay}}
-Flex Shield (Cutout Used): {{site1.cutoutSizeDisplay}}
-Pre-op Size: {{site1.lesionSizeDisplay}}
-Lesion / Treatment Location: {{site1.treatmentLocationText}}
-Treatment Depth: {{site1.treatmentDepthDisplay}}
-Additional Treatment Devices: {{site1.additionalDevices}}
+Tx site name: {{site1.txSiteName}}
+ICD10: {{site1.icd10}}
+Total Fractions: {{site1.totalFractions}}
+Daily dose: {{site1.dailyDose}}
+Cumulative dose: {{site1.cumulativeDose}}
+Tx depth: {{site1.treatmentDepthDisplay}}
+Cone size: {{site1.coneSizeDisplay}}
+Cutout flex shield size: {{site1.cutoutSizeDisplay}}
+Additional Tx devices: {{site1.additionalDevices}}
 
 Plan: Consultation for Radiotherapy.
 Location: {{site1.bodyLocation}}
@@ -495,12 +502,15 @@ Number of Treatment Areas: 1
 Number of Blocks: {{site1.numberOfBlocks}}
 Type of Blocks: Complex
 {{site1.simulationComplicationsLine}}
-Applicator: {{site1.coneSizeDisplay}}
-Flex Shield (Cutout Used): {{site1.cutoutSizeDisplay}}
-Pre-op Size: {{site1.lesionSizeDisplay}}
-Lesion / Treatment Location: {{site1.treatmentLocationText}}
-Treatment Depth: {{site1.treatmentDepthDisplay}}
-Additional Treatment Devices: {{site1.additionalDevices}}
+Tx site name: {{site1.txSiteName}}
+ICD10: {{site1.icd10}}
+Total Fractions: {{site1.totalFractions}}
+Daily dose: {{site1.dailyDose}}
+Cumulative dose: {{site1.cumulativeDose}}
+Tx depth: {{site1.treatmentDepthDisplay}}
+Cone size: {{site1.coneSizeDisplay}}
+Cutout flex shield size: {{site1.cutoutSizeDisplay}}
+Additional Tx devices: {{site1.additionalDevices}}
 
 Plan: Consultation for Radiotherapy.
 Location: {{site1.bodyLocation}}
@@ -533,12 +543,15 @@ Number of Treatment Areas: 1
 Number of Blocks: {{site2.numberOfBlocks}}
 Type of Blocks: Complex
 {{site2.simulationComplicationsLine}}
-Applicator: {{site2.coneSizeDisplay}}
-Flex Shield (Cutout Used): {{site2.cutoutSizeDisplay}}
-Pre-op Size: {{site2.lesionSizeDisplay}}
-Lesion / Treatment Location: {{site2.treatmentLocationText}}
-Treatment Depth: {{site2.treatmentDepthDisplay}}
-Additional Treatment Devices: {{site2.additionalDevices}}
+Tx site name: {{site2.txSiteName}}
+ICD10: {{site2.icd10}}
+Total Fractions: {{site2.totalFractions}}
+Daily dose: {{site2.dailyDose}}
+Cumulative dose: {{site2.cumulativeDose}}
+Tx depth: {{site2.treatmentDepthDisplay}}
+Cone size: {{site2.coneSizeDisplay}}
+Cutout flex shield size: {{site2.cutoutSizeDisplay}}
+Additional Tx devices: {{site2.additionalDevices}}
 
 Plan: Consultation for Radiotherapy.
 Location: {{site2.bodyLocation}}

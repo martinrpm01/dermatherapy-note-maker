@@ -774,6 +774,27 @@ describe("RadiationNoteService workflow", () => {
       "The following treatment devices and target prescriptions were utilized pending radiation oncologist and medical physics review:"
     );
     expect(consultDraft.note.generatedText).not.toContain("mm mm");
+
+    consultDraft.note.structuredFields.projectedFractionsInput = 12;
+    consultDraft.note.structuredFields.siteSnapshots = consultDraft.note.structuredFields.siteSnapshots.map((site) => ({
+      ...site,
+      prescribedFractions: undefined
+    }));
+    consultDraft.note.generatedText = "";
+    consultDraft.note.editedText = "";
+    const savedConsult = service.saveVisit(consultDraft.note);
+
+    expect(savedConsult.generatedText).toContain("Tx site name: Bridge of nose");
+    expect(savedConsult.generatedText).toContain("ICD10: C44.311");
+    expect(savedConsult.generatedText).toContain("Total Fractions: 12");
+    expect(savedConsult.generatedText).toContain("Daily dose: 500");
+    expect(savedConsult.generatedText).toContain("Cumulative dose: 0");
+    expect(savedConsult.generatedText).toContain("Tx depth: 3mm");
+    expect(savedConsult.generatedText).toContain("Cone size: 30mm");
+    expect(savedConsult.generatedText).toContain("Cutout flex shield size: 18mm");
+    expect(savedConsult.generatedText).toContain("Additional Tx devices: Special Set-up - Custom cutout");
+    expect(savedConsult.generatedText).not.toContain("Applicator:");
+    expect(savedConsult.generatedText).not.toContain("Flex Shield (Cutout Used):");
   });
 
   it("renders fuller first fraction and otv wording from the updated sample-based templates", async () => {
@@ -867,8 +888,8 @@ describe("RadiationNoteService workflow", () => {
     const consultDraft = service.buildVisitDraft(course.id, "consult_sim");
     consultDraft.note.structuredFields.siteSnapshots = consultDraft.note.structuredFields.siteSnapshots.map((site) =>
       site.siteNumber === 1
-        ? { ...site, biopsyDate: "2026-04-01" }
-        : { ...site, biopsyDate: "2026-04-05" }
+        ? { ...site, biopsyDate: "2026-04-01", prescribedFractions: 10 }
+        : { ...site, biopsyDate: "2026-04-05", prescribedFractions: 12 }
     );
     consultDraft.note.structuredFields.biopsyDate = "2026-04-01";
     consultDraft.note.generatedText = "";
@@ -881,6 +902,18 @@ describe("RadiationNoteService workflow", () => {
     expect(savedConsult.generatedText).toContain(
       "2. is following up for Squamous cell carcinoma on the Right ear. Biopsy date: 04/05/2026."
     );
+    expect(savedConsult.generatedText).toContain("Tx site name: Left medial malar cheek");
+    expect(savedConsult.generatedText).toContain("ICD10: C44.319");
+    expect(savedConsult.generatedText).toContain("Total Fractions: 10");
+    expect(savedConsult.generatedText).toContain("Daily dose: 400");
+    expect(savedConsult.generatedText).toContain("Cumulative dose: 0");
+    expect(savedConsult.generatedText).toContain("Tx depth: 3mm");
+    expect(savedConsult.generatedText).toContain("Cone size: 20mm");
+    expect(savedConsult.generatedText).toContain("Cutout flex shield size: 10mm");
+    expect(savedConsult.generatedText).toContain("Tx site name: Right post auricular skin");
+    expect(savedConsult.generatedText).toContain("ICD10: C44.222");
+    expect(savedConsult.generatedText).toContain("Total Fractions: 12");
+    expect(savedConsult.generatedText).toContain("Cutout flex shield size: 12mm");
   });
 
   it("only includes additional notes when provided and places them above follow up", async () => {
