@@ -86,6 +86,21 @@ function sanitizeNamePart(value: string) {
     .toLowerCase();
 }
 
+function ensureUniqueCourseSiteIds(sites: Parameters<AppClient["saveCourse"]>[0]["sites"]) {
+  const seen = new Set<string>();
+  return sites.map((site) => {
+    if (!site.id) {
+      return site;
+    }
+    if (seen.has(site.id)) {
+      const { id, ...siteWithoutDuplicateId } = site;
+      return siteWithoutDuplicateId;
+    }
+    seen.add(site.id);
+    return site;
+  });
+}
+
 /**
  * Planning stub for the future browser/PWA AppClient.
  *
@@ -911,7 +926,7 @@ export class BrowserAppClient implements AppClient {
     const structuredDataStore = await this.getStructuredDataStore();
         const normalizedInput = {
           ...input,
-          sites: input.sites.map((site) => ({
+          sites: ensureUniqueCourseSiteIds(input.sites).map((site) => ({
             ...site,
             ...normalizeVacLokPlacement(site.additionalDevices, site.worksheetPositioning),
             ...normalizeWorksheetDeviceDetailsForSite({

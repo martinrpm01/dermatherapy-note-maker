@@ -1671,7 +1671,9 @@ export function CourseModal(props: {
                     ...courseForm,
                     courseType: next,
                     sites: next === "two_site"
-                      ? courseForm.sites.length === 2 ? courseForm.sites : [...courseForm.sites, { ...courseForm.sites[0], siteNumber: 2 }]
+                      ? courseForm.sites.length === 2
+                        ? courseForm.sites
+                        : [...courseForm.sites, { ...courseForm.sites[0], id: undefined, siteNumber: 2 }]
                       : [courseForm.sites[0]]
                   });
                 }}

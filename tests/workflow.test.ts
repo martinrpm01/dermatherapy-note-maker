@@ -282,6 +282,34 @@ describe("RadiationNoteService workflow", () => {
     expect(form.sites[0].totalDose).toBe(0);
   });
 
+  it("saves an existing one-lesion course after expanding it to two lesions", async () => {
+    const { patient } = await createPatientAndCourse();
+    const detail = service.getPatientDetail(patient.id);
+    const form = createCourseFormFromDetail(detail.courses[0]);
+    const firstSite = form.sites[0];
+
+    const savedCourse = service.saveCourse({
+      ...form,
+      courseType: "two_site",
+      sites: [
+        firstSite,
+        {
+          ...firstSite,
+          siteNumber: 2,
+          treatmentLocationText: "Right temple",
+          bodyLocation: "Right temple",
+          icd10: "C44.319"
+        }
+      ]
+    });
+    const savedSites = repository.fetchSites([savedCourse.id]);
+
+    expect(savedCourse.courseType).toBe("two_site");
+    expect(savedSites).toHaveLength(2);
+    expect(new Set(savedSites.map((site) => site.id)).size).toBe(2);
+    expect(savedSites.map((site) => site.siteNumber).sort()).toEqual([1, 2]);
+  });
+
   it("defaults the treatment machine text when a site machine is blank", async () => {
     const { patient, course } = await createPatientAndCourse();
 

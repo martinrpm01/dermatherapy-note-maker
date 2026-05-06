@@ -316,6 +316,21 @@ function buildTreatmentLabel(note: VisitInput) {
   return `tx ${note.treatmentNumber}`;
 }
 
+function ensureUniqueCourseSiteIds(sites: CourseInput["sites"]) {
+  const seen = new Set<string>();
+  return sites.map((site) => {
+    if (!site.id) {
+      return site;
+    }
+    if (seen.has(site.id)) {
+      const { id, ...siteWithoutDuplicateId } = site;
+      return siteWithoutDuplicateId;
+    }
+    seen.add(site.id);
+    return site;
+  });
+}
+
 export class RadiationNoteService {
   private isLocked = true;
   private readonly archivePreparationService: PatientArchivePreparationService;
@@ -726,7 +741,7 @@ export class RadiationNoteService {
     this.assertUnlocked();
         const normalizedInput: CourseInput = {
           ...input,
-          sites: input.sites.map((site) => ({
+          sites: ensureUniqueCourseSiteIds(input.sites).map((site) => ({
             ...site,
             ...normalizeVacLokPlacement(site.additionalDevices, site.worksheetPositioning),
             ...normalizeWorksheetDeviceDetailsForSite({
