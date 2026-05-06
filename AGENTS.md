@@ -45,7 +45,7 @@ Build a production-quality, local-first radiation treatment note application for
 - Favor accessible forms, large action targets, clear status badges, and obvious archive boundaries.
 - Add tests for note-selection logic, archive/restore flows, dose calculations, template override persistence, and PDF regeneration behavior.
 - Document install, database, run, and packaging steps in the README.
-- After desktop-app changes, verify the Desktop shortcut launch path still opens ClearSkin Hub and reaches its first real screen before reporting completion.
+- Run the Desktop shortcut launch verification only when changing startup, packaging, Electron shell, or shortcut-related behavior, or when explicitly requested.
 
 ## Forbidden Behaviors
 
