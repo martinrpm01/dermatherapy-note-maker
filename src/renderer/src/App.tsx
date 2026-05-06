@@ -107,6 +107,47 @@ type CourseConsentActionsState = {
   courseId: string;
 };
 
+type RecoveryDraft =
+  | {
+      kind: "patient";
+      key: string;
+      label: string;
+      savedAt: string;
+      value: PatientInput;
+    }
+  | {
+      kind: "course";
+      key: string;
+      label: string;
+      savedAt: string;
+      value: {
+        courseForm: CourseInput;
+        courseFormMode: CourseModalMode;
+        courseCompletionNeedsFacePhoto: boolean;
+      };
+    }
+  | {
+      kind: "documentOnly";
+      key: string;
+      label: string;
+      savedAt: string;
+      value: DocumentOnlyInput;
+    }
+  | {
+      kind: "documentOnlyWorksheet";
+      key: string;
+      label: string;
+      savedAt: string;
+      value: DocumentOnlyInput;
+    }
+  | {
+      kind: "consentSigning";
+      key: string;
+      label: string;
+      savedAt: string;
+      value: CourseConsentSigningState | DocumentOnlyConsentSigningState;
+    };
+
 type LogoCropState = {
   target: "setup" | "settings";
   file: File;
@@ -141,6 +182,170 @@ function shouldShowInstallPrompt() {
   }
 
   return isIosDevice && isSafari && !isStandalone && !isDismissed;
+}
+
+const RECOVERY_DRAFT_PREFIX = "clearskin:recovery-draft:v1:";
+
+function canUseRecoveryStorage() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  try {
+    return Boolean(window.localStorage);
+  } catch {
+    return false;
+  }
+}
+
+function getPatientRecoveryKey(form: PatientInput) {
+  return `${RECOVERY_DRAFT_PREFIX}patient:${form.id ?? "new"}`;
+}
+
+function getCourseRecoveryKey(form: CourseInput, mode: CourseModalMode) {
+  return `${RECOVERY_DRAFT_PREFIX}course:${form.id ?? `new:${form.patientId}:${mode}`}`;
+}
+
+function getDocumentOnlyRecoveryKey(form: DocumentOnlyInput) {
+  return `${RECOVERY_DRAFT_PREFIX}document-only:${form.id ?? "new"}`;
+}
+
+function getDocumentOnlyWorksheetRecoveryKey(form: DocumentOnlyInput) {
+  return `${RECOVERY_DRAFT_PREFIX}document-only-worksheet:${form.id ?? "new"}`;
+}
+
+function getConsentSigningRecoveryKey(signing: CourseConsentSigningState | DocumentOnlyConsentSigningState) {
+  return signing.kind === "course"
+    ? `${RECOVERY_DRAFT_PREFIX}consent:course:${signing.course.id}`
+    : `${RECOVERY_DRAFT_PREFIX}consent:document-only:${signing.recordId}`;
+}
+
+function stripLargePatientDraftFields(form: PatientInput): PatientInput {
+  const { facePhotoUpload, ...draft } = form;
+  return draft;
+}
+
+function hasPatientDraftContent(form: PatientInput) {
+  return Boolean(
+    form.id ||
+    form.firstName.trim() ||
+    form.lastName.trim() ||
+    form.mrn.trim() ||
+    form.dob.trim() ||
+    form.sex?.trim() ||
+    form.notes.trim()
+  );
+}
+
+function hasCourseDraftContent(form: CourseInput) {
+  return Boolean(
+    form.id ||
+    form.courseName.trim() ||
+    form.prescribedFractions > 0 ||
+    form.sites.some((site) =>
+      Boolean(
+        site.treatmentLocationText.trim() ||
+        site.bodyLocation.trim() ||
+        site.diagnosisText.trim() ||
+        site.icd10.trim() ||
+        site.lesionSize.trim() ||
+        site.coneSize.trim() ||
+        site.cutoutSize.trim() ||
+        site.worksheetSide.trim() ||
+        site.worksheetPositioning.trim() ||
+        site.additionalDevices.trim() && site.additionalDevices.trim().toLowerCase() !== "none" ||
+        (site.prescribedFractions ?? 0) > 0
+      )
+    )
+  );
+}
+
+function hasDocumentOnlyDraftContent(form: DocumentOnlyInput) {
+  return Boolean(
+    form.id ||
+    form.firstName.trim() ||
+    form.lastName.trim() ||
+    form.mrn.trim() ||
+    form.dob.trim() ||
+    form.sex.trim() ||
+    form.sites.some((site) =>
+      Boolean(
+        site.treatmentLocationText.trim() ||
+        site.bodyLocation.trim() ||
+        site.diagnosisText.trim() ||
+        site.icd10.trim() ||
+        site.lesionSize.trim() ||
+        site.coneSize.trim() ||
+        site.cutoutSize.trim() ||
+        site.worksheetSide.trim() ||
+        site.worksheetPositioning.trim() ||
+        site.additionalDevices.trim() && site.additionalDevices.trim().toLowerCase() !== "none" ||
+        (site.projectedFractions ?? 0) > 0
+      )
+    )
+  );
+}
+
+function saveRecoveryDraft(draft: RecoveryDraft) {
+  if (!canUseRecoveryStorage()) {
+    return;
+  }
+  try {
+    window.localStorage.setItem(draft.key, JSON.stringify(draft));
+  } catch {
+    // Best-effort safety net only.
+  }
+}
+
+function clearRecoveryDraft(key: string) {
+  if (!canUseRecoveryStorage()) {
+    return;
+  }
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // Best-effort safety net only.
+  }
+}
+
+function listRecoveryDrafts() {
+  if (!canUseRecoveryStorage()) {
+    return [] as RecoveryDraft[];
+  }
+
+  const drafts: RecoveryDraft[] = [];
+  try {
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index);
+      if (!key?.startsWith(RECOVERY_DRAFT_PREFIX)) {
+        continue;
+      }
+      const raw = window.localStorage.getItem(key);
+      if (!raw) {
+        continue;
+      }
+      const parsed = JSON.parse(raw) as RecoveryDraft;
+      if (parsed?.key === key && parsed.savedAt && parsed.kind) {
+        drafts.push(parsed);
+      }
+    }
+  } catch {
+    return [];
+  }
+
+  return drafts.sort((left, right) => right.savedAt.localeCompare(left.savedAt));
+}
+
+function formatRecoveryDraftTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "earlier";
+  }
+  return date.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
 }
 
 function buildAutosaveVisitInput(note: VisitEditorState["note"]) {
@@ -290,8 +495,72 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [updateReady, setUpdateReady] = useState(false);
   const [logoCropState, setLogoCropState] = useState<LogoCropState | null>(null);
+  const [recoveryDraftPrompt, setRecoveryDraftPrompt] = useState<RecoveryDraft | null>(null);
   const autosaveTimerRef = useRef<number | null>(null);
   const autosaveSignatureRef = useRef("");
+
+  function restoreRecoveryDraft(draft: RecoveryDraft) {
+    if (draft.kind === "patient") {
+      setPatientForm(draft.value);
+    } else if (draft.kind === "course") {
+      setScreen({ name: "patient", patientId: draft.value.courseForm.patientId });
+      setCourseForm(draft.value.courseForm);
+      setCourseFormMode(draft.value.courseFormMode);
+      setCourseCompletionNeedsFacePhoto(draft.value.courseCompletionNeedsFacePhoto);
+      setCourseCompletionFacePhotoUpload(null);
+    } else if (draft.kind === "documentOnly") {
+      setScreen({ name: "documents" });
+      setDocumentOnlyForm(draft.value);
+    } else if (draft.kind === "documentOnlyWorksheet") {
+      setScreen({ name: "documents" });
+      setDocumentOnlyWorksheetForm(draft.value);
+    } else {
+      if (draft.value.kind === "course") {
+        setScreen({ name: "patient", patientId: draft.value.patient.id });
+      } else {
+        setScreen({ name: "documents" });
+      }
+      setConsentSigning(draft.value);
+    }
+    setRecoveryDraftPrompt(null);
+    showToast("Unsaved edits restored.");
+  }
+
+  function discardRecoveryDraft(draft: RecoveryDraft) {
+    clearRecoveryDraft(draft.key);
+    setRecoveryDraftPrompt(null);
+    showToast("Recovery draft discarded.");
+  }
+
+  function clearPatientRecoveryFor(form: PatientInput | null) {
+    if (form) {
+      clearRecoveryDraft(getPatientRecoveryKey(form));
+    }
+  }
+
+  function clearCourseRecoveryFor(form: CourseInput | null, mode = courseFormMode) {
+    if (form) {
+      clearRecoveryDraft(getCourseRecoveryKey(form, mode));
+    }
+  }
+
+  function clearDocumentOnlyRecoveryFor(form: DocumentOnlyInput | null) {
+    if (form) {
+      clearRecoveryDraft(getDocumentOnlyRecoveryKey(form));
+    }
+  }
+
+  function clearDocumentOnlyWorksheetRecoveryFor(form: DocumentOnlyInput | null) {
+    if (form) {
+      clearRecoveryDraft(getDocumentOnlyWorksheetRecoveryKey(form));
+    }
+  }
+
+  function clearConsentSigningRecoveryFor(signing: CourseConsentSigningState | DocumentOnlyConsentSigningState | null) {
+    if (signing) {
+      clearRecoveryDraft(getConsentSigningRecoveryKey(signing));
+    }
+  }
 
   async function startLogoCrop(file: File | undefined, target: LogoCropState["target"]) {
     if (!file) {
@@ -403,6 +672,131 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
   useEffect(() => {
     if (navigator.storage?.persist) void navigator.storage.persist();
   }, []);
+
+  useEffect(() => {
+    if (
+      !boot ||
+      boot.isLocked ||
+      boot.requiresPinSetup ||
+      authGateActive ||
+      recoveryDraftPrompt ||
+      patientForm ||
+      courseForm ||
+      documentOnlyForm ||
+      documentOnlyWorksheetForm ||
+      consentSigning
+    ) {
+      return;
+    }
+
+    const nextDraft = listRecoveryDrafts()[0] ?? null;
+    if (nextDraft) {
+      setRecoveryDraftPrompt(nextDraft);
+    }
+  }, [
+    boot,
+    authGateActive,
+    recoveryDraftPrompt,
+    patientForm,
+    courseForm,
+    documentOnlyForm,
+    documentOnlyWorksheetForm,
+    consentSigning
+  ]);
+
+  useEffect(() => {
+    if (!patientForm) {
+      return;
+    }
+    const key = getPatientRecoveryKey(patientForm);
+    if (!hasPatientDraftContent(patientForm)) {
+      clearRecoveryDraft(key);
+      return;
+    }
+    saveRecoveryDraft({
+      kind: "patient",
+      key,
+      label: patientForm.id
+        ? `patient edits for ${`${patientForm.firstName} ${patientForm.lastName}`.trim() || "this patient"}`
+        : "new patient information",
+      savedAt: new Date().toISOString(),
+      value: stripLargePatientDraftFields(patientForm)
+    });
+  }, [patientForm]);
+
+  useEffect(() => {
+    if (!courseForm) {
+      return;
+    }
+    const key = getCourseRecoveryKey(courseForm, courseFormMode);
+    if (!hasCourseDraftContent(courseForm)) {
+      clearRecoveryDraft(key);
+      return;
+    }
+    saveRecoveryDraft({
+      kind: "course",
+      key,
+      label: courseForm.id
+        ? `course edits for ${courseForm.courseName || "this course"}`
+        : courseFormMode === "intake"
+          ? "new consent/path intake"
+          : "new treatment course",
+      savedAt: new Date().toISOString(),
+      value: {
+        courseForm,
+        courseFormMode,
+        courseCompletionNeedsFacePhoto
+      }
+    });
+  }, [courseForm, courseFormMode, courseCompletionNeedsFacePhoto]);
+
+  useEffect(() => {
+    if (!documentOnlyForm) {
+      return;
+    }
+    const key = getDocumentOnlyRecoveryKey(documentOnlyForm);
+    if (!hasDocumentOnlyDraftContent(documentOnlyForm)) {
+      clearRecoveryDraft(key);
+      return;
+    }
+    saveRecoveryDraft({
+      kind: "documentOnly",
+      key,
+      label: documentOnlyForm.id
+        ? `document-only edits for ${`${documentOnlyForm.firstName} ${documentOnlyForm.lastName}`.trim() || "this record"}`
+        : "new document-only patient information",
+      savedAt: new Date().toISOString(),
+      value: documentOnlyForm
+    });
+  }, [documentOnlyForm]);
+
+  useEffect(() => {
+    if (!documentOnlyWorksheetForm) {
+      return;
+    }
+    const key = getDocumentOnlyWorksheetRecoveryKey(documentOnlyWorksheetForm);
+    saveRecoveryDraft({
+      kind: "documentOnlyWorksheet",
+      key,
+      label: `sim worksheet setup for ${`${documentOnlyWorksheetForm.firstName} ${documentOnlyWorksheetForm.lastName}`.trim() || "this record"}`,
+      savedAt: new Date().toISOString(),
+      value: documentOnlyWorksheetForm
+    });
+  }, [documentOnlyWorksheetForm]);
+
+  useEffect(() => {
+    if (!consentSigning) {
+      return;
+    }
+    const key = getConsentSigningRecoveryKey(consentSigning);
+    saveRecoveryDraft({
+      kind: "consentSigning",
+      key,
+      label: `consent signing for ${`${consentSigning.patient.firstName} ${consentSigning.patient.lastName}`.trim() || "this patient"}`,
+      savedAt: new Date().toISOString(),
+      value: consentSigning
+    });
+  }, [consentSigning]);
 
   useEffect(() => {
     if (!boot?.requiresPinSetup) {
@@ -728,6 +1122,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     try {
       if (!appClient) return;
       const patient = await appClient.savePatient(patientForm);
+      clearPatientRecoveryFor(patientForm);
       setPatientForm(null);
       setScreen({ name: "patient", patientId: patient.id });
       await loadDashboard();
@@ -750,6 +1145,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
           ? { ...courseForm, status: "active" as const }
           : courseForm;
       const course = await appClient.saveCourse(nextCourseForm);
+      clearCourseRecoveryFor(courseForm);
       const shouldAttachFacePhoto =
         isCompletingPendingCourse &&
         courseCompletionNeedsFacePhoto &&
@@ -796,11 +1192,12 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     try {
       const patientId = courseForm.patientId;
         if (!appClient) return;
-        if (courseForm.status !== "pending") {
+      if (courseForm.status !== "pending") {
           await appClient.saveCourse({
             ...courseForm,
             status: "pending"
           });
+          clearCourseRecoveryFor(courseForm);
           setCourseForm(null);
           setCourseFormMode("full");
           setCourseCompletionNeedsFacePhoto(false);
@@ -817,8 +1214,9 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
           showToast("Course moved back to pending intake.");
           return;
         }
-        await appClient.deleteCourse(courseForm.id);
-        setCourseForm(null);
+      await appClient.deleteCourse(courseForm.id);
+      clearCourseRecoveryFor(courseForm);
+      setCourseForm(null);
         setCourseFormMode("full");
         setCourseCompletionNeedsFacePhoto(false);
         setCourseCompletionFacePhotoUpload(null);
@@ -845,6 +1243,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     try {
       const isEditing = Boolean(documentOnlyForm.id);
       await appClient.saveDocumentOnlyRecord(documentOnlyForm);
+      clearDocumentOnlyRecoveryFor(documentOnlyForm);
       setDocumentOnlyForm(null);
       setScreen({ name: "documents" });
       await loadDocumentOnly();
@@ -865,6 +1264,8 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     setBusy(true);
     try {
       await appClient.deleteDocumentOnlyRecord(recordId);
+      clearDocumentOnlyRecoveryFor(documentOnlyForm);
+      clearDocumentOnlyWorksheetRecoveryFor(documentOnlyWorksheetForm);
       setDocumentOnlyForm(null);
       setDocumentOnlyWorksheetForm(null);
       await loadDocumentOnly();
@@ -1002,6 +1403,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
       } else {
         await appClient.finalizeDocumentOnlyConsent(consentSigning.recordId, consentSigning.input);
       }
+      clearConsentSigningRecoveryFor(consentSigning);
       setConsentSigning(null);
       if (consentSigning.kind === "course") {
         await loadDashboard();
@@ -1039,6 +1441,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     setBusy(true);
     try {
       const saved = await appClient.saveDocumentOnlyRecord(documentOnlyWorksheetForm);
+      clearDocumentOnlyWorksheetRecoveryFor(documentOnlyWorksheetForm);
       await appClient.generateDocumentOnlySimWorksheet(saved.id);
       setDocumentOnlyWorksheetForm(null);
       await loadDocumentOnly();
@@ -1740,12 +2143,36 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
         ) : null}
         </main>
 
+          {recoveryDraftPrompt ? (
+            <div className="modal-backdrop">
+              <div className="modal-card">
+                <h3>Unsaved Edits Found</h3>
+                <p>
+                  The app found unsaved {recoveryDraftPrompt.label} from{" "}
+                  {formatRecoveryDraftTime(recoveryDraftPrompt.savedAt)}.
+                </p>
+                <p className="muted">
+                  Restore these edits, or discard the recovery draft if you no longer need it.
+                </p>
+                <div className="button-row">
+                  <button onClick={() => discardRecoveryDraft(recoveryDraftPrompt)}>Discard</button>
+                  <button className="primary" onClick={() => restoreRecoveryDraft(recoveryDraftPrompt)}>
+                    Restore Edits
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           {patientForm ? (
             <PatientModal
               patientForm={patientForm}
               busy={busy}
               onChange={setPatientForm}
-              onClose={() => setPatientForm(null)}
+              onClose={() => {
+                clearPatientRecoveryFor(patientForm);
+                setPatientForm(null);
+              }}
               onSave={() => void savePatientForm()}
               onFacePhotoSelected={(file) => {
                 void (async () => {
@@ -1764,6 +2191,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
                 busy={busy}
                 onChange={setCourseForm}
                 onClose={() => {
+                  clearCourseRecoveryFor(courseForm);
                   setCourseForm(null);
                   setCourseFormMode("full");
                   setCourseCompletionNeedsFacePhoto(false);
@@ -1780,6 +2208,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
                 facePhotoUploadName={courseCompletionFacePhotoUpload?.name}
                 onChange={setCourseForm}
                 onClose={() => {
+                  clearCourseRecoveryFor(courseForm);
                   setCourseForm(null);
                   setCourseFormMode("full");
                   setCourseCompletionNeedsFacePhoto(false);
@@ -1805,7 +2234,10 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
               recordForm={documentOnlyForm}
               busy={busy}
               onChange={setDocumentOnlyForm}
-              onClose={() => setDocumentOnlyForm(null)}
+              onClose={() => {
+                clearDocumentOnlyRecoveryFor(documentOnlyForm);
+                setDocumentOnlyForm(null);
+              }}
               onSave={() => void saveDocumentOnlyForm()}
               onDelete={
                 documentOnlyForm.id
@@ -1824,7 +2256,10 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
               recordForm={documentOnlyWorksheetForm}
               busy={busy}
               onChange={setDocumentOnlyWorksheetForm}
-              onClose={() => setDocumentOnlyWorksheetForm(null)}
+              onClose={() => {
+                clearDocumentOnlyWorksheetRecoveryFor(documentOnlyWorksheetForm);
+                setDocumentOnlyWorksheetForm(null);
+              }}
               onSave={() => void saveAndGenerateDocumentOnlySimWorksheet()}
             />
           ) : null}
@@ -1872,7 +2307,10 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
               signingInput={consentSigning.input}
               busy={busy}
               onChange={(next) => setConsentSigning((current) => (current ? { ...current, input: next } : current))}
-              onClose={() => setConsentSigning(null)}
+              onClose={() => {
+                clearConsentSigningRecoveryFor(consentSigning);
+                setConsentSigning(null);
+              }}
               onSave={() => void finalizeConsentSigning()}
             />
           ) : null}
