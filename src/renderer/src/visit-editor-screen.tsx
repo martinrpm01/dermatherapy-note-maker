@@ -8,6 +8,7 @@ import {
   getDefaultMipsNote,
   getDefaultOtvNote,
   getDefaultPhysicsComment,
+  getDefaultUltrasoundNote,
   getMaxSitePrescribedFractions,
   getSuggestedNoteType,
   isFinalTreatmentEligible,
@@ -600,29 +601,105 @@ const showProjectedFractionsInput = false;
               );
             })()}
           </div>
-          {editor.note.noteType === "otv" ? (
-            <label>
-              OTV Note
-              <textarea
-                className="otv-note-textarea"
-                value={editor.note.structuredFields.examComment ?? ""}
-                onChange={(event) =>
-                  props.onUpdate(
-                    (current) => ({
-                      ...current,
-                      note: {
-                        ...current.note,
-                        structuredFields: {
-                          ...current.note.structuredFields,
-                          examComment: event.target.value
-                        }
-                      }
-                    }),
-                    { regenerate: true, overwriteEdited: !props.textDirty }
-                  )
-                }
-              />
-            </label>
+          {(editor.note.structuredFields.ultrasoundPerformed ||
+            editor.note.noteType === "otv" ||
+            editor.note.structuredFields.finalTreatment ||
+            editor.note.structuredFields.addMips) ? (
+            <div className="checkbox-note-fields">
+              {editor.note.structuredFields.ultrasoundPerformed ? (
+                <label>
+                  Ultrasound Note
+                  <textarea
+                    value={editor.note.structuredFields.ultrasoundPerformed}
+                    onChange={(event) =>
+                      props.onUpdate(
+                        (current) => ({
+                          ...current,
+                          note: {
+                            ...current.note,
+                            structuredFields: {
+                              ...current.note.structuredFields,
+                              ultrasoundPerformed: event.target.value
+                            }
+                          }
+                        }),
+                        { regenerate: true, overwriteEdited: !props.textDirty }
+                      )
+                    }
+                  />
+                </label>
+              ) : null}
+              {editor.note.noteType === "otv" ? (
+                <label>
+                  OTV Note
+                  <textarea
+                    className="otv-note-textarea"
+                    value={editor.note.structuredFields.examComment ?? ""}
+                    onChange={(event) =>
+                      props.onUpdate(
+                        (current) => ({
+                          ...current,
+                          note: {
+                            ...current.note,
+                            structuredFields: {
+                              ...current.note.structuredFields,
+                              examComment: event.target.value
+                            }
+                          }
+                        }),
+                        { regenerate: true, overwriteEdited: !props.textDirty }
+                      )
+                    }
+                  />
+                </label>
+              ) : null}
+              {editor.note.structuredFields.finalTreatment ? (
+                <label>
+                  Final Treatment Note
+                  <textarea
+                    value={editor.note.structuredFields.finalTreatmentNote ?? getDefaultFinalTreatmentNote()}
+                    onChange={(event) =>
+                      props.onUpdate(
+                        (current) => ({
+                          ...current,
+                          note: {
+                            ...current.note,
+                            structuredFields: {
+                              ...current.note.structuredFields,
+                              finalTreatmentNote: event.target.value
+                            }
+                          }
+                        }),
+                        { regenerate: true, overwriteEdited: !props.textDirty }
+                      )
+                    }
+                  />
+                </label>
+              ) : null}
+              {editor.note.structuredFields.addMips ? (
+                <label>
+                  MIPS Note
+                  <textarea
+                    value={editor.note.structuredFields.mipsNote ?? getDefaultMipsNote()}
+                    onChange={(event) =>
+                      props.onUpdate(
+                        (current) => ({
+                          ...current,
+                          note: {
+                            ...current.note,
+                            structuredFields: {
+                              ...current.note.structuredFields,
+                              mipsNote: event.target.value
+                            }
+                          }
+                        }),
+                        { regenerate: true, overwriteEdited: !props.textDirty }
+                      )
+                    }
+                  />
+                </label>
+              ) : null}
+            </div>
           ) : null}
           <label>
             Additional Notes
@@ -781,13 +858,13 @@ const showProjectedFractionsInput = false;
                       structuredFields: {
                         ...current.note.structuredFields,
                         ultrasoundPerformed: event.target.checked
-                          ? "Ultrasound Performed:\nAn ultrasound of the lesion was completed to determine tumor extent in order to select the best course of treatment for the lesion. The image was reviewed, and radiation therapy was selected as the treatment plan."
+                          ? current.note.structuredFields.ultrasoundPerformed?.trim() || getDefaultUltrasoundNote()
                           : ""
                       }
                     }
                   }), { regenerate: true, overwriteEdited: true })}
                 />
-                Ultrasound Performed
+                Ultrasound
               </label>
             )}
             {otvEligible ? (
@@ -891,56 +968,6 @@ const showProjectedFractionsInput = false;
               MIPS
             </label>
           </div>
-          {(editor.note.structuredFields.finalTreatment || editor.note.structuredFields.addMips) ? (
-            <div className="checkbox-note-fields">
-              {editor.note.structuredFields.finalTreatment ? (
-                <label>
-                  Final Treatment Note
-                  <textarea
-                    value={editor.note.structuredFields.finalTreatmentNote ?? getDefaultFinalTreatmentNote()}
-                    onChange={(event) =>
-                      props.onUpdate(
-                        (current) => ({
-                          ...current,
-                          note: {
-                            ...current.note,
-                            structuredFields: {
-                              ...current.note.structuredFields,
-                              finalTreatmentNote: event.target.value
-                            }
-                          }
-                        }),
-                        { regenerate: true, overwriteEdited: !props.textDirty }
-                      )
-                    }
-                  />
-                </label>
-              ) : null}
-              {editor.note.structuredFields.addMips ? (
-                <label>
-                  MIPS Note
-                  <textarea
-                    value={editor.note.structuredFields.mipsNote ?? getDefaultMipsNote()}
-                    onChange={(event) =>
-                      props.onUpdate(
-                        (current) => ({
-                          ...current,
-                          note: {
-                            ...current.note,
-                            structuredFields: {
-                              ...current.note.structuredFields,
-                              mipsNote: event.target.value
-                            }
-                          }
-                        }),
-                        { regenerate: true, overwriteEdited: !props.textDirty }
-                      )
-                    }
-                  />
-                </label>
-              ) : null}
-            </div>
-          ) : null}
           <div className="site-grid">
             {editor.note.structuredFields.siteSnapshots.map((site) => (
               <div className="subpanel" key={site.siteNumber}>

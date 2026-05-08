@@ -1389,6 +1389,20 @@ describe("RadiationNoteService workflow", () => {
     );
   });
 
+  it("uses editable ultrasound wording on consult notes", async () => {
+    const { course } = await createPatientAndCourse();
+    const consultDraft = service.buildVisitDraft(course.id, "consult_sim");
+    consultDraft.note.structuredFields.ultrasoundPerformed =
+      "Ultrasound Performed:\nCustom ultrasound wording for this simulation.";
+
+    const savedConsult = service.saveVisit(consultDraft.note);
+
+    expect(savedConsult.generatedText).toContain("Custom ultrasound wording for this simulation.");
+    expect(savedConsult.generatedText).not.toContain(
+      "An ultrasound of the lesion was completed to determine tumor extent"
+    );
+  });
+
   it("maps simulation complication wording from additional treatment devices and omits it for none", async () => {
     const { patient, course } = await createPatientAndCourse();
     const originalSite = repository.fetchSites([course.id])[0];

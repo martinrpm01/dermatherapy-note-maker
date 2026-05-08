@@ -725,6 +725,10 @@ export function getDefaultMipsNote(): string {
   return "Quality measures have been documented for this encounter in accordance with Merit-based Incentive Payment System (MIPS) requirements.";
 }
 
+export function getDefaultUltrasoundNote(): string {
+  return "Ultrasound Performed:\nAn ultrasound of the lesion was completed to determine tumor extent in order to select the best course of treatment for the lesion. The image was reviewed, and radiation therapy was selected as the treatment plan.";
+}
+
 export function buildDefaultStructuredFields(
   noteType: NoteType,
   siteSnapshots: SiteSnapshot[],
