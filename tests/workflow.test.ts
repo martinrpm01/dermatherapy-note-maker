@@ -1281,6 +1281,24 @@ describe("RadiationNoteService workflow", () => {
     expect(savedFinal.generatedText).not.toContain("Quality measures have been documented for this encounter");
   });
 
+  it("auto-checks final treatment when prescribed fractions live on the site snapshot", async () => {
+    const { course } = await createTwoSitePatientAndCourse();
+    const consultDraft = service.buildVisitDraft(course.id, "consult_sim");
+    consultDraft.note.structuredFields.projectedFractionsInput = 12;
+    consultDraft.note.structuredFields.siteSnapshots = consultDraft.note.structuredFields.siteSnapshots.map((site) => ({
+      ...site,
+      prescribedFractions: site.siteNumber === 1 ? 8 : 12
+    }));
+    service.saveVisit(consultDraft.note);
+
+    const finalDraft = service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 12 });
+    expect(finalDraft.note.structuredFields.finalTreatment).toBe(true);
+    const savedFinal = service.saveVisit(finalDraft.note);
+
+    expect(savedFinal.structuredFields.finalTreatment).toBe(true);
+    expect(savedFinal.generatedText).toContain("Patient successfully completed the prescribed course");
+  });
+
   it("keeps course-derived values in the live preview when treatment number changes note type", async () => {
     const { patient, course } = await createPatientAndCourse();
     const firstDraft = service.buildVisitDraft(course.id, "next_treatment");
@@ -1742,6 +1760,7 @@ describe("RadiationNoteService workflow", () => {
     draft.note.structuredFields.supervisedBy = "Avery Bennett, M.D.";
     const saved = service.saveVisit(draft.note);
     expect(saved.generatedText).toContain("Avery Bennett, M.D. -");
+    expect(service.getSettingsPayload().settings.supervisingPhysician).toBe("Avery Bennett, M.D.");
 
     service.deleteSavedOption(physicianOption!.id);
     expect(service.getSettingsPayload().savedOptions.some((option) => option.id === physicianOption!.id)).toBe(false);

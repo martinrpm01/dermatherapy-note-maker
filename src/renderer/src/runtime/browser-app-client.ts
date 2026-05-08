@@ -361,9 +361,13 @@ export class BrowserAppClient implements AppClient {
           )
     );
     const settings = structuredDataStore.getSettingsRecord();
+    const finalTreatmentFraction =
+      course.prescribedFractions > 0
+        ? course.prescribedFractions
+        : getMaxSitePrescribedFractions(resolvedSiteSnapshots);
     const finalTreatmentEligible =
       visit.noteType !== "consult_sim" &&
-      isFinalTreatmentEligible(visit.treatmentNumber, course.prescribedFractions);
+      isFinalTreatmentEligible(visit.treatmentNumber, finalTreatmentFraction);
     const refreshedNote: VisitInput = {
       id: visit.id,
       patientId: visit.patientId,
@@ -1345,7 +1349,9 @@ export class BrowserAppClient implements AppClient {
         const finalTreatmentFraction =
           course.prescribedFractions > 0
             ? course.prescribedFractions
-            : getMaxSitePrescribedFractions(structuredFields.siteSnapshots);
+            : getMaxSitePrescribedFractions(structuredFields.siteSnapshots) ??
+              getMaxSitePrescribedFractions(projectedFractionsBySiteFromConsult) ??
+              projectedFractionsFromConsult;
         structuredFields.finalTreatment = isFinalTreatmentEligible(treatmentNumber, finalTreatmentFraction);
       }
 
@@ -1471,9 +1477,21 @@ export class BrowserAppClient implements AppClient {
     }
 
     const settings = structuredDataStore.getSettingsRecord();
+    const priorCourseVisits = structuredDataStore.fetchVisitsByCourseIds([input.courseId]);
+    const latestConsultVisit = priorCourseVisits
+      .filter((visit) => visit.note.noteType === "consult_sim")
+      .sort((left, right) => right.note.updatedAt.localeCompare(left.note.updatedAt))[0];
+    const finalTreatmentFraction =
+      course.prescribedFractions > 0
+        ? course.prescribedFractions
+        : getMaxSitePrescribedFractions(normalizedSiteSnapshots) ??
+          input.structuredFields.prescribedFractionsInput ??
+          input.structuredFields.projectedFractionsInput ??
+          getMaxSitePrescribedFractions(latestConsultVisit?.note.structuredFields.siteSnapshots ?? []) ??
+          latestConsultVisit?.note.structuredFields.projectedFractionsInput;
     const finalTreatmentEligible =
       input.noteType !== "consult_sim" &&
-      isFinalTreatmentEligible(input.treatmentNumber, course.prescribedFractions);
+      isFinalTreatmentEligible(input.treatmentNumber, finalTreatmentFraction);
       const structuredFields = {
         ...input.structuredFields,
         additionalNotes: input.structuredFields.additionalNotes ?? "",
@@ -1508,12 +1526,23 @@ export class BrowserAppClient implements AppClient {
         input.structuredFields.biopsyDate || ""
       )
     };
+    const selectedSupervisingPhysician = structuredFields.supervisedBy.trim();
+    if (selectedSupervisingPhysician && selectedSupervisingPhysician !== settings.supervisingPhysician) {
+      structuredDataStore.updateSettings({
+        appName: settings.appName,
+        defaultTherapist: settings.defaultTherapist,
+        supervisingPhysician: selectedSupervisingPhysician,
+        dermatologyOfficeName: settings.dermatologyOfficeName,
+        dermatologyOfficeLogoAsset: null,
+        dermatologyOfficeLogoPath: settings.dermatologyOfficeLogoPath,
+        inactivityTimeoutMinutes: settings.inactivityTimeoutMinutes
+      });
+    }
 
     const normalizedInput: VisitInput = {
       ...input,
       id: (() => {
-        const slotVisits = structuredDataStore
-          .fetchVisitsByCourseIds([input.courseId])
+        const slotVisits = priorCourseVisits
           .filter((visit) =>
             visit.note.courseId === input.courseId &&
             (visit.note.treatmentNumber ?? null) === (input.treatmentNumber ?? null)

@@ -1045,7 +1045,9 @@ export class RadiationNoteService {
         const finalTreatmentFraction =
           course.prescribedFractions > 0
             ? course.prescribedFractions
-            : getMaxSitePrescribedFractions(structuredFields.siteSnapshots);
+            : getMaxSitePrescribedFractions(structuredFields.siteSnapshots) ??
+              getMaxSitePrescribedFractions(projectedFractionsBySiteFromConsult) ??
+              projectedFractionsFromConsult;
         structuredFields.finalTreatment = isFinalTreatmentEligible(treatmentNumber, finalTreatmentFraction);
       }
 
@@ -1162,9 +1164,21 @@ export class RadiationNoteService {
     }
 
       const settings = this.repository.getSettingsRecord();
+      const priorCourseVisits = this.repository.fetchVisitsByCourseIds([input.courseId]);
+      const latestConsultVisit = priorCourseVisits
+        .filter((visit) => visit.note.noteType === "consult_sim")
+        .sort((left, right) => right.note.updatedAt.localeCompare(left.note.updatedAt))[0];
+      const finalTreatmentFraction =
+        course.prescribedFractions > 0
+          ? course.prescribedFractions
+          : getMaxSitePrescribedFractions(normalizedSiteSnapshots) ??
+            input.structuredFields.prescribedFractionsInput ??
+            input.structuredFields.projectedFractionsInput ??
+            getMaxSitePrescribedFractions(latestConsultVisit?.note.structuredFields.siteSnapshots ?? []) ??
+            latestConsultVisit?.note.structuredFields.projectedFractionsInput;
       const finalTreatmentEligible =
         input.noteType !== "consult_sim" &&
-        isFinalTreatmentEligible(input.treatmentNumber, course.prescribedFractions);
+        isFinalTreatmentEligible(input.treatmentNumber, finalTreatmentFraction);
       const structuredFields = {
         ...input.structuredFields,
           additionalNotes: input.structuredFields.additionalNotes ?? "",
@@ -1199,9 +1213,20 @@ export class RadiationNoteService {
           input.structuredFields.biopsyDate || ""
         )
       };
+      const selectedSupervisingPhysician = structuredFields.supervisedBy.trim();
+      if (selectedSupervisingPhysician && selectedSupervisingPhysician !== settings.supervisingPhysician) {
+        this.repository.updateSettings({
+          appName: settings.appName,
+          defaultTherapist: settings.defaultTherapist,
+          supervisingPhysician: selectedSupervisingPhysician,
+          dermatologyOfficeName: settings.dermatologyOfficeName,
+          dermatologyOfficeLogoAsset: null,
+          dermatologyOfficeLogoPath: settings.dermatologyOfficeLogoPath,
+          inactivityTimeoutMinutes: settings.inactivityTimeoutMinutes
+        });
+      }
 
-    const slotVisits = this.repository
-      .fetchVisitsByCourseIds([input.courseId])
+    const slotVisits = priorCourseVisits
       .filter((visit) =>
         visit.note.courseId === input.courseId &&
         (visit.note.treatmentNumber ?? null) === (input.treatmentNumber ?? null)
@@ -2014,9 +2039,13 @@ export class RadiationNoteService {
             )
       );
       const settings = this.repository.getSettingsRecord();
+      const finalTreatmentFraction =
+        course.prescribedFractions > 0
+          ? course.prescribedFractions
+          : getMaxSitePrescribedFractions(resolvedSiteSnapshots);
       const finalTreatmentEligible =
         visit.noteType !== "consult_sim" &&
-        isFinalTreatmentEligible(visit.treatmentNumber, course.prescribedFractions);
+        isFinalTreatmentEligible(visit.treatmentNumber, finalTreatmentFraction);
       const refreshedNote: VisitInput = {
         id: visit.id,
         patientId: visit.patientId,
@@ -2193,7 +2222,7 @@ export class RadiationNoteService {
       };
 
     const finalTreatmentSection = buildFinalTreatmentSection(
-      note.structuredFields.finalTreatment && isFinalTreatmentEligible(note.treatmentNumber, course.prescribedFractions),
+      note.structuredFields.finalTreatment,
       note.structuredFields.finalTreatmentNote
     );
     const mipsSection = buildMipsSection(note.structuredFields.addMips, note.structuredFields.mipsNote);

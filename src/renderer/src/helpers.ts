@@ -306,7 +306,7 @@ export function buildVisitPreviewText(
       };
 
   const finalTreatmentSection = buildFinalTreatmentSection(
-    !!note.structuredFields.finalTreatment && isFinalTreatmentEligible(note.treatmentNumber, course.prescribedFractions),
+    !!note.structuredFields.finalTreatment,
     note.structuredFields.finalTreatmentNote
   );
   const mipsSection = buildMipsSection(!!note.structuredFields.addMips, note.structuredFields.mipsNote);

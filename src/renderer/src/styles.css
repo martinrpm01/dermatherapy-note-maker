@@ -851,11 +851,28 @@ button.tab-active {
 .checkbox-note-fields {
   display: grid;
   gap: 0.75rem;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: 1fr;
 }
 
 .checkbox-note-fields textarea {
-  min-height: 8rem;
+  resize: vertical;
+  overflow-y: hidden;
+}
+
+.checkbox-note-fields textarea.ultrasound-note-textarea {
+  height: 9rem;
+}
+
+.checkbox-note-fields textarea.otv-note-textarea {
+  height: 16rem;
+}
+
+.checkbox-note-fields textarea.final-treatment-note-textarea {
+  height: 12rem;
+}
+
+.checkbox-note-fields textarea.mips-note-textarea {
+  height: 7rem;
 }
 
 .note-panel {

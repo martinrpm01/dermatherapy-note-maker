@@ -295,10 +295,11 @@ const showProjectedFractionsInput = false;
                         treatmentNumber: num,
                         noteType: nextNoteType,
                         structuredFields: {
-                          ...current.note.structuredFields,
+                        ...current.note.structuredFields,
                           finalTreatment:
-                            current.note.structuredFields.finalTreatment &&
-                            isFinalTreatmentEligible(num, nextFinalTreatmentFraction),
+                            isFinalTreatmentEligible(num, nextFinalTreatmentFraction) ||
+                            (current.note.structuredFields.finalTreatment &&
+                              isFinalTreatmentEligible(num, nextFinalTreatmentFraction)),
                           examComment:
                             nextNoteType === "otv"
                               ? current.note.structuredFields.examComment?.trim() ||
@@ -601,6 +602,42 @@ const showProjectedFractionsInput = false;
               );
             })()}
           </div>
+          {(editor.note.noteType === "consult_sim" || editor.note.noteType === "otv") &&
+          shouldIncludeExamVitals(editor.note.noteType, editor.note.structuredFields.includeExamVitals) ? (
+            <div>
+              <h4 style={{ margin: "0 0 0.4rem" }}>Exam Vitals</h4>
+              <div className="form-grid">
+                <label>
+                  Blood Pressure
+                  <BloodPressureInput
+                    value={editor.note.vitals.bloodPressure}
+                    onChange={(next) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, bloodPressure: next } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                  />
+                </label>
+                <label>
+                  Heart Rate
+                  <HeartRateInput
+                    value={editor.note.vitals.heartRate}
+                    onChange={(next) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, heartRate: next } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                  />
+                </label>
+                <label>
+                  O2 Saturation
+                  <OxygenSaturationInput
+                    value={editor.note.vitals.oxygenSaturation}
+                    onChange={(next) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, oxygenSaturation: next } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                  />
+                </label>
+                <label>
+                  Weight
+                  <WeightInput
+                    value={editor.note.vitals.weight}
+                    onChange={(next) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, weight: next } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                  />
+                </label>
+              </div>
+            </div>
+          ) : null}
           {(editor.note.structuredFields.ultrasoundPerformed ||
             editor.note.noteType === "otv" ||
             editor.note.structuredFields.finalTreatment ||
@@ -610,6 +647,7 @@ const showProjectedFractionsInput = false;
                 <label>
                   Ultrasound Note
                   <textarea
+                    className="checkbox-note-textarea ultrasound-note-textarea"
                     value={editor.note.structuredFields.ultrasoundPerformed}
                     onChange={(event) =>
                       props.onUpdate(
@@ -633,7 +671,7 @@ const showProjectedFractionsInput = false;
                 <label>
                   OTV Note
                   <textarea
-                    className="otv-note-textarea"
+                    className="checkbox-note-textarea otv-note-textarea"
                     value={editor.note.structuredFields.examComment ?? ""}
                     onChange={(event) =>
                       props.onUpdate(
@@ -657,6 +695,7 @@ const showProjectedFractionsInput = false;
                 <label>
                   Final Treatment Note
                   <textarea
+                    className="checkbox-note-textarea final-treatment-note-textarea"
                     value={editor.note.structuredFields.finalTreatmentNote ?? getDefaultFinalTreatmentNote()}
                     onChange={(event) =>
                       props.onUpdate(
@@ -680,6 +719,7 @@ const showProjectedFractionsInput = false;
                 <label>
                   MIPS Note
                   <textarea
+                    className="checkbox-note-textarea mips-note-textarea"
                     value={editor.note.structuredFields.mipsNote ?? getDefaultMipsNote()}
                     onChange={(event) =>
                       props.onUpdate(
@@ -804,45 +844,6 @@ const showProjectedFractionsInput = false;
               </label>
             </div>
           )}
-          {(editor.note.noteType === "consult_sim" || editor.note.noteType === "otv") && (
-            <div>
-              {shouldIncludeExamVitals(editor.note.noteType, editor.note.structuredFields.includeExamVitals) ? (
-                <>
-                  <h4 style={{ margin: "0 0 0.4rem" }}>Exam Vitals</h4>
-                  <div className="form-grid">
-                    <label>
-                      Blood Pressure
-                      <BloodPressureInput
-                        value={editor.note.vitals.bloodPressure}
-                        onChange={(next) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, bloodPressure: next } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
-                      />
-                    </label>
-                    <label>
-                      Heart Rate
-                      <HeartRateInput
-                        value={editor.note.vitals.heartRate}
-                        onChange={(next) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, heartRate: next } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
-                      />
-                    </label>
-                    <label>
-                      O2 Saturation
-                      <OxygenSaturationInput
-                        value={editor.note.vitals.oxygenSaturation}
-                        onChange={(next) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, oxygenSaturation: next } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
-                      />
-                    </label>
-                    <label>
-                      Weight
-                      <WeightInput
-                        value={editor.note.vitals.weight}
-                        onChange={(next) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, weight: next } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
-                      />
-                    </label>
-                  </div>
-                </>
-              ) : null}
-            </div>
-          )}
         </div>
         <div className={`panel summary-panel${isTwoLesionLayout ? " compact-summary-panel" : ""}`}>
           <div className="summary-checkboxes">
@@ -867,6 +868,33 @@ const showProjectedFractionsInput = false;
                 Ultrasound
               </label>
             )}
+            {(editor.note.noteType === "consult_sim" || editor.note.noteType === "otv") ? (
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={shouldIncludeExamVitals(
+                    editor.note.noteType,
+                    editor.note.structuredFields.includeExamVitals
+                  )}
+                  onChange={(event) =>
+                    props.onUpdate(
+                      (current) => ({
+                        ...current,
+                        note: {
+                          ...current.note,
+                          structuredFields: {
+                            ...current.note.structuredFields,
+                            includeExamVitals: event.target.checked
+                          }
+                        }
+                      }),
+                      { regenerate: true, overwriteEdited: !props.textDirty }
+                    )
+                  }
+                />
+                Exam Vitals
+              </label>
+            ) : null}
             {otvEligible ? (
               <label className="checkbox-label">
                 <input
@@ -896,33 +924,6 @@ const showProjectedFractionsInput = false;
                   }
                 />
                 OTV
-              </label>
-            ) : null}
-            {(editor.note.noteType === "consult_sim" || editor.note.noteType === "otv") ? (
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={shouldIncludeExamVitals(
-                    editor.note.noteType,
-                    editor.note.structuredFields.includeExamVitals
-                  )}
-                  onChange={(event) =>
-                    props.onUpdate(
-                      (current) => ({
-                        ...current,
-                        note: {
-                          ...current.note,
-                          structuredFields: {
-                            ...current.note.structuredFields,
-                            includeExamVitals: event.target.checked
-                          }
-                        }
-                      }),
-                      { regenerate: true, overwriteEdited: !props.textDirty }
-                    )
-                  }
-                />
-                Exam Vitals
               </label>
             ) : null}
             {finalTreatmentEligible && (

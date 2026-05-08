@@ -1660,11 +1660,11 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
       return;
     }
 
+    await appClient.rememberSavedOption("physician", supervisingPhysician);
     await appClient.saveSettings({
       ...settingsPayload.settings,
-      supervisingPhysician
+      supervisingPhysician: ""
     });
-    await appClient.rememberSavedOption("physician", supervisingPhysician);
     const nextPayload = await appClient.getSettingsPayload();
     setSettingsPayload(nextPayload);
     setBoot((current) => (current ? { ...current, settings: nextPayload.settings } : current));
