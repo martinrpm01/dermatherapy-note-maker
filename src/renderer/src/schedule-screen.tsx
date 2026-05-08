@@ -521,6 +521,10 @@ function getAppointmentLaneStyle(layout?: { lane: number; isDoubleBooked: boolea
   };
 }
 
+function getAppointmentSortKey(appointment: Pick<ScheduleAppointmentRecord, "appointmentDate" | "startTime" | "id">) {
+  return `${appointment.appointmentDate}|${appointment.startTime}|${appointment.id}`;
+}
+
 function buildDefaultAppointmentForm(dateIso: string, startTime: string): AppointmentFormState {
   return {
     source: "manual",
@@ -874,13 +878,45 @@ export function ScheduleScreen(props: {
 
   const firstOpenTime = slots[0] ?? "08:00";
 
-  function getConflict(input: ScheduleAppointmentInput, ignoreId?: string) {
-    const doubleBookingConflict = getDoubleBookingConflict(snapshot?.appointments ?? [], input, ignoreId);
+  function getSeriesAppointmentsFrom(appointment: ScheduleAppointmentRecord, sourceSnapshot: ScheduleSnapshot | null = snapshot) {
+    if (!appointment.seriesId) {
+      return [appointment];
+    }
+    const targetKey = getAppointmentSortKey(appointment);
+    return (sourceSnapshot?.appointments ?? [])
+      .filter((item) => item.seriesId === appointment.seriesId)
+      .filter((item) => item.id === appointment.id || getAppointmentSortKey(item) >= targetKey)
+      .sort((left, right) => getAppointmentSortKey(left).localeCompare(getAppointmentSortKey(right)));
+  }
+
+  function buildAppointmentEditForm(appointment: ScheduleAppointmentRecord) {
+    const form = appointmentToForm(appointment);
+    if (appointment.appointmentType !== "treatment") {
+      return form;
+    }
+    const seriesAppointments = getSeriesAppointmentsFrom(appointment);
+    const weekdays = [...new Set(seriesAppointments.map((item) => parseIsoDate(item.appointmentDate).getDay()))].sort();
+    const remainingCount =
+      appointment.totalAppointments && appointment.appointmentNumber
+        ? Math.max(1, appointment.totalAppointments - appointment.appointmentNumber + 1)
+        : seriesAppointments.length;
+    return {
+      ...form,
+      recurring: Boolean(appointment.seriesId),
+      recurringCount: appointment.seriesId ? `${remainingCount}` : "",
+      recurringWeekdays: appointment.seriesId ? weekdays : []
+    };
+  }
+
+  function getConflict(input: ScheduleAppointmentInput, ignoreIds?: string | Set<string>, sourceSnapshot: ScheduleSnapshot | null = snapshot) {
+    const ignored = typeof ignoreIds === "string" ? new Set([ignoreIds]) : ignoreIds ?? new Set<string>();
+    const comparableAppointments = (sourceSnapshot?.appointments ?? []).filter((appointment) => !ignored.has(appointment.id));
+    const doubleBookingConflict = getDoubleBookingConflict(comparableAppointments, input);
     if (doubleBookingConflict) {
       return doubleBookingConflict;
     }
 
-    const blockConflict = (snapshot?.blocks ?? []).find((block) => {
+    const blockConflict = (sourceSnapshot?.blocks ?? []).find((block) => {
       if (!recurringBlockApplies(block, input.appointmentDate)) return false;
       return hasTimeOverlap(block.startTime, block.endTime, input.startTime, input.endTime);
     });
@@ -914,30 +950,55 @@ export function ScheduleScreen(props: {
 
     setBusy(true);
     try {
+      const shouldBuildRecurringSeries =
+        isRecurringTreatment && (!appointmentForm.id || !appointmentForm.seriesId || appointmentForm.moveFollowing);
+      const saveSnapshot =
+        shouldBuildRecurringSeries || (appointmentForm.id && appointmentForm.moveFollowing && appointmentForm.seriesId)
+          ? await props.appClient.getScheduleSnapshot("1900-01-01", "2999-12-31")
+          : snapshot;
+      const originalAppointment = appointmentForm.id
+        ? (saveSnapshot?.appointments.find((appointment) => appointment.id === appointmentForm.id) ??
+            snapshot?.appointments.find((appointment) => appointment.id === appointmentForm.id) ??
+            null)
+        : null;
+      const replacedSeriesAppointments =
+        shouldBuildRecurringSeries && originalAppointment?.seriesId
+          ? getSeriesAppointmentsFrom(originalAppointment, saveSnapshot).filter((appointment) => appointment.id !== appointmentForm.id)
+          : [];
+      const ignoredAppointmentIds = new Set<string>();
+      if (appointmentForm.id) {
+        ignoredAppointmentIds.add(appointmentForm.id);
+      }
+      for (const appointment of replacedSeriesAppointments) {
+        ignoredAppointmentIds.add(appointment.id);
+      }
+
       const total = isRecurringTreatment ? getTreatmentAppointmentCount(appointmentForm, linkedCourse) : 1;
       const linkedFractions = linkedCourse?.prescribedFractions && linkedCourse.prescribedFractions > 0 ? linkedCourse.prescribedFractions : null;
       const existingNumber = Number(appointmentForm.appointmentNumber) || null;
       const existingTotal = Number(appointmentForm.totalAppointments) || null;
-      const totalAppointments =
-        appointmentForm.appointmentType === "treatment"
-          ? appointmentForm.source === "linked"
-            ? linkedFractions
-            : existingTotal
-              ? existingTotal
-              : isRecurringTreatment
-                ? total
-                : null
-          : null;
       const startNumber =
         appointmentForm.appointmentType === "sim_consult"
           ? 0
           : appointmentForm.appointmentType === "treatment"
             ? existingNumber ?? linkedCourse?.suggestedTreatmentNumber ?? (isRecurringTreatment ? 1 : null)
             : null;
-      const seriesId = appointmentForm.id ? appointmentForm.seriesId : isRecurringTreatment ? createSeriesId() : appointmentForm.seriesId;
+      const totalAppointments =
+        appointmentForm.appointmentType === "treatment"
+          ? appointmentForm.source === "linked"
+            ? linkedFractions
+            : existingTotal && !shouldBuildRecurringSeries
+              ? existingTotal
+              : isRecurringTreatment
+                ? startNumber
+                  ? startNumber + total - 1
+                  : total
+                : null
+          : null;
+      const seriesId = isRecurringTreatment ? appointmentForm.seriesId ?? createSeriesId() : appointmentForm.seriesId;
       const inputs: ScheduleAppointmentInput[] = [];
 
-      if (isRecurringTreatment && !appointmentForm.id) {
+      if (isRecurringTreatment && shouldBuildRecurringSeries) {
         let dateCursor = appointmentForm.appointmentDate;
         let attempts = 0;
         while (inputs.length < total && attempts < 520) {
@@ -950,8 +1011,9 @@ export function ScheduleScreen(props: {
                 appointmentForm.appointmentType === "treatment" && startNumber
                   ? startNumber + inputs.length
                   : null;
-              const input = buildAppointmentInput(appointmentForm, dateCursor, appointmentNumber, totalAppointments, seriesId);
-              const conflict = getConflict(input);
+              const baseInput = buildAppointmentInput(appointmentForm, dateCursor, appointmentNumber, totalAppointments, seriesId);
+              const input = appointmentForm.id && inputs.length === 0 ? { ...baseInput, id: appointmentForm.id } : baseInput;
+              const conflict = getConflict(input, ignoredAppointmentIds, saveSnapshot);
               if (conflict) {
                 window.alert(`This appointment overlaps with ${conflict}. Please choose another time.`);
                 return;
@@ -963,7 +1025,7 @@ export function ScheduleScreen(props: {
         }
       } else {
         const input = buildAppointmentInput(appointmentForm, appointmentForm.appointmentDate, startNumber, totalAppointments, seriesId);
-        const conflict = getConflict(input, appointmentForm.id);
+        const conflict = getConflict(input, appointmentForm.id, saveSnapshot);
         if (conflict) {
           window.alert(`This appointment overlaps with ${conflict}. Please choose another time.`);
           return;
@@ -975,12 +1037,22 @@ export function ScheduleScreen(props: {
       for (const input of inputs) {
         saved.push(await props.appClient.saveScheduleAppointment(input));
       }
+      for (const appointment of replacedSeriesAppointments) {
+        await props.appClient.deleteScheduleAppointment(appointment.id);
+      }
 
-      if (appointmentForm.id && appointmentForm.moveFollowing && appointmentForm.seriesId && appointmentForm.originalDate && appointmentForm.originalStartTime) {
+      if (
+        appointmentForm.id &&
+        appointmentForm.moveFollowing &&
+        appointmentForm.seriesId &&
+        !shouldBuildRecurringSeries &&
+        appointmentForm.originalDate &&
+        appointmentForm.originalStartTime
+      ) {
         const dayDelta =
           (parseIsoDate(appointmentForm.appointmentDate).getTime() - parseIsoDate(appointmentForm.originalDate).getTime()) / 86_400_000;
         const timeDelta = timeToMinutes(appointmentForm.startTime) - timeToMinutes(appointmentForm.originalStartTime);
-        const affected = (snapshot?.appointments ?? []).filter(
+        const affected = (saveSnapshot?.appointments ?? []).filter(
           (appointment) =>
             appointment.seriesId === appointmentForm.seriesId &&
             appointment.id !== appointmentForm.id &&
@@ -1662,7 +1734,7 @@ export function ScheduleScreen(props: {
             <button
               type="button"
               onClick={() => {
-                setAppointmentForm(appointmentToForm(appointmentMenu.appointment));
+                setAppointmentForm(buildAppointmentEditForm(appointmentMenu.appointment));
                 setAppointmentMenu(null);
               }}
             >
@@ -1966,7 +2038,7 @@ export function ScheduleScreen(props: {
               </div>
             ) : null}
 
-            {!appointmentForm.id && appointmentForm.appointmentType === "treatment" ? (
+            {appointmentForm.appointmentType === "treatment" ? (
               <div className={appointmentForm.recurring ? "panel schedule-subpanel" : "schedule-recurring-toggle"}>
                 <label className="checkbox-line">
                   <input
@@ -2054,6 +2126,16 @@ export function ScheduleScreen(props: {
                       ))}
                     </div>
                   </>
+                ) : null}
+                {appointmentForm.id && appointmentForm.seriesId ? (
+                  <label className="checkbox-line">
+                    <input
+                      type="checkbox"
+                      checked={appointmentForm.moveFollowing}
+                      onChange={(event) => setAppointmentForm({ ...appointmentForm, moveFollowing: event.target.checked })}
+                    />
+                    Move following appointments in this schedule too
+                  </label>
                 ) : null}
               </div>
             ) : appointmentForm.seriesId ? (
