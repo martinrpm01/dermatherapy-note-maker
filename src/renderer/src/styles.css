@@ -60,6 +60,26 @@ button.primary {
   color: white;
 }
 
+a.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.65rem 1rem;
+  background: var(--panel);
+  color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+a.button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
 button.ghost {
   background: transparent;
 }
@@ -154,14 +174,16 @@ textarea {
   gap: 0.75rem;
 }
 
-.lock-setup-install-panel {
+.lock-setup-install-panel,
+.lock-setup-download-panel {
   grid-column: 1 / -1;
   display: grid;
   gap: 0.45rem;
 }
 
 .lock-setup-install-panel p,
-.lock-setup-install-panel ol {
+.lock-setup-install-panel ol,
+.lock-setup-download-panel p {
   margin: 0;
 }
 

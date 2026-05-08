@@ -26,6 +26,10 @@ ROOT = Path(__file__).resolve().parents[1]
 SHOT_DIR = ROOT / "tmp" / "ipad-tutorial"
 CROP_DIR = ROOT / "tmp" / "ipad-tutorial-crops"
 DEFAULT_OUTPUT_PATH = ROOT / "docs" / "ClearSkin-Hub-iPad-Therapist-Workflow-Guide.pdf"
+APP_URL = "https://dermatherapies.vercel.app/"
+DESKTOP_DOWNLOAD_URL = (
+    "https://github.com/martinrpm01/dermatherapy-note-maker/releases/latest/download/ClearSkin-Hub-Setup.exe"
+)
 
 PAGE_WIDTH, PAGE_HEIGHT = letter
 MARGIN_X = 0.7 * inch
@@ -244,7 +248,11 @@ def build_cover(story: list, styles: dict[str, ParagraphStyle]):
                 styles["body"],
             ),
             Paragraph(
-                'Start here on iPad Safari: <link href="https://dermatherapies.vercel.app/"><b><font color="#174c79">https://dermatherapies.vercel.app/</font></b></link>',
+                f'Start here on iPad Safari: <link href="{APP_URL}"><b><font color="#174c79">{APP_URL}</font></b></link>',
+                styles["body"],
+            ),
+            Paragraph(
+                f'Windows desktop download: <link href="{DESKTOP_DOWNLOAD_URL}"><b><font color="#174c79">Download Desktop Version</font></b></link>',
                 styles["body"],
             ),
             Paragraph(
@@ -375,6 +383,7 @@ def main():
             "Open ClearSkin Hub in Safari only.",
             "Tap Share, then View More, then Add to Home Screen before doing first-time setup.",
             "Add it once so the app opens like a full-screen iPad app during daily use.",
+            "On a Windows computer, use Download Desktop Version on the first setup screen instead of setting up patient records inside the browser.",
             "On first setup, enter the default therapist, supervising physician, office name, and a 4-8 digit PIN.",
         ],
         "01-landing.png",

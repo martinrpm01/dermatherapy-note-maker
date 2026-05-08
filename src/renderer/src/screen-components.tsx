@@ -1584,6 +1584,8 @@ export function LockScreen(props: {
   onSetupLogoSelected: (file: File | undefined) => void;
   onRemoveSetupLogo: () => void;
   showSetupInstallPrompt?: boolean;
+  showDesktopDownloadPrompt?: boolean;
+  desktopDownloadUrl?: string;
   onDismissSetupInstallPrompt?: () => void;
   onUnlock: () => void;
   onSetup: () => void;
@@ -1609,6 +1611,18 @@ export function LockScreen(props: {
                 <div className="button-row">
                   <span className="install-helper-hint">Safari only. Add it to Home Screen before creating your PIN.</span>
                   <button type="button" className="ghost" onClick={props.onDismissSetupInstallPrompt}>Maybe Later</button>
+                </div>
+              </div>
+            ) : null}
+            {props.showDesktopDownloadPrompt && props.desktopDownloadUrl ? (
+              <div className="panel lock-setup-download-panel">
+                <strong>Use The Desktop Version</strong>
+                <p>For Windows computers, download the desktop app before creating a PIN in the browser.</p>
+                <div className="button-row">
+                  <a className="button primary" href={props.desktopDownloadUrl} target="_blank" rel="noreferrer">
+                    Download Desktop Version
+                  </a>
+                  <span className="install-helper-hint">The desktop app keeps patient records local to that computer.</span>
                 </div>
               </div>
             ) : null}

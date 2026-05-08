@@ -1,0 +1,82 @@
+name: Build Desktop Release
+
+on:
+  push:
+    tags:
+      - "desktop-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows desktop build
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build desktop package
+        run: npm run package
+
+      - name: Create stable download filenames
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -Path dist -Filter "ClearSkin Hub Setup *.exe" | Select-Object -First 1
+          $portable = Get-ChildItem -Path dist -Filter "ClearSkin Hub *.exe" | Where-Object { $_.Name -notlike "*Setup*" } | Select-Object -First 1
+
+          if (-not $installer) {
+            throw "Installer executable was not found in dist."
+          }
+
+          if (-not $portable) {
+            throw "Portable executable was not found in dist."
+          }
+
+          Copy-Item -LiteralPath $installer.FullName -Destination "dist\ClearSkin-Hub-Setup.exe" -Force
+          Copy-Item -LiteralPath $portable.FullName -Destination "dist\ClearSkin-Hub-Portable.exe" -Force
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClearSkin-Hub-Desktop-Windows
+          path: |
+            dist/ClearSkin-Hub-Setup.exe
+            dist/ClearSkin-Hub-Portable.exe
+
+      - name: Publish GitHub release
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $title = "ClearSkin Hub Desktop $tag"
+          $notes = @"
+          Windows desktop build for ClearSkin Hub.
+
+          Downloads:
+          - ClearSkin-Hub-Setup.exe: Windows installer
+          - ClearSkin-Hub-Portable.exe: portable Windows app
+          "@
+
+          gh release view $tag *> $null
+          $releaseExists = $LASTEXITCODE -eq 0
+
+          if ($releaseExists) {
+            gh release upload $tag "dist\ClearSkin-Hub-Setup.exe" "dist\ClearSkin-Hub-Portable.exe" --clobber
+            gh release edit $tag --title $title --notes $notes --latest
+          } else {
+            gh release create $tag "dist\ClearSkin-Hub-Setup.exe" "dist\ClearSkin-Hub-Portable.exe" --title $title --notes $notes --latest
+          }

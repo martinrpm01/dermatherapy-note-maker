@@ -162,6 +162,9 @@ type InstallAwareNavigator = Navigator & {
   standalone?: boolean;
 };
 
+const DESKTOP_DOWNLOAD_URL =
+  "https://github.com/martinrpm01/dermatherapy-note-maker/releases/latest/download/ClearSkin-Hub-Setup.exe";
+
 function shouldShowInstallPrompt() {
   if (typeof window === "undefined") {
     return false;
@@ -186,6 +189,21 @@ function shouldShowInstallPrompt() {
   }
 
   return isIosDevice && isSafari && !isStandalone && !isDismissed;
+}
+
+function shouldShowDesktopDownloadPrompt() {
+  if (typeof window === "undefined" || window.rtNoteApi) {
+    return false;
+  }
+
+  const userAgent = window.navigator.userAgent;
+  const platform = window.navigator.platform;
+  const maxTouchPoints = window.navigator.maxTouchPoints ?? 0;
+  const isAppleTouchDevice =
+    /iphone|ipad|ipod/i.test(userAgent) || (platform === "MacIntel" && maxTouchPoints > 1);
+  const isMobileBrowser = isAppleTouchDevice || /android|mobile/i.test(userAgent);
+
+  return !isMobileBrowser;
 }
 
 const RECOVERY_DRAFT_PREFIX = "clearskin:recovery-draft:v1:";
@@ -1842,6 +1860,8 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
               : undefined
           }
           showSetupInstallPrompt={boot.requiresPinSetup && showInstallPrompt}
+          showDesktopDownloadPrompt={boot.requiresPinSetup && shouldShowDesktopDownloadPrompt()}
+          desktopDownloadUrl={DESKTOP_DOWNLOAD_URL}
           onDismissSetupInstallPrompt={() => {
             try {
               window.localStorage.setItem("install-prompt-dismissed", "true");
