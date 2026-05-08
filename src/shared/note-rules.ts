@@ -686,12 +686,64 @@ export function getDefaultPhysicsComment(noteType: NoteType): string {
 }
 
 export function getDefaultOtvNote(siteSnapshots: SiteSnapshot[]): string {
-  const firstSiteLocation = siteSnapshots[0]?.bodyLocation || "treatment site";
-  const secondSiteLocation = siteSnapshots[1]?.bodyLocation || "second treatment site";
-  const combinedSiteLabel =
-    siteSnapshots.length === 2 ? `${firstSiteLocation} and ${secondSiteLocation}` : firstSiteLocation;
+  const siteDescriptions = siteSnapshots.map((site) => {
+    const location = site.treatmentLocationText || site.bodyLocation || `Lesion ${site.siteNumber}`;
+    return `${formatDiagnosisForOtv(site.diagnosisText)} of the ${location}`;
+  });
+  const combinedSiteLabel = joinClinicalList(siteDescriptions, "the treatment site");
+  const doseSummaries = siteSnapshots
+    .map((site) => {
+      const currentDose = site.cumulativeDose;
+      const totalDose = site.totalDose;
+      const prescribedFractions = site.prescribedFractions;
+      if (!currentDose || !totalDose || !prescribedFractions || !site.dailyDose) {
+        return "";
+      }
 
-  return `Patient evaluated today during the current course of radiation therapy for ${combinedSiteLabel}. Current dose reviewed. Patient reports good tolerance with no pain or new or worsening symptoms. Focused skin exam shows mild expected erythema without breakdown, ulceration, or infection. No changes required; ongoing skin care, anticipated acute effects, and the plan to continue radiation therapy as prescribed were reviewed.`;
+      const treatmentNumber = Math.max(1, Math.round(currentDose / site.dailyDose));
+      return `${currentDose}/${totalDose} cGy in ${treatmentNumber} of ${prescribedFractions} fractions`;
+    })
+    .filter(Boolean);
+  const doseText = doseSummaries.length
+    ? ` Current dose reviewed ${joinClinicalList(doseSummaries)}.`
+    : " Current dose reviewed.";
+
+  return `Patient evaluated today during the current course of radiation therapy for ${combinedSiteLabel}.${doseText} Patient reports good tolerance with no pain or new or worsening symptoms. Focused skin exam shows mild expected erythema without breakdown, ulceration, or infection. No changes required; ongoing skin care, anticipated acute effects, and the plan to continue radiation therapy as prescribed were reviewed.`;
+}
+
+export function isLegacyDefaultOtvNote(value: string): boolean {
+  const normalized = value.trim();
+  return (
+    normalized.startsWith("Patient evaluated today during the current course of radiation therapy for ") &&
+    normalized.includes("Current dose reviewed.") &&
+    normalized.includes("Patient reports good tolerance with no pain or new or worsening symptoms.") &&
+    !normalized.includes(" cGy in ")
+  );
+}
+
+function formatDiagnosisForOtv(value: string): string {
+  const normalized = normalizeOptionValue(value);
+  if (normalized.includes("basal cell")) {
+    return "BCC";
+  }
+  if (normalized.includes("squamous cell")) {
+    return "SCC";
+  }
+  return value.trim() || "skin cancer";
+}
+
+function joinClinicalList(values: string[], fallback = ""): string {
+  const cleanValues = values.map((value) => value.trim()).filter(Boolean);
+  if (cleanValues.length === 0) {
+    return fallback;
+  }
+  if (cleanValues.length === 1) {
+    return cleanValues[0];
+  }
+  if (cleanValues.length === 2) {
+    return `${cleanValues[0]} and ${cleanValues[1]}`;
+  }
+  return `${cleanValues.slice(0, -1).join(", ")}, and ${cleanValues[cleanValues.length - 1]}`;
 }
 
 export function shouldIncludeExamVitals(noteType: NoteType, includeExamVitals: boolean | undefined): boolean {

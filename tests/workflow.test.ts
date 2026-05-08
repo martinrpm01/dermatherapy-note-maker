@@ -1187,7 +1187,10 @@ describe("RadiationNoteService workflow", () => {
 
     const otvDraft = service.buildVisitDraft(course.id, "next_treatment");
     expect(otvDraft.note.noteType).toBe("otv");
-    expect(otvDraft.note.generatedText).toContain("Plan: Radiation Physics Consultation.\nLocation: Nasal bridge\nPhysics Consultation: Fraction Number: 5 of 15");
+    expect(otvDraft.note.generatedText).toContain("Plan: Radiation Physics Consultation.\nLocation: Nasal bridge\nPhysics Consultation: Fraction Number: 1 to 5");
+    expect(otvDraft.note.generatedText).toContain(
+      "Patient evaluated today during the current course of radiation therapy for BCC of the Bridge of nose. Current dose reviewed 1400/4200 cGy in 5 of 15 fractions."
+    );
     expect(otvDraft.note.generatedText).toContain(
       "In accordance with the standard of care for radiotherapy treatment"
     );
@@ -1257,6 +1260,9 @@ describe("RadiationNoteService workflow", () => {
       ]
     });
     const twoSiteOtvDraft = service.buildVisitDraft(twoSiteCourse.id, "next_treatment", undefined, { treatmentNumber: 5 });
+    expect(twoSiteOtvDraft.note.generatedText).toContain(
+      "Patient evaluated today during the current course of radiation therapy for BCC of the Left cheek and SCC of the Right ear. Current dose reviewed 2000/4000 cGy in 5 of 10 fractions and 2000/4000 cGy in 5 of 10 fractions."
+    );
     twoSiteOtvDraft.note.structuredFields.examComment = "Custom two-site OTV wording for today.";
     const savedTwoSiteOtv = service.saveVisit(twoSiteOtvDraft.note);
     expect(savedTwoSiteOtv.generatedText).toContain("Custom two-site OTV wording for today.");
@@ -1821,7 +1827,9 @@ describe("RadiationNoteService workflow", () => {
     draft.note.structuredFields.siteSnapshots[0].cumulativeDose =
       draft.note.structuredFields.siteSnapshots[0].dailyDose * 4;
     const saved = service.saveVisit(draft.note);
-    expect(saved.structuredFields.siteSnapshots[0].cumulativeDose).toBe(2000);
+    expect(saved.structuredFields.siteSnapshots[0].cumulativeDose).toBe(
+      saved.structuredFields.siteSnapshots[0].dailyDose * 4
+    );
   });
 
   it("archives and restores patients and courses", async () => {

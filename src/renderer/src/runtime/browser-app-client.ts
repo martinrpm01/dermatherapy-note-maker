@@ -34,6 +34,7 @@ import {
   getNextTreatmentNumber,
   getSuggestedNoteType,
   getTemplateKey,
+  isLegacyDefaultOtvNote,
   isFinalTreatmentEligible,
   normalizeVacLokAreaValue,
   normalizeOptionValue,
@@ -397,7 +398,9 @@ export class BrowserAppClient implements AppClient {
         lastTreatmentDate: visit.structuredFields.lastTreatmentDate ?? course.startDate ?? "",
         examComment:
           visit.noteType === "otv"
-            ? visit.structuredFields.examComment?.trim() || getDefaultOtvNote(resolvedSiteSnapshots)
+            ? !visit.structuredFields.examComment?.trim() || isLegacyDefaultOtvNote(visit.structuredFields.examComment)
+              ? getDefaultOtvNote(resolvedSiteSnapshots)
+              : visit.structuredFields.examComment
             : visit.structuredFields.examComment ?? "",
         physicsComment:
           visit.structuredFields.physicsComment?.trim() ||
@@ -1316,7 +1319,11 @@ export class BrowserAppClient implements AppClient {
     });
     structuredFields.siteSnapshots = structuredFields.siteSnapshots.map((site) => ({
       ...site,
-      biopsyDate: site.biopsyDate || course.startDate || ""
+      biopsyDate: site.biopsyDate || course.startDate || "",
+      prescribedFractions:
+        site.prescribedFractions ?? (noteType !== "consult_sim" && course.prescribedFractions > 0
+          ? course.prescribedFractions
+          : undefined)
     }));
     if (noteType === "consult_sim" && scheduleDates.treatmentStartDate) {
       structuredFields.startRadiationDate = scheduleDates.treatmentStartDate;
@@ -1353,6 +1360,9 @@ export class BrowserAppClient implements AppClient {
               getMaxSitePrescribedFractions(projectedFractionsBySiteFromConsult) ??
               projectedFractionsFromConsult;
         structuredFields.finalTreatment = isFinalTreatmentEligible(treatmentNumber, finalTreatmentFraction);
+      }
+      if (noteType === "otv") {
+        structuredFields.examComment = getDefaultOtvNote(structuredFields.siteSnapshots);
       }
 
       const note: VisitInput = {
@@ -1407,7 +1417,9 @@ export class BrowserAppClient implements AppClient {
             prescribedFractions:
               input.noteType === "consult_sim"
                 ? input.structuredFields.projectedFractionsInput ?? site.prescribedFractions ?? undefined
-                : input.structuredFields.prescribedFractionsInput ?? site.prescribedFractions ?? undefined
+                : input.structuredFields.prescribedFractionsInput ??
+                  site.prescribedFractions ??
+                  (course.prescribedFractions > 0 ? course.prescribedFractions : undefined)
           }))
         : input.structuredFields.siteSnapshots
     ).map((site) =>
@@ -1504,7 +1516,9 @@ export class BrowserAppClient implements AppClient {
         lastTreatmentDate: input.structuredFields.lastTreatmentDate ?? "",
       examComment:
         input.noteType === "otv"
-          ? input.structuredFields.examComment?.trim() || getDefaultOtvNote(normalizedSiteSnapshots)
+          ? !input.structuredFields.examComment?.trim() || isLegacyDefaultOtvNote(input.structuredFields.examComment)
+            ? getDefaultOtvNote(normalizedSiteSnapshots)
+            : input.structuredFields.examComment
           : input.structuredFields.examComment ?? "",
       physicsComment:
         input.structuredFields.physicsComment?.trim() ||

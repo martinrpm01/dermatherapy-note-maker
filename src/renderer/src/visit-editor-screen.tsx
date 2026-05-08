@@ -11,6 +11,7 @@ import {
   getDefaultUltrasoundNote,
   getMaxSitePrescribedFractions,
   getSuggestedNoteType,
+  isLegacyDefaultOtvNote,
   isFinalTreatmentEligible,
   isOtvTreatmentNumber,
   shouldIncludeExamVitals
@@ -302,8 +303,10 @@ const showProjectedFractionsInput = false;
                               isFinalTreatmentEligible(num, nextFinalTreatmentFraction)),
                           examComment:
                             nextNoteType === "otv"
-                              ? current.note.structuredFields.examComment?.trim() ||
-                                getDefaultOtvNote(current.note.structuredFields.siteSnapshots)
+                              ? !current.note.structuredFields.examComment?.trim() ||
+                                isLegacyDefaultOtvNote(current.note.structuredFields.examComment)
+                                ? getDefaultOtvNote(current.note.structuredFields.siteSnapshots)
+                                : current.note.structuredFields.examComment
                               : current.note.structuredFields.examComment,
                           siteSnapshots: current.note.structuredFields.siteSnapshots.map((site) =>
                             applyAutomaticDoseValuesToSiteSnapshot(
@@ -910,8 +913,10 @@ const showProjectedFractionsInput = false;
                           structuredFields: {
                             ...current.note.structuredFields,
                             examComment: event.target.checked
-                              ? current.note.structuredFields.examComment?.trim() ||
-                                getDefaultOtvNote(current.note.structuredFields.siteSnapshots)
+                              ? !current.note.structuredFields.examComment?.trim() ||
+                                isLegacyDefaultOtvNote(current.note.structuredFields.examComment)
+                                ? getDefaultOtvNote(current.note.structuredFields.siteSnapshots)
+                                : current.note.structuredFields.examComment
                               : current.note.structuredFields.examComment,
                             physicsComment: event.target.checked
                               ? current.note.structuredFields.physicsComment?.trim() || getDefaultPhysicsComment("otv")

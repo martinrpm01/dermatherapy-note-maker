@@ -119,7 +119,22 @@ function injectMipsSection(renderedText: string, mipsSection: string) {
   return `${renderedText}\n\n${trimmedSection}`;
 }
 
-function injectPhysicsConsultationDetails(renderedText: string, physicsComment: string, bodyLocations: string[]) {
+function formatPhysicsFractionRange(treatmentNumber: number | null) {
+  if (treatmentNumber === null || treatmentNumber <= 0) {
+    return "";
+  }
+
+  const end = Math.trunc(treatmentNumber);
+  const start = Math.max(1, end - 4);
+  return `${start} to ${end}`;
+}
+
+function injectPhysicsConsultationDetails(
+  renderedText: string,
+  physicsComment: string,
+  bodyLocations: string[],
+  treatmentNumber: number | null
+) {
   const trimmedComment = physicsComment.trim();
   if (!trimmedComment && bodyLocations.every((location) => !location.trim())) {
     return renderedText;
@@ -136,7 +151,11 @@ function injectPhysicsConsultationDetails(renderedText: string, physicsComment: 
     }
 
     const bodyLocation = bodyLocations[consultationIndex]?.trim() ?? "";
+    const fractionRange = formatPhysicsFractionRange(treatmentNumber);
     lines[index] = line.replace(/ for .+$/, "");
+    if (fractionRange) {
+      lines[index] = lines[index].replace(/Fraction Number:.+$/, `Fraction Number: ${fractionRange}`);
+    }
     if (bodyLocation) {
       const locationLine = `Location: ${bodyLocation}`;
       const previousLine = (lines[index - 1] ?? "").trim();
@@ -355,7 +374,7 @@ export function buildVisitPreviewText(
         injectPhysicsConsultationDetails(renderedText, note.structuredFields.physicsComment?.trim() || getDefaultPhysicsComment(note.noteType), [
           site1.bodyLocation,
           site2.bodyLocation
-        ]),
+        ], note.treatmentNumber),
         mipsSection
       ),
       finalTreatmentSection
