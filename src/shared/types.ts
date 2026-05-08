@@ -58,7 +58,6 @@ export interface AppSettingsView {
   appName: string;
   defaultTherapist: string;
   supervisingPhysician: string;
-  rememberSupervisingPhysician?: boolean;
   dermatologyOfficeName: string;
   dermatologyOfficeLogoAsset: AssetReference | null;
   dermatologyOfficeLogoUpload?: StoredAssetUpload | null;
@@ -750,6 +749,7 @@ export interface AppClient {
   removeVisitAttachment: (attachmentId: string) => Promise<void>;
   getSettingsPayload: () => Promise<SettingsPayload>;
   saveSettings: (input: AppSettingsView) => Promise<AppSettingsView>;
+  rememberSavedOption: (type: SavedOptionType, value: string) => Promise<void>;
   deleteSavedOption: (optionId: string) => Promise<void>;
   getTemplates: () => Promise<TemplateDefinitionRecord[]>;
   saveTemplate: (templateId: string, templateText: string) => Promise<TemplateDefinitionRecord>;

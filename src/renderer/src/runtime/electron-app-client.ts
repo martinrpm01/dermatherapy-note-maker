@@ -243,6 +243,10 @@ export class ElectronAppClient implements AppClient {
     return this.api.saveSettings(input);
   }
 
+  rememberSavedOption(type: Parameters<AppClient["rememberSavedOption"]>[0], value: string) {
+    return this.api.rememberSavedOption(type, value);
+  }
+
   deleteSavedOption(optionId: string) {
     return this.api.deleteSavedOption(optionId);
   }

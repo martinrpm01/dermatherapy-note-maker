@@ -78,6 +78,7 @@ import type {
   ScheduleAppointmentStatus,
   ScheduleBlockInput,
   ScheduleSettingsView,
+  SavedOptionType,
   SettingsPayload,
   SiteSnapshot,
   StoredAssetUpload,
@@ -1902,12 +1903,17 @@ export class RadiationNoteService {
         removeDermatologyOfficeLogo: undefined
       });
 
-    const supervisingPhysician = input.supervisingPhysician.trim();
-    if (input.rememberSupervisingPhysician && supervisingPhysician) {
-      this.repository.rememberOption("physician", supervisingPhysician, normalizeOptionValue(supervisingPhysician));
+    return this.repository.toSettingsView(this.repository.getSettingsRecord());
+  }
+
+  rememberSavedOption(type: SavedOptionType, value: string) {
+    this.assertUnlocked();
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return;
     }
 
-    return this.repository.toSettingsView(this.repository.getSettingsRecord());
+    this.repository.rememberOption(type, trimmed, normalizeOptionValue(trimmed));
   }
 
   deleteSavedOption(optionId: string) {

@@ -69,6 +69,7 @@ const api: ElectronApi = {
 
   getSettingsPayload: () => ipcRenderer.invoke("settings:getPayload"),
   saveSettings: (input) => ipcRenderer.invoke("settings:save", input),
+  rememberSavedOption: (type, value) => ipcRenderer.invoke("settings:rememberSavedOption", type, value),
   deleteSavedOption: (optionId) => ipcRenderer.invoke("settings:deleteSavedOption", optionId),
 
   getTemplates: () => ipcRenderer.invoke("templates:list"),

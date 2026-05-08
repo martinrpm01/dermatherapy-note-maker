@@ -1652,6 +1652,25 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     showToast("Removed from list.");
   }
 
+  async function rememberPhysicianOption() {
+    if (!appClient || !settingsPayload) return;
+    const supervisingPhysician = settingsPayload.settings.supervisingPhysician.trim();
+    if (!supervisingPhysician) {
+      showToast("Enter a physician name first.");
+      return;
+    }
+
+    await appClient.saveSettings({
+      ...settingsPayload.settings,
+      supervisingPhysician
+    });
+    await appClient.rememberSavedOption("physician", supervisingPhysician);
+    const nextPayload = await appClient.getSettingsPayload();
+    setSettingsPayload(nextPayload);
+    setBoot((current) => (current ? { ...current, settings: nextPayload.settings } : current));
+    showToast("Physician added.");
+  }
+
   async function saveTemplateDraft() {
     const selected = templates.find((template) => template.id === selectedTemplateId);
     if (!selected) return;
@@ -2310,6 +2329,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
             onSave={() => void saveSettingsForm()}
             onSubmitPin={() => void submitPinChange()}
             onLockApp={() => void lockApp()}
+            onRememberPhysician={() => void rememberPhysicianOption()}
             onDeleteSavedOption={(optionId) => void deleteSavedOption(optionId)}
             onLogoSelected={(file) => {
               void startLogoCrop(file, "settings");

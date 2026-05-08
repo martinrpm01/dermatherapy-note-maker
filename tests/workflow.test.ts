@@ -1708,9 +1708,9 @@ describe("RadiationNoteService workflow", () => {
     const initialPayload = service.getSettingsPayload();
     service.saveSettings({
       ...initialPayload.settings,
-      supervisingPhysician: "Avery Bennett, M.D.",
-      rememberSupervisingPhysician: true
+      supervisingPhysician: "Avery Bennett, M.D."
     });
+    service.rememberSavedOption("physician", "Avery Bennett, M.D.");
 
     const physicianOption = service
       .getSettingsPayload()

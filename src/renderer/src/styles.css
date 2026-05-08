@@ -892,6 +892,17 @@ input.search {
   gap: 0.55rem;
 }
 
+.inline-add-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 2.75rem;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.inline-add-field input {
+  min-width: 0;
+}
+
 .saved-option-row {
   display: flex;
   align-items: center;

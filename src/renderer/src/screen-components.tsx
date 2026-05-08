@@ -3002,6 +3002,7 @@ export function SettingsScreen(props: {
   onLockApp: () => void;
   onLogoSelected: (file: File | undefined) => void;
   onRemoveLogo: () => void;
+  onRememberPhysician: () => void;
   onDeleteSavedOption: (optionId: string) => void;
 }) {
   const resolvedLogoSrc = useResolvedAssetUrl(props.appClient, props.settingsPayload.settings.dermatologyOfficeLogoAsset);
@@ -3067,20 +3068,26 @@ export function SettingsScreen(props: {
           </label>
           <label>
             Supervising Physician Name
-            <input placeholder="e.g. Avery Bennett, M.D." value={props.settingsPayload.settings.supervisingPhysician} onChange={(event) => props.onSettingsChange({ ...props.settingsPayload.settings, supervisingPhysician: event.target.value })} />
-          </label>
-          <label className="checkbox-line">
-            <input
-              type="checkbox"
-              checked={!!props.settingsPayload.settings.rememberSupervisingPhysician}
-              onChange={(event) =>
-                props.onSettingsChange({
-                  ...props.settingsPayload.settings,
-                  rememberSupervisingPhysician: event.target.checked
-                })
-              }
-            />
-            Save to physician list
+            <div className="inline-add-field">
+              <input
+                placeholder="e.g. Avery Bennett, M.D."
+                value={props.settingsPayload.settings.supervisingPhysician}
+                onChange={(event) =>
+                  props.onSettingsChange({
+                    ...props.settingsPayload.settings,
+                    supervisingPhysician: event.target.value
+                  })
+                }
+              />
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Add supervising physician to list"
+                onClick={props.onRememberPhysician}
+              >
+                +
+              </button>
+            </div>
           </label>
           <div className="saved-option-list">
             <span className="strong">Physician List</span>

@@ -2301,16 +2301,26 @@ export class BrowserAppClient implements AppClient {
       removeDermatologyOfficeLogo: undefined
     });
 
-    const supervisingPhysician = input.supervisingPhysician.trim();
-    if (input.rememberSupervisingPhysician && supervisingPhysician) {
-      structuredDataStore.rememberOption("physician", supervisingPhysician, normalizeOptionValue(supervisingPhysician));
-    }
-
     await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
     return {
       ...structuredDataStore.toSettingsView(structuredDataStore.getSettingsRecord()),
       inactivityTimeoutMinutes: 5
     };
+  }
+
+  async rememberSavedOption(
+    type: Parameters<AppClient["rememberSavedOption"]>[0],
+    value: string
+  ) {
+    this.assertUnlocked();
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    const structuredDataStore = await this.getStructuredDataStore();
+    structuredDataStore.rememberOption(type, trimmed, normalizeOptionValue(trimmed));
+    await structuredDataStore.flush();
   }
 
   // fully-portable: removes a remembered option from local settings state.

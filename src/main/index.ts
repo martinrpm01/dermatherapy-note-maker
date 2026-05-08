@@ -345,6 +345,7 @@ function registerIpc() {
 
   ipcMain.handle("settings:getPayload", () => service.getSettingsPayload());
   ipcMain.handle("settings:save", (_, input) => service.saveSettings(input));
+  ipcMain.handle("settings:rememberSavedOption", (_, type, value: string) => service.rememberSavedOption(type, value));
   ipcMain.handle("settings:deleteSavedOption", (_, optionId: string) => service.deleteSavedOption(optionId));
 
   ipcMain.handle("templates:list", () => service.getTemplates());
