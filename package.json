@@ -16,7 +16,7 @@
     "verify:shortcut": "powershell -ExecutionPolicy Bypass -File scripts/verify-start-shortcut.ps1",
     "test": "vitest run",
     "test:watch": "vitest",
-    "extract:templates": "node scripts/extract-source-templates.mjs \"C:\\Users\\cobra\\Downloads\\2026 EBRT Sim & Tx notes\\2026 EBRT Sim & Tx notes\""
+    "extract:templates": "node scripts/extract-source-templates.mjs"
   },
   "build": {
     "appId": "local.dermatherapy.note.maker",

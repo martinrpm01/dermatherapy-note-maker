@@ -11,3 +11,4 @@ AppData/
 test-results/
 
 .vercel
+.claude/settings.local.json

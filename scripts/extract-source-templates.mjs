@@ -54,7 +54,7 @@ async function main() {
     outputPath,
     JSON.stringify(
       {
-        sourceDirectory: sourceDir,
+        sourceDirectory: path.basename(path.resolve(sourceDir)),
         generatedAt: new Date().toISOString(),
         templates
       },

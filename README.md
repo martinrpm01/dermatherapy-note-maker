@@ -132,10 +132,10 @@ Template safety behavior:
 The repo also includes a source-template extraction utility:
 
 ```powershell
-npm run extract:templates
+npm run extract:templates -- path/to/source-templates
 ```
 
-This reads the uploaded `.odt` files and writes a manifest to [docs/source-template-manifest.json](/C:/Users/cobra/Desktop/Doc%20maker/docs/source-template-manifest.json).
+This reads the supplied `.odt` files and writes a manifest to [docs/source-template-manifest.json](docs/source-template-manifest.json).
 
 ## Tech Stack
 
@@ -181,7 +181,7 @@ The app creates its local database automatically on first launch:
 
 ### One-Click Launch
 
-Double-click [Launch ClearSkin Hub.bat](/C:/Users/cobra/Desktop/Doc%20maker/Launch%20ClearSkin%20Hub.bat).
+Double-click [Launch ClearSkin Hub.bat](<Launch ClearSkin Hub.bat>).
 
 It will:
 
@@ -191,7 +191,7 @@ It will:
 
 Desktop shortcut for daily use:
 
-- `C:\Users\cobra\Desktop\ClearSkin Hub.lnk`
+- `%USERPROFILE%\Desktop\ClearSkin Hub.lnk`
 
 Verification command used after app changes:
 
@@ -250,9 +250,9 @@ Recommended local deployment pattern:
 
 - Project/app name: `ClearSkin Hub`
 - App icon sources:
-  - [assets/branding/dermatherapy-icon.ico](/C:/Users/cobra/Desktop/Doc%20maker/assets/branding/dermatherapy-icon.ico)
-  - [assets/branding/dermatherapy-icon.png](/C:/Users/cobra/Desktop/Doc%20maker/assets/branding/dermatherapy-icon.png)
-  - [assets/branding/dermatherapy-logo.png](/C:/Users/cobra/Desktop/Doc%20maker/assets/branding/dermatherapy-logo.png)
+  - [assets/branding/dermatherapy-icon.ico](assets/branding/dermatherapy-icon.ico)
+  - [assets/branding/dermatherapy-icon.png](assets/branding/dermatherapy-icon.png)
+  - [assets/branding/dermatherapy-logo.png](assets/branding/dermatherapy-logo.png)
 
 The provided JPG logo is now used in the packaged Windows app, installer configuration, window icon path, favicon, and in-app sidebar/lock screen branding.
 
@@ -281,22 +281,22 @@ The Vitest suite covers:
 
 Key implementation files:
 
-- [AGENTS.md](/C:/Users/cobra/Desktop/Doc%20maker/AGENTS.md)
-- [package.json](/C:/Users/cobra/Desktop/Doc%20maker/package.json)
-- [electron.vite.config.ts](/C:/Users/cobra/Desktop/Doc%20maker/electron.vite.config.ts)
-- [src/main/index.ts](/C:/Users/cobra/Desktop/Doc%20maker/src/main/index.ts)
-- [src/main/backend.ts](/C:/Users/cobra/Desktop/Doc%20maker/src/main/backend.ts)
-- [src/main/repository.ts](/C:/Users/cobra/Desktop/Doc%20maker/src/main/repository.ts)
-- [src/main/pdf.ts](/C:/Users/cobra/Desktop/Doc%20maker/src/main/pdf.ts)
-- [src/preload/index.ts](/C:/Users/cobra/Desktop/Doc%20maker/src/preload/index.ts)
-- [src/shared/types.ts](/C:/Users/cobra/Desktop/Doc%20maker/src/shared/types.ts)
-- [src/shared/note-rules.ts](/C:/Users/cobra/Desktop/Doc%20maker/src/shared/note-rules.ts)
-- [src/shared/templates.ts](/C:/Users/cobra/Desktop/Doc%20maker/src/shared/templates.ts)
-- [src/shared/template-engine.ts](/C:/Users/cobra/Desktop/Doc%20maker/src/shared/template-engine.ts)
-- [src/renderer/src/App.tsx](/C:/Users/cobra/Desktop/Doc%20maker/src/renderer/src/App.tsx)
-- [src/renderer/src/screen-components.tsx](/C:/Users/cobra/Desktop/Doc%20maker/src/renderer/src/screen-components.tsx)
-- [src/renderer/src/visit-editor-screen.tsx](/C:/Users/cobra/Desktop/Doc%20maker/src/renderer/src/visit-editor-screen.tsx)
-- [src/renderer/src/modal-components.tsx](/C:/Users/cobra/Desktop/Doc%20maker/src/renderer/src/modal-components.tsx)
-- [src/renderer/src/styles.css](/C:/Users/cobra/Desktop/Doc%20maker/src/renderer/src/styles.css)
-- [tests/workflow.test.ts](/C:/Users/cobra/Desktop/Doc%20maker/tests/workflow.test.ts)
-- [scripts/extract-source-templates.mjs](/C:/Users/cobra/Desktop/Doc%20maker/scripts/extract-source-templates.mjs)
+- [AGENTS.md](AGENTS.md)
+- [package.json](package.json)
+- [electron.vite.config.ts](electron.vite.config.ts)
+- [src/main/index.ts](src/main/index.ts)
+- [src/main/backend.ts](src/main/backend.ts)
+- [src/main/repository.ts](src/main/repository.ts)
+- [src/main/pdf.ts](src/main/pdf.ts)
+- [src/preload/index.ts](src/preload/index.ts)
+- [src/shared/types.ts](src/shared/types.ts)
+- [src/shared/note-rules.ts](src/shared/note-rules.ts)
+- [src/shared/templates.ts](src/shared/templates.ts)
+- [src/shared/template-engine.ts](src/shared/template-engine.ts)
+- [src/renderer/src/App.tsx](src/renderer/src/App.tsx)
+- [src/renderer/src/screen-components.tsx](src/renderer/src/screen-components.tsx)
+- [src/renderer/src/visit-editor-screen.tsx](src/renderer/src/visit-editor-screen.tsx)
+- [src/renderer/src/modal-components.tsx](src/renderer/src/modal-components.tsx)
+- [src/renderer/src/styles.css](src/renderer/src/styles.css)
+- [tests/workflow.test.ts](tests/workflow.test.ts)
+- [scripts/extract-source-templates.mjs](scripts/extract-source-templates.mjs)
