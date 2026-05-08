@@ -2141,16 +2141,12 @@ export function DashboardScreen(props: {
                             <button onClick={() => props.onUploadConsentForm(patientId, row.courseId)}>Import Signed Consent</button>
                           </>
                         )}
-                        {scheduledCourseIds.has(row.courseId) ? (
-                          <>
-                            <button onClick={() => props.onPrintCourseSchedule(row.courseId)}>Print Schedule</button>
-                            <button style={{ color: "var(--danger)", borderColor: "var(--danger)" }} onClick={() => void deleteDashboardCourseSchedule(row.courseId)}>
-                              Delete Schedule
-                            </button>
-                          </>
-                        ) : (
-                          <button onClick={() => props.onScheduleCourse(row.courseId)}>Create Schedule</button>
-                        )}
+                        <CourseScheduleMenu
+                          hasSchedule={scheduledCourseIds.has(row.courseId)}
+                          onOpenSchedule={() => props.onScheduleCourse(row.courseId)}
+                          onPrintSchedule={() => props.onPrintCourseSchedule(row.courseId)}
+                          onDeleteSchedule={() => void deleteDashboardCourseSchedule(row.courseId)}
+                        />
                         <button className="primary" onClick={() => props.onEditPendingCourse(patientId, row.courseId, "full")}>
                           Complete Course Setup
                         </button>
@@ -2415,16 +2411,12 @@ export function PatientScreen(props: {
                         <button onClick={() => props.onUploadConsentForm(courseDetail.course.patientId, courseDetail.course.id)}>Import Signed Consent</button>
                       </>
                     )}
-                    {scheduledCourseIds.has(courseDetail.course.id) ? (
-                      <>
-                        <button onClick={() => props.onPrintCourseSchedule(courseDetail.course.id)}>Print Schedule</button>
-                        <button style={{ color: "var(--danger)", borderColor: "var(--danger)" }} onClick={() => void deleteCourseSchedule(courseDetail.course.id)}>
-                          Delete Schedule
-                        </button>
-                      </>
-                    ) : (
-                      <button onClick={() => props.onScheduleCourse(courseDetail.course.id)}>Create Schedule</button>
-                    )}
+                    <CourseScheduleMenu
+                      hasSchedule={scheduledCourseIds.has(courseDetail.course.id)}
+                      onOpenSchedule={() => props.onScheduleCourse(courseDetail.course.id)}
+                      onPrintSchedule={() => props.onPrintCourseSchedule(courseDetail.course.id)}
+                      onDeleteSchedule={() => void deleteCourseSchedule(courseDetail.course.id)}
+                    />
                     <button className="primary" onClick={() => props.onCompleteCourseSetup(courseDetail.course.id)}>
                       Complete Course Setup
                     </button>
