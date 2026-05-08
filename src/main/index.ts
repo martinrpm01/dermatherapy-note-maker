@@ -7,6 +7,14 @@ import type { OpenDialogOptions } from "electron";
 
 import type { AssetReference, LaunchReadyScreen, VisitDraftOptions } from "../shared/types";
 import type { PatientArchiveIoHandle } from "../shared/archive";
+import {
+  DESKTOP_INSTALLER_DOWNLOAD_URL,
+  DESKTOP_RELEASE_API_URL,
+  formatDesktopBuildLabel,
+  getDesktopBuildInfo,
+  isSameDesktopRelease,
+  type AppUpdateCheckResult
+} from "../shared/app-update";
 import type { RadiationNoteRepository } from "./repository";
 import type { RadiationNoteService } from "./backend";
 import { DesktopBinaryAssetStore } from "./storage/desktop-binary-asset-store";
@@ -67,6 +75,19 @@ let mainWindow: BrowserWindow | null = null;
 let repository!: RadiationNoteRepository;
 let service!: RadiationNoteService;
 let assetStore!: DesktopBinaryAssetStore;
+
+type GitHubReleaseAsset = {
+  name?: string;
+  browser_download_url?: string;
+};
+
+type GitHubRelease = {
+  tag_name?: string;
+  name?: string;
+  html_url?: string;
+  published_at?: string;
+  assets?: GitHubReleaseAsset[];
+};
 
 function createWindow() {
   const iconPath = path.join(app.getAppPath(), "assets", "branding", "clear-skin-app-icon.png");
@@ -154,6 +175,72 @@ function appendStartupLog(message: string) {
 
 appendStartupLog("main-process-module-loaded");
 
+function findReleaseAssetDownloadUrl(release: GitHubRelease, assetName: string) {
+  return release.assets?.find((asset) => asset.name === assetName)?.browser_download_url || DESKTOP_INSTALLER_DOWNLOAD_URL;
+}
+
+async function checkForDesktopUpdates(): Promise<AppUpdateCheckResult> {
+  const checkedAt = new Date().toISOString();
+  const currentBuild = getDesktopBuildInfo();
+  const currentVersionLabel = formatDesktopBuildLabel(currentBuild);
+
+  try {
+    const response = await net.fetch(DESKTOP_RELEASE_API_URL, {
+      headers: {
+        Accept: "application/vnd.github+json",
+        "Cache-Control": "no-cache",
+        "User-Agent": "ClearSkin-Hub"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`GitHub returned ${response.status}.`);
+    }
+
+    const release = (await response.json()) as GitHubRelease;
+    const latestTag = release.tag_name?.trim() || "";
+    const latestVersionLabel = latestTag || release.name || "latest desktop release";
+    const downloadUrl = findReleaseAssetDownloadUrl(release, "ClearSkin-Hub-Setup.exe");
+
+    if (isSameDesktopRelease(currentBuild.releaseTag, latestTag)) {
+      return {
+        runtime: "desktop",
+        status: "current",
+        action: "none",
+        currentVersionLabel,
+        latestVersionLabel,
+        message: "This desktop app is up to date.",
+        checkedAt,
+        downloadUrl,
+        releaseUrl: release.html_url
+      };
+    }
+
+    return {
+      runtime: "desktop",
+      status: "available",
+      action: "download",
+      currentVersionLabel,
+      latestVersionLabel,
+      message: "A newer desktop installer is available.",
+      checkedAt,
+      downloadUrl,
+      releaseUrl: release.html_url
+    };
+  } catch {
+    return {
+      runtime: "desktop",
+      status: "unavailable",
+      action: "none",
+      currentVersionLabel,
+      latestVersionLabel: null,
+      message: "Could not check for desktop updates. Try again when the network is available.",
+      checkedAt,
+      downloadUrl: DESKTOP_INSTALLER_DOWNLOAD_URL
+    };
+  }
+}
+
 function registerIpc() {
   ipcMain.handle("app:bootstrap", () => service.bootstrap());
   ipcMain.handle("app:reportReady", (_, screen: LaunchReadyScreen) => {
@@ -167,6 +254,10 @@ function registerIpc() {
     service.resetPinWithRecoveryCode(recoveryCode, nextPin)
   );
   ipcMain.handle("app:wipeAllLocalData", () => service.wipeAllLocalData());
+  ipcMain.handle("app:checkForUpdates", () => checkForDesktopUpdates());
+  ipcMain.handle("app:openUpdateDownload", async () => {
+    await shell.openExternal(DESKTOP_INSTALLER_DOWNLOAD_URL);
+  });
 
   ipcMain.handle("dashboard:getSnapshot", () => service.getDashboardSnapshot());
   ipcMain.handle("schedule:getSnapshot", (_, startDate: string, endDate: string) =>

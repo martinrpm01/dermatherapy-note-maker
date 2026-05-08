@@ -35,6 +35,14 @@ export class ElectronAppClient implements AppClient {
     return this.api.wipeAllLocalData();
   }
 
+  checkForUpdates() {
+    return this.api.checkForUpdates();
+  }
+
+  openUpdateDownload() {
+    return this.api.openUpdateDownload();
+  }
+
   getDashboardSnapshot() {
     return this.api.getDashboardSnapshot();
   }

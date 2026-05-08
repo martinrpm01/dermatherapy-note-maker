@@ -12,6 +12,8 @@ const api: ElectronApi = {
   resetPinWithRecoveryCode: (recoveryCode, nextPin) =>
     ipcRenderer.invoke("app:resetPinWithRecoveryCode", recoveryCode, nextPin),
   wipeAllLocalData: () => ipcRenderer.invoke("app:wipeAllLocalData"),
+  checkForUpdates: () => ipcRenderer.invoke("app:checkForUpdates"),
+  openUpdateDownload: () => ipcRenderer.invoke("app:openUpdateDownload"),
 
   getDashboardSnapshot: () => ipcRenderer.invoke("dashboard:getSnapshot"),
   getScheduleSnapshot: (startDate, endDate) => ipcRenderer.invoke("schedule:getSnapshot", startDate, endDate),

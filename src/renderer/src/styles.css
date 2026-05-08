@@ -1292,6 +1292,16 @@ input.search {
   flex-shrink: 0;
 }
 
+.update-status {
+  margin: 0.7rem 0 0;
+  color: var(--muted);
+}
+
+.update-status.available {
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;

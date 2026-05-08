@@ -66,6 +66,7 @@ import { validateTemplate } from "../../../shared/template-engine";
 import { buildDocumentOnlySyntheticContext } from "../../../shared/document-only";
 import { BrowserBinaryAssetStore } from "../storage/browser-binary-asset-store";
 import { BrowserStructuredDataStore } from "../storage/browser-structured-data-store";
+import { checkBrowserRefreshUpdate } from "../refresh-pulse";
 import brandLogo from "../assets/clear-skin-note-logo.jpg";
 import consentFormTemplateUrl from "../../../../assets/templates/radiation-therapy-consent-form.pdf";
 import simWorksheetTemplateUrl from "../../../../assets/templates/radiation-therapy-sim-worksheet.pdf";
@@ -611,6 +612,14 @@ export class BrowserAppClient implements AppClient {
     await this.binaryAssetStore.wipeAllData();
     this.isLocked = false;
     this.hasBootstrapped = false;
+  }
+
+  async checkForUpdates() {
+    return checkBrowserRefreshUpdate();
+  }
+
+  async openUpdateDownload() {
+    window.location.reload();
   }
 
   // fully-portable: returns the active dashboard snapshot.

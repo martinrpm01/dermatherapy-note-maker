@@ -48,6 +48,7 @@ Build a production-quality, local-first radiation treatment note application for
 - Run the Desktop shortcut launch verification only when changing startup, packaging, Electron shell, or shortcut-related behavior, or when explicitly requested.
 - For user-facing desktop app changes that are pushed to `main`, update the downloadable Windows installer/portable EXE from the same commit before calling the work done. Use the desktop release workflow or a new `desktop-v*` tag, and verify the GitHub release/artifact contains fresh `ClearSkin-Hub-Setup.exe` and `ClearSkin-Hub-Portable.exe`; if this cannot be completed, clearly tell the user the installer is still stale.
 - For every user-facing browser/iPad release, keep the refresh pulse in place by building with `npm run build:browser`; the build emits `refresh-pulse.json`, and open browser sessions use it to show the refresh banner when a newer deployment is live.
+- Keep the Settings update check working for both runtimes: desktop checks the public GitHub latest release and opens the installer download, while browser/iPad checks the refresh pulse and offers a refresh.
 
 ## Forbidden Behaviors
 

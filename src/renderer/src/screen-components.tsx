@@ -11,7 +11,8 @@ import type {
   PatientDetail,
   SettingsPayload,
   TemplateDefinitionRecord,
-  AppSettingsView
+  AppSettingsView,
+  AppUpdateCheckResult
 } from "../../shared/types";
 import { NOTE_TYPE_LABELS, formatBloodPressure, formatDisplayDate, formatHeartRate, formatOxygenSaturation, formatWeight } from "../../shared/note-rules";
 import { useResolvedAssetUrl } from "./asset-url";
@@ -3006,6 +3007,45 @@ export function SettingsScreen(props: {
   const currentLogoSrc = props.settingsPayload.settings.dermatologyOfficeLogoUpload?.dataUrl
     || resolvedLogoSrc
     || props.defaultLogoSrc;
+  const [updateBusy, setUpdateBusy] = useState(false);
+  const [updateCheck, setUpdateCheck] = useState<AppUpdateCheckResult | null>(null);
+
+  async function checkForUpdates() {
+    if (!props.appClient) {
+      return;
+    }
+
+    setUpdateBusy(true);
+    try {
+      setUpdateCheck(await props.appClient.checkForUpdates());
+    } catch {
+      setUpdateCheck({
+        runtime: "browser",
+        status: "unavailable",
+        action: "none",
+        currentVersionLabel: "",
+        latestVersionLabel: null,
+        message: "Could not check for updates. Try again when the network is available.",
+        checkedAt: new Date().toISOString()
+      });
+    } finally {
+      setUpdateBusy(false);
+    }
+  }
+
+  async function runUpdateAction() {
+    if (!props.appClient || !updateCheck || updateCheck.action === "none") {
+      return;
+    }
+
+    if (updateCheck.action === "refresh") {
+      window.location.reload();
+      return;
+    }
+
+    await props.appClient.openUpdateDownload();
+  }
+
   return (
     <section className="screen">
       <div className="screen-header">
@@ -3057,6 +3097,24 @@ export function SettingsScreen(props: {
           <PinInput placeholder="Confirm New PIN" value={props.changePin.confirmPin} onChange={(next) => props.onChangePin({ ...props.changePin, confirmPin: next })} onDone={props.onSubmitPin} />
           <button onClick={props.onSubmitPin}>Update PIN</button>
           <button className="ghost" onClick={props.onLockApp}>Lock App</button>
+        </div>
+        <div className="panel">
+          <h3>Updates</h3>
+          <div className="button-row">
+            <button onClick={() => void checkForUpdates()} disabled={updateBusy || !props.appClient}>
+              {updateBusy ? "Checking..." : "Check for Updates"}
+            </button>
+            {updateCheck && updateCheck.action !== "none" ? (
+              <button className="primary" onClick={() => void runUpdateAction()}>
+                {updateCheck.action === "refresh" ? "Refresh Now" : "Download Installer"}
+              </button>
+            ) : null}
+          </div>
+          {updateCheck ? (
+            <p className={updateCheck.status === "available" ? "update-status available" : "update-status"}>
+              {updateCheck.message}
+            </p>
+          ) : null}
         </div>
       </div>
     </section>

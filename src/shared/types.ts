@@ -5,6 +5,8 @@ import type {
   PatientArchiveReadResult,
   PatientArchiveRestoreResult
 } from "./archive";
+import type { AppUpdateCheckResult } from "./app-update";
+export type { AppUpdateCheckResult } from "./app-update";
 export type CourseType = "one_site" | "two_site" | "consult";
 export type NoteType = "consult_sim" | "first_fraction" | "standard_treatment" | "otv";
 export type PatientStatus = "active" | "archived" | "deleted";
@@ -759,6 +761,8 @@ export interface AppClient {
   openAsset: (asset: AssetReference) => Promise<void>;
   revealPath: (targetPath: string) => Promise<void>;
   openPath: (targetPath: string) => Promise<void>;
+  checkForUpdates: () => Promise<AppUpdateCheckResult>;
+  openUpdateDownload: () => Promise<void>;
 }
 
 export type ElectronApi = AppClient;

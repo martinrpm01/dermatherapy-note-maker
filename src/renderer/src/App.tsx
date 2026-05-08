@@ -43,6 +43,12 @@ import {
 } from "./modal-components";
 import { VisitEditorScreen } from "./visit-editor-screen";
 import { ScheduleScreen, printPatientSchedule } from "./schedule-screen";
+import {
+  canCheckRefreshPulse,
+  fetchLatestRefreshPulse,
+  CURRENT_REFRESH_PULSE,
+  REFRESH_PULSE_CHECK_INTERVAL_MS
+} from "./refresh-pulse";
 import appBrandLogo from "./assets/clear-skin-app-logo.jpg";
 import defaultNoteLogo from "./assets/clear-skin-note-logo.jpg";
 import brandIcon from "./assets/dermatherapy-icon.png";
@@ -162,21 +168,8 @@ type InstallAwareNavigator = Navigator & {
   standalone?: boolean;
 };
 
-type RefreshPulse = {
-  id: string;
-  version: string;
-  commit: string;
-  generatedAt: string;
-};
-
 const DESKTOP_DOWNLOAD_URL =
   "https://github.com/martinrpm01/dermatherapy-note-maker/releases/latest/download/ClearSkin-Hub-Setup.exe";
-const REFRESH_PULSE_URL = "/refresh-pulse.json";
-const REFRESH_PULSE_CHECK_INTERVAL_MS = 60_000;
-const CURRENT_REFRESH_PULSE: RefreshPulse =
-  typeof __CLEARSKIN_REFRESH_PULSE__ === "undefined"
-    ? { id: "desktop", version: "desktop", commit: "desktop", generatedAt: "" }
-    : __CLEARSKIN_REFRESH_PULSE__;
 
 function shouldShowInstallPrompt() {
   if (typeof window === "undefined") {
@@ -217,29 +210,6 @@ function shouldShowDesktopDownloadPrompt() {
   const isMobileBrowser = isAppleTouchDevice || /android|mobile/i.test(userAgent);
 
   return !isMobileBrowser;
-}
-
-function canCheckRefreshPulse() {
-  if (typeof window === "undefined") {
-    return false;
-  }
-  return window.location.protocol === "http:" || window.location.protocol === "https:";
-}
-
-function parseRefreshPulse(value: unknown): RefreshPulse | null {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-
-  const pulse = value as Record<string, unknown>;
-  return typeof pulse.id === "string" && pulse.id.trim()
-    ? {
-        id: pulse.id,
-        version: typeof pulse.version === "string" ? pulse.version : "",
-        commit: typeof pulse.commit === "string" ? pulse.commit : "",
-        generatedAt: typeof pulse.generatedAt === "string" ? pulse.generatedAt : ""
-      }
-    : null;
 }
 
 const RECOVERY_DRAFT_PREFIX = "clearskin:recovery-draft:v1:";
@@ -887,12 +857,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
 
     async function checkRefreshPulse() {
       try {
-        const response = await fetch(`${REFRESH_PULSE_URL}?t=${Date.now()}`, { cache: "no-store" });
-        if (!response.ok) {
-          return;
-        }
-
-        const remotePulse = parseRefreshPulse(await response.json());
+        const remotePulse = await fetchLatestRefreshPulse();
         if (!cancelled && remotePulse && remotePulse.id !== CURRENT_REFRESH_PULSE.id) {
           setUpdateReady(true);
         }

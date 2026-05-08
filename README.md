@@ -250,6 +250,10 @@ Recommended local deployment pattern:
 
 The browser/iPad build emits a same-origin `refresh-pulse.json` file during `npm run build:browser`. Open browser sessions check that file periodically and show the in-app refresh banner when a newer deployment is available, so active users know to refresh before continuing work.
 
+## Update Checks
+
+Settings includes a manual update check. In the desktop app, it compares the installed desktop release tag with the public GitHub latest release and opens the latest Windows installer when an update is available. In the browser/iPad app, it checks the deployed refresh pulse and offers to refresh when the browser shell is behind. Patient records stay in local app data and are not sent during either check.
+
 ## Branding
 
 - Project/app name: `ClearSkin Hub`
