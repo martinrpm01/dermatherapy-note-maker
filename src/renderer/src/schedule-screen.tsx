@@ -34,7 +34,7 @@ const STATUS_OPTIONS: Array<{ value: ScheduleAppointmentStatus; label: string }>
   { value: "cancelled", label: "Cancelled" },
   { value: "rescheduled", label: "Rescheduled" }
 ];
-const FRACTION_PRESETS = [8, 10, 12, 15];
+const FRACTION_PRESETS = [8, 10, 12];
 const DIAGNOSIS_OPTIONS = [
   "Basal Cell Carcinoma",
   "Squamous Cell Carcinoma",
@@ -140,6 +140,14 @@ function buildPatientName(firstName: string, lastName: string, fallback = "") {
     return `${last}, ${first}`;
   }
   return last || first || fallback.trim();
+}
+
+function getFractionSelection(value: string) {
+  const count = Number(value);
+  if (!value || !Number.isFinite(count) || count <= 0) {
+    return "";
+  }
+  return FRACTION_PRESETS.includes(count) ? `${count}` : "other";
 }
 
 function normalizeMatchValue(value: string) {
@@ -589,7 +597,7 @@ function getTreatmentAppointmentCount(form: AppointmentFormState, linkedCourse: 
   if (linkedFractions) {
     return Math.max(1, linkedFractions - startNumber + 1);
   }
-  return Math.max(1, Number(form.recurringCount) || 1);
+  return Math.max(0, Number(form.recurringCount) || 0);
 }
 
 function appointmentToForm(appointment: ScheduleAppointmentRecord): AppointmentFormState {
@@ -893,15 +901,19 @@ export function ScheduleScreen(props: {
       window.alert("Choose a course before saving.");
       return;
     }
+    const linkedCourse = snapshot?.activeCourses.find((course) => course.courseId === appointmentForm.courseId) ?? null;
     const isRecurringTreatment = appointmentForm.appointmentType === "treatment" && appointmentForm.recurring;
     if (isRecurringTreatment && appointmentForm.recurringWeekdays.length === 0) {
       window.alert("Choose at least one recurring day.");
       return;
     }
+    if (isRecurringTreatment && getTreatmentAppointmentCount(appointmentForm, linkedCourse) < 1) {
+      window.alert("Choose recurring fractions before saving.");
+      return;
+    }
 
     setBusy(true);
     try {
-      const linkedCourse = snapshot?.activeCourses.find((course) => course.courseId === appointmentForm.courseId) ?? null;
       const total = isRecurringTreatment ? getTreatmentAppointmentCount(appointmentForm, linkedCourse) : 1;
       const linkedFractions = linkedCourse?.prescribedFractions && linkedCourse.prescribedFractions > 0 ? linkedCourse.prescribedFractions : null;
       const existingNumber = Number(appointmentForm.appointmentNumber) || null;
@@ -1445,6 +1457,11 @@ export function ScheduleScreen(props: {
     );
   }
 
+  const appointmentLinkedCourse = appointmentForm?.courseId
+    ? snapshot?.activeCourses.find((course) => course.courseId === appointmentForm.courseId) ?? null
+    : null;
+  const recurringFractionSelection = appointmentForm ? getFractionSelection(appointmentForm.recurringCount) : "";
+
   return (
     <section className="stack schedule-screen">
       <div className="section-header">
@@ -1667,14 +1684,18 @@ export function ScheduleScreen(props: {
                 Source
                 <select
                   value={appointmentForm.source}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const nextSource = event.target.value as AppointmentFormState["source"];
                     setAppointmentForm({
                       ...appointmentForm,
-                      source: event.target.value as AppointmentFormState["source"],
+                      source: nextSource,
                       courseId: "",
-                      patientId: null
-                    })
-                  }
+                      patientId: null,
+                      recurring: nextSource === "manual" ? false : appointmentForm.recurring,
+                      recurringCount: nextSource === "manual" ? "" : appointmentForm.recurringCount,
+                      recurringWeekdays: nextSource === "manual" ? [] : appointmentForm.recurringWeekdays
+                    });
+                  }}
                 >
                   <option value="manual">Manual patient</option>
                   <option value="linked">Active course</option>
@@ -1692,7 +1713,7 @@ export function ScheduleScreen(props: {
                     ))}
                   </select>
                 </label>
-              ) : appointmentForm.appointmentType === "sim_consult" ? (
+              ) : (
                 <>
                   <label className="field">
                     First Name
@@ -1708,41 +1729,37 @@ export function ScheduleScreen(props: {
                       onChange={(event) => setAppointmentForm({ ...appointmentForm, patientLastName: event.target.value })}
                     />
                   </label>
-                  <label className="field">
-                    MRN
-                    <input
-                      value={appointmentForm.patientMrn}
-                      onChange={(event) => setAppointmentForm({ ...appointmentForm, patientMrn: event.target.value })}
-                    />
-                  </label>
-                  <label className="field">
-                    DOB
-                    <DobInput
-                      value={appointmentForm.patientDob}
-                      onChange={(value) => setAppointmentForm({ ...appointmentForm, patientDob: value })}
-                    />
-                  </label>
-                  <label className="field">
-                    Sex
-                    <select
-                      value={appointmentForm.patientSex}
-                      onChange={(event) => setAppointmentForm({ ...appointmentForm, patientSex: event.target.value })}
-                    >
-                      <option value="">Select</option>
-                      <option value="Female">Female</option>
-                      <option value="Male">Male</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </label>
+                  {appointmentForm.appointmentType === "sim_consult" ? (
+                    <>
+                      <label className="field">
+                        MRN
+                        <input
+                          value={appointmentForm.patientMrn}
+                          onChange={(event) => setAppointmentForm({ ...appointmentForm, patientMrn: event.target.value })}
+                        />
+                      </label>
+                      <label className="field">
+                        DOB
+                        <DobInput
+                          value={appointmentForm.patientDob}
+                          onChange={(value) => setAppointmentForm({ ...appointmentForm, patientDob: value })}
+                        />
+                      </label>
+                      <label className="field">
+                        Sex
+                        <select
+                          value={appointmentForm.patientSex}
+                          onChange={(event) => setAppointmentForm({ ...appointmentForm, patientSex: event.target.value })}
+                        >
+                          <option value="">Select</option>
+                          <option value="Female">Female</option>
+                          <option value="Male">Male</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </label>
+                    </>
+                  ) : null}
                 </>
-              ) : (
-                <label className="field wide">
-                  Patient Name
-                  <input
-                    value={appointmentForm.patientName}
-                    onChange={(event) => setAppointmentForm({ ...appointmentForm, patientName: event.target.value })}
-                  />
-                </label>
               )}
               <label className="field">
                 Appointment Type
@@ -1759,13 +1776,13 @@ export function ScheduleScreen(props: {
                           : "";
                     const nextRecurring =
                       appointmentType === "treatment"
-                        ? appointmentForm.recurring || Boolean(linkedCourse)
+                        ? Boolean(linkedCourse)
                         : false;
                     const nextRecurringCount =
                       appointmentType === "treatment" && linkedCourse
                         ? `${Math.max(1, linkedCourse.prescribedFractions - (linkedCourse.suggestedTreatmentNumber ?? 1) + 1)}`
                         : appointmentType === "treatment"
-                          ? appointmentForm.recurringCount
+                          ? ""
                           : "1";
                     setAppointmentForm({
                       ...appointmentForm,
@@ -1950,22 +1967,74 @@ export function ScheduleScreen(props: {
             ) : null}
 
             {!appointmentForm.id && appointmentForm.appointmentType === "treatment" ? (
-              <div className="panel schedule-subpanel">
+              <div className={appointmentForm.recurring ? "panel schedule-subpanel" : "schedule-recurring-toggle"}>
                 <label className="checkbox-line">
                   <input
                     type="checkbox"
                     checked={appointmentForm.recurring}
-                    onChange={(event) => setAppointmentForm({ ...appointmentForm, recurring: event.target.checked })}
+                    onChange={(event) =>
+                      setAppointmentForm({
+                        ...appointmentForm,
+                        recurring: event.target.checked,
+                        recurringCount: event.target.checked
+                          ? appointmentLinkedCourse
+                            ? appointmentForm.recurringCount
+                            : ""
+                          : appointmentLinkedCourse
+                            ? appointmentForm.recurringCount
+                            : "",
+                        recurringWeekdays: event.target.checked ? appointmentForm.recurringWeekdays : []
+                      })
+                    }
                   />
                   Recurring treatment appointments
                 </label>
                 {appointmentForm.recurring ? (
                   <>
+                    {!appointmentLinkedCourse ? (
+                      <div className="form-grid recurring-fractions-grid">
+                        <label className="field">
+                          Recurring Fractions
+                          <select
+                            value={recurringFractionSelection}
+                            onChange={(event) => {
+                              const selection = event.target.value;
+                              setAppointmentForm({
+                                ...appointmentForm,
+                                recurringCount:
+                                  selection === "other"
+                                    ? recurringFractionSelection === "other" ? appointmentForm.recurringCount : "1"
+                                    : selection
+                              });
+                            }}
+                          >
+                            <option value="">Select Fractions</option>
+                            {FRACTION_PRESETS.map((option) => (
+                              <option key={option} value={option}>
+                                {option}
+                              </option>
+                            ))}
+                            <option value="other">Other</option>
+                          </select>
+                        </label>
+                        {recurringFractionSelection === "other" ? (
+                          <label className="field">
+                            Actual Recurring Fractions
+                            <NumericInput
+                              placeholder="Enter fractions"
+                              value={appointmentForm.recurringCount}
+                              onChange={(value) => setAppointmentForm({ ...appointmentForm, recurringCount: value })}
+                            />
+                          </label>
+                        ) : null}
+                      </div>
+                    ) : null}
                     <p className="muted" style={{ margin: 0 }}>
-                      {getTreatmentAppointmentCount(
-                        appointmentForm,
-                        snapshot?.activeCourses.find((course) => course.courseId === appointmentForm.courseId) ?? null
-                      )} treatment appointments will be created from the projected fractions.
+                      {getTreatmentAppointmentCount(appointmentForm, appointmentLinkedCourse) > 0
+                        ? `${getTreatmentAppointmentCount(appointmentForm, appointmentLinkedCourse)} treatment appointments will be created from the ${
+                            appointmentLinkedCourse ? "course prescription" : "recurring fractions"
+                          }.`
+                        : "Choose recurring fractions and weekdays to create the treatment series."}
                     </p>
                     <div className="weekday-picker">
                       {WEEKDAY_OPTIONS.map((day) => (

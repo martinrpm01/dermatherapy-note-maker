@@ -2191,6 +2191,10 @@ input.search {
   margin-top: 0.85rem;
 }
 
+.schedule-recurring-toggle {
+  margin-top: 0.85rem;
+}
+
 .checkbox-line {
   display: flex;
   align-items: center;

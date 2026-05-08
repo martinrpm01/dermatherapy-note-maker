@@ -30,7 +30,7 @@ import type {
 } from "../../shared/types";
 import { CalendarDateInput, DobInput, LesionSizeInput, NumericInput } from "./screen-components";
 
-const FRACTION_PRESETS = [8, 10, 12, 15];
+const FRACTION_PRESETS = [8, 10, 12];
 const DEPTH_OPTIONS = ["3", "4", "5"];
 const CONE_SIZE_OPTIONS = ["10mm", "20mm", "35mm", "50mm"] as const;
 const CUTOUT_SIZE_OPTIONS = [

@@ -13,7 +13,7 @@ import {
 import { useResolvedAssetUrl } from "./asset-url";
 import { BloodPressureInput, CalendarDateInput, HeartRateInput, NumericInput, OxygenSaturationInput, VisitDateInput, WeightInput } from "./screen-components";
 
-const STANDARD_PRESCRIBED_FRACTION_OPTIONS = [8, 10, 12, 15] as const;
+const STANDARD_PRESCRIBED_FRACTION_OPTIONS = [8, 10, 12] as const;
 
 function getFractionSelectionFromValue(value: number | null | undefined, options: readonly number[]) {
   if (!(typeof value === "number" && value > 0)) {
