@@ -1268,6 +1268,20 @@ describe("RadiationNoteService workflow", () => {
     expect(savedTwoSiteOtv.generatedText).toContain("Custom two-site OTV wording for today.");
   });
 
+  it("recalculates OTV dose text from the selected treatment number when jumping ahead", async () => {
+    const { course } = await createPatientAndCourse();
+    const draft = service.buildVisitDraft(course.id, "next_treatment");
+    draft.note.treatmentNumber = 5;
+    draft.note.noteType = "otv";
+
+    const saved = service.saveVisit(draft.note);
+
+    expect(saved.generatedText).toContain(
+      "Patient evaluated today during the current course of radiation therapy for BCC of the Bridge of nose. Current dose reviewed 1400/4200 cGy in 5 of 15 fractions."
+    );
+    expect(saved.generatedText).not.toContain("Current dose reviewed 280/4200 cGy in 1 of 15 fractions.");
+  });
+
   it("only renders final treatment wording on the prescribed final treatment", async () => {
     const { course } = await createPatientAndCourse();
     const earlyDraft = service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 14 });

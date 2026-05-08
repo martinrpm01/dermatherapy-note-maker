@@ -399,7 +399,7 @@ export class BrowserAppClient implements AppClient {
         examComment:
           visit.noteType === "otv"
             ? !visit.structuredFields.examComment?.trim() || isLegacyDefaultOtvNote(visit.structuredFields.examComment)
-              ? getDefaultOtvNote(resolvedSiteSnapshots)
+              ? getDefaultOtvNote(resolvedSiteSnapshots, visit.treatmentNumber)
               : visit.structuredFields.examComment
             : visit.structuredFields.examComment ?? "",
         physicsComment:
@@ -1362,7 +1362,7 @@ export class BrowserAppClient implements AppClient {
         structuredFields.finalTreatment = isFinalTreatmentEligible(treatmentNumber, finalTreatmentFraction);
       }
       if (noteType === "otv") {
-        structuredFields.examComment = getDefaultOtvNote(structuredFields.siteSnapshots);
+        structuredFields.examComment = getDefaultOtvNote(structuredFields.siteSnapshots, treatmentNumber);
       }
 
       const note: VisitInput = {
@@ -1517,7 +1517,7 @@ export class BrowserAppClient implements AppClient {
       examComment:
         input.noteType === "otv"
           ? !input.structuredFields.examComment?.trim() || isLegacyDefaultOtvNote(input.structuredFields.examComment)
-            ? getDefaultOtvNote(normalizedSiteSnapshots)
+            ? getDefaultOtvNote(normalizedSiteSnapshots, input.treatmentNumber)
             : input.structuredFields.examComment
           : input.structuredFields.examComment ?? "",
       physicsComment:

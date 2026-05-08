@@ -289,6 +289,13 @@ const showProjectedFractionsInput = false;
                         ? current.course.prescribedFractions
                         : getMaxSitePrescribedFractions(current.note.structuredFields.siteSnapshots);
                     const nextNoteType = num !== null ? getSuggestedNoteType(num) : current.note.noteType;
+                    const nextSiteSnapshots = current.note.structuredFields.siteSnapshots.map((site) =>
+                      applyAutomaticDoseValuesToSiteSnapshot(
+                        { ...site, doseManuallyAdjusted: Boolean(site.doseManuallyAdjusted) },
+                        num,
+                        site.prescribedFractions ?? undefined
+                      )
+                    );
                     return {
                       ...current,
                       note: {
@@ -305,16 +312,10 @@ const showProjectedFractionsInput = false;
                             nextNoteType === "otv"
                               ? !current.note.structuredFields.examComment?.trim() ||
                                 isLegacyDefaultOtvNote(current.note.structuredFields.examComment)
-                                ? getDefaultOtvNote(current.note.structuredFields.siteSnapshots)
+                                ? getDefaultOtvNote(nextSiteSnapshots, num)
                                 : current.note.structuredFields.examComment
                               : current.note.structuredFields.examComment,
-                          siteSnapshots: current.note.structuredFields.siteSnapshots.map((site) =>
-                            applyAutomaticDoseValuesToSiteSnapshot(
-                              { ...site, doseManuallyAdjusted: Boolean(site.doseManuallyAdjusted) },
-                              num,
-                              site.prescribedFractions ?? undefined
-                            )
-                          )
+                          siteSnapshots: nextSiteSnapshots
                         }
                       }
                     };
@@ -915,7 +916,10 @@ const showProjectedFractionsInput = false;
                             examComment: event.target.checked
                               ? !current.note.structuredFields.examComment?.trim() ||
                                 isLegacyDefaultOtvNote(current.note.structuredFields.examComment)
-                                ? getDefaultOtvNote(current.note.structuredFields.siteSnapshots)
+                                ? getDefaultOtvNote(
+                                    current.note.structuredFields.siteSnapshots,
+                                    current.note.treatmentNumber
+                                  )
                                 : current.note.structuredFields.examComment
                               : current.note.structuredFields.examComment,
                             physicsComment: event.target.checked

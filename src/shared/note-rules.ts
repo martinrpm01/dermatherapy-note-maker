@@ -685,7 +685,7 @@ export function getDefaultPhysicsComment(noteType: NoteType): string {
     : "";
 }
 
-export function getDefaultOtvNote(siteSnapshots: SiteSnapshot[]): string {
+export function getDefaultOtvNote(siteSnapshots: SiteSnapshot[], treatmentNumber?: number | null): string {
   const siteDescriptions = siteSnapshots.map((site) => {
     const location = site.treatmentLocationText || site.bodyLocation || `Lesion ${site.siteNumber}`;
     return `${formatDiagnosisForOtv(site.diagnosisText)} of the ${location}`;
@@ -693,15 +693,18 @@ export function getDefaultOtvNote(siteSnapshots: SiteSnapshot[]): string {
   const combinedSiteLabel = joinClinicalList(siteDescriptions, "the treatment site");
   const doseSummaries = siteSnapshots
     .map((site) => {
-      const currentDose = site.cumulativeDose;
+      const currentDose =
+        typeof treatmentNumber === "number" && treatmentNumber > 0 && site.dailyDose
+          ? calculateCumulativeDose(site.dailyDose, treatmentNumber)
+          : site.cumulativeDose;
       const totalDose = site.totalDose;
       const prescribedFractions = site.prescribedFractions;
       if (!currentDose || !totalDose || !prescribedFractions || !site.dailyDose) {
         return "";
       }
 
-      const treatmentNumber = Math.max(1, Math.round(currentDose / site.dailyDose));
-      return `${currentDose}/${totalDose} cGy in ${treatmentNumber} of ${prescribedFractions} fractions`;
+      const resolvedTreatmentNumber = Math.max(1, Math.round(currentDose / site.dailyDose));
+      return `${currentDose}/${totalDose} cGy in ${resolvedTreatmentNumber} of ${prescribedFractions} fractions`;
     })
     .filter(Boolean);
   const doseText = doseSummaries.length

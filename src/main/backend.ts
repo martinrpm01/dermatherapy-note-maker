@@ -1075,7 +1075,7 @@ export class RadiationNoteService {
         structuredFields.finalTreatment = isFinalTreatmentEligible(treatmentNumber, finalTreatmentFraction);
       }
       if (noteType === "otv") {
-        structuredFields.examComment = getDefaultOtvNote(structuredFields.siteSnapshots);
+        structuredFields.examComment = getDefaultOtvNote(structuredFields.siteSnapshots, treatmentNumber);
       }
 
       const note: VisitInput = {
@@ -1221,7 +1221,7 @@ export class RadiationNoteService {
         examComment:
           input.noteType === "otv"
             ? !input.structuredFields.examComment?.trim() || isLegacyDefaultOtvNote(input.structuredFields.examComment)
-              ? getDefaultOtvNote(normalizedSiteSnapshots)
+              ? getDefaultOtvNote(normalizedSiteSnapshots, input.treatmentNumber)
               : input.structuredFields.examComment
             : input.structuredFields.examComment ?? "",
         physicsComment:
@@ -2114,7 +2114,7 @@ export class RadiationNoteService {
           examComment:
             visit.noteType === "otv"
               ? !visit.structuredFields.examComment?.trim() || isLegacyDefaultOtvNote(visit.structuredFields.examComment)
-                ? getDefaultOtvNote(resolvedSiteSnapshots)
+                ? getDefaultOtvNote(resolvedSiteSnapshots, visit.treatmentNumber)
                 : visit.structuredFields.examComment
               : visit.structuredFields.examComment ?? "",
           mipsNote: visit.structuredFields.mipsNote?.trim() || getDefaultMipsNote(),
