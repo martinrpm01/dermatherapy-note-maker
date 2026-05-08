@@ -28,7 +28,7 @@ jobs:
         run: npm ci
 
       - name: Build desktop package
-        run: npm run package
+        run: npm run package -- --publish=never
 
       - name: Create stable download filenames
         shell: pwsh
