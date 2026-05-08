@@ -246,6 +246,10 @@ Recommended local deployment pattern:
 4. launch and create the local site PIN
 5. use the app with local-only patient data on that machine
 
+## Browser Refresh Notice
+
+The browser/iPad build emits a same-origin `refresh-pulse.json` file during `npm run build:browser`. Open browser sessions check that file periodically and show the in-app refresh banner when a newer deployment is available, so active users know to refresh before continuing work.
+
 ## Branding
 
 - Project/app name: `ClearSkin Hub`

@@ -1,6 +1,26 @@
 {
   "buildCommand": "npm run build:browser",
   "outputDirectory": "out-browser",
+  "headers": [
+    {
+      "source": "/refresh-pulse.json",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, max-age=0"
+        }
+      ]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    }
+  ],
   "rewrites": [
     {
       "source": "/(.*)",

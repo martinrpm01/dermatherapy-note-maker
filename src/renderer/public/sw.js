@@ -1,4 +1,5 @@
-const CACHE_NAME = "clearskin-hub-v6";
+const CACHE_NAME = "clearskin-hub-v7";
+const REFRESH_PULSE_URL = "/refresh-pulse.json";
 
 // Bump CACHE_NAME when a deployment should invalidate previously cached shell files.
 const PRECACHE_URLS = ["/index.browser.html", "/manifest.json", "/icon-192.png", "/icon-512.png"];
@@ -8,6 +9,10 @@ function isSameOriginRequest(url) {
 }
 
 function isStaticAssetRequest(url) {
+  if (url.pathname === REFRESH_PULSE_URL) {
+    return false;
+  }
+
   return (
     url.pathname.startsWith("/assets/") ||
     /\.(?:js|css|png|jpg|jpeg|svg|webp|gif|ico|json)$/i.test(url.pathname)
@@ -43,6 +48,11 @@ self.addEventListener("fetch", (event) => {
 
   const requestUrl = new URL(request.url);
   if (!isSameOriginRequest(requestUrl)) {
+    return;
+  }
+
+  if (requestUrl.pathname === REFRESH_PULSE_URL) {
+    event.respondWith(fetch(request, { cache: "no-store" }));
     return;
   }
 
