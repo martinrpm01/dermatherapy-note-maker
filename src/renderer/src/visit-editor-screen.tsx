@@ -4,9 +4,11 @@ import {
   applyAutomaticDoseValuesToSiteSnapshot,
   NOTE_TYPE_LABELS,
   formatBloodPressure,
+  getDefaultOtvNote,
   getDefaultPhysicsComment,
   getMaxSitePrescribedFractions,
   getSuggestedNoteType,
+  isFinalTreatmentEligible,
   isOtvTreatmentNumber,
   shouldIncludeExamVitals
 } from "../../shared/note-rules";
@@ -98,6 +100,27 @@ const showProjectedFractionsInput = false;
   const isTwoLesionLayout = editor.note.structuredFields.siteSnapshots.length > 1;
   const sortedSiteSnapshots = [...editor.note.structuredFields.siteSnapshots].sort(
     (left, right) => left.siteNumber - right.siteNumber
+  );
+  const finalTreatmentFraction =
+    editor.course.prescribedFractions > 0
+      ? editor.course.prescribedFractions
+      : getMaxSitePrescribedFractions(editor.note.structuredFields.siteSnapshots);
+  const finalTreatmentEligible =
+    editor.note.noteType !== "consult_sim" &&
+    isFinalTreatmentEligible(editor.note.treatmentNumber, finalTreatmentFraction);
+  const physicianOptionValues = Array.from(
+    new Map(
+      [
+        props.settingsPayload?.settings.supervisingPhysician,
+        ...(props.settingsPayload?.savedOptions
+          .filter((option) => option.type === "physician")
+          .map((option) => option.value) ?? []),
+        editor.note.structuredFields.supervisedBy
+      ]
+        .map((value) => (value ?? "").trim())
+        .filter(Boolean)
+        .map((value) => [value.toLowerCase(), value] as const)
+    ).values()
   );
   const formatFractionLabel = (prefix: string, siteNumber: 1 | 2, bodyLocation: string, index: number) =>
     isTwoLesionLayout
@@ -256,24 +279,39 @@ const showProjectedFractionsInput = false;
                 Treatment Number
                 <NumericInput value={editor.note.treatmentNumber ?? ""} onChange={(value) => {
                   const num = value ? Number(value) : null;
-                  props.onUpdate((current) => ({
-                    ...current,
-                    note: {
-                      ...current.note,
-                      treatmentNumber: num,
-                      noteType: num !== null ? getSuggestedNoteType(num) : current.note.noteType,
-                      structuredFields: {
-                        ...current.note.structuredFields,
-                        siteSnapshots: current.note.structuredFields.siteSnapshots.map((site) =>
-                          applyAutomaticDoseValuesToSiteSnapshot(
-                            { ...site, doseManuallyAdjusted: Boolean(site.doseManuallyAdjusted) },
-                            num,
-                            site.prescribedFractions ?? undefined
+                  props.onUpdate((current) => {
+                    const nextFinalTreatmentFraction =
+                      current.course.prescribedFractions > 0
+                        ? current.course.prescribedFractions
+                        : getMaxSitePrescribedFractions(current.note.structuredFields.siteSnapshots);
+                    const nextNoteType = num !== null ? getSuggestedNoteType(num) : current.note.noteType;
+                    return {
+                      ...current,
+                      note: {
+                        ...current.note,
+                        treatmentNumber: num,
+                        noteType: nextNoteType,
+                        structuredFields: {
+                          ...current.note.structuredFields,
+                          finalTreatment:
+                            current.note.structuredFields.finalTreatment &&
+                            isFinalTreatmentEligible(num, nextFinalTreatmentFraction),
+                          examComment:
+                            nextNoteType === "otv"
+                              ? current.note.structuredFields.examComment?.trim() ||
+                                getDefaultOtvNote(current.note.structuredFields.siteSnapshots)
+                              : current.note.structuredFields.examComment,
+                          siteSnapshots: current.note.structuredFields.siteSnapshots.map((site) =>
+                            applyAutomaticDoseValuesToSiteSnapshot(
+                              { ...site, doseManuallyAdjusted: Boolean(site.doseManuallyAdjusted) },
+                              num,
+                              site.prescribedFractions ?? undefined
+                            )
                           )
-                        )
+                        }
                       }
-                    }
-                  }), { regenerate: true, overwriteEdited: !props.textDirty });
+                    };
+                  }, { regenerate: true, overwriteEdited: !props.textDirty });
                 }} />
               </label>
             )}
@@ -504,6 +542,34 @@ const showProjectedFractionsInput = false;
                 <input value={editor.note.therapistName} list="therapists" onChange={(event) => props.onUpdate((current) => ({ ...current, note: { ...current.note, therapistName: event.target.value } }), { regenerate: true, overwriteEdited: !props.textDirty })} />
               </label>
             ) : null}
+            <label>
+              Supervising Physician
+              <select
+                value={editor.note.structuredFields.supervisedBy ?? ""}
+                onChange={(event) =>
+                  props.onUpdate(
+                    (current) => ({
+                      ...current,
+                      note: {
+                        ...current.note,
+                        structuredFields: {
+                          ...current.note.structuredFields,
+                          supervisedBy: event.target.value
+                        }
+                      }
+                    }),
+                    { regenerate: true, overwriteEdited: !props.textDirty }
+                  )
+                }
+              >
+                <option value="">Select Physician</option>
+                {physicianOptionValues.map((physician) => (
+                  <option key={physician} value={physician}>
+                    {physician}
+                  </option>
+                ))}
+              </select>
+            </label>
             {editor.note.noteType !== "consult_sim" && (() => {
               const POST_CARE_OPTIONS = [
                 { label: "Aquaphor", value: "Aquaphor was applied to the treated area." },
@@ -553,6 +619,29 @@ const showProjectedFractionsInput = false;
               }
             />
           </label>
+          {editor.note.noteType === "otv" ? (
+            <label>
+              OTV Note
+              <textarea
+                value={editor.note.structuredFields.examComment ?? ""}
+                onChange={(event) =>
+                  props.onUpdate(
+                    (current) => ({
+                      ...current,
+                      note: {
+                        ...current.note,
+                        structuredFields: {
+                          ...current.note.structuredFields,
+                          examComment: event.target.value
+                        }
+                      }
+                    }),
+                    { regenerate: true, overwriteEdited: !props.textDirty }
+                  )
+                }
+              />
+            </label>
+          ) : null}
           {editor.note.noteType === "consult_sim" ? (
             <div className="form-grid">
               {editor.note.structuredFields.siteSnapshots.map((site, index) => (
@@ -740,6 +829,10 @@ const showProjectedFractionsInput = false;
                             noteType: event.target.checked ? "otv" : "standard_treatment",
                             structuredFields: {
                               ...current.note.structuredFields,
+                              examComment: event.target.checked
+                                ? current.note.structuredFields.examComment?.trim() ||
+                                  getDefaultOtvNote(current.note.structuredFields.siteSnapshots)
+                                : current.note.structuredFields.examComment,
                               physicsComment: event.target.checked
                                 ? current.note.structuredFields.physicsComment?.trim() || getDefaultPhysicsComment("otv")
                                 : current.note.structuredFields.physicsComment
@@ -760,7 +853,7 @@ const showProjectedFractionsInput = false;
                 </span>
               </div>
             ) : null}
-            {editor.note.noteType !== "consult_sim" && (
+            {finalTreatmentEligible && (
               <label className="checkbox-label">
                 <input
                   type="checkbox"

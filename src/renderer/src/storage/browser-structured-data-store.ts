@@ -339,6 +339,21 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
 
   rememberOption(type: SavedOptionType, value: string, normalizedValue: string) {
     this.ensureInitialized();
+    const existing = [...this.savedOptions.values()].find(
+      (option) => option.type === type && option.normalizedValue === normalizedValue
+    );
+    if (existing) {
+      const record: SavedOptionRecord = {
+        ...existing,
+        value,
+        active: true,
+        updatedAt: nowIso()
+      };
+      this.savedOptions.set(record.id, record);
+      this.queuePut("savedOptions", record);
+      return;
+    }
+
     const record: SavedOptionRecord = {
       id: makeId("saved-option"),
       type,

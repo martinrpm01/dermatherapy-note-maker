@@ -887,6 +887,32 @@ input.search {
   gap: 0.75rem;
 }
 
+.saved-option-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.saved-option-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.55rem 0.65rem;
+  background: #ffffff;
+}
+
+.icon-button {
+  width: 2.25rem;
+  min-width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .visit-row {
   padding: 0.8rem 0;
   border-top: 1px solid rgba(216, 204, 178, 0.6);

@@ -89,6 +89,18 @@ export function getDoseValuesForFractions(fractions: number | null | undefined) 
   return PRESCRIBED_FRACTION_DOSE_MAP[fractions] ?? null;
 }
 
+export function isFinalTreatmentEligible(
+  treatmentNumber: number | null | undefined,
+  prescribedFractions: number | null | undefined
+): boolean {
+  const safeTreatmentNumber = clampTreatmentNumber(treatmentNumber ?? null);
+  if (safeTreatmentNumber === null || !(typeof prescribedFractions === "number" && prescribedFractions > 0)) {
+    return false;
+  }
+
+  return safeTreatmentNumber === Math.trunc(prescribedFractions);
+}
+
 export function applyAutomaticDoseValuesToSiteSnapshot<
   T extends {
     dailyDose: number;
@@ -673,6 +685,15 @@ export function getDefaultPhysicsComment(noteType: NoteType): string {
     : "";
 }
 
+export function getDefaultOtvNote(siteSnapshots: SiteSnapshot[]): string {
+  const firstSiteLocation = siteSnapshots[0]?.bodyLocation || "treatment site";
+  const secondSiteLocation = siteSnapshots[1]?.bodyLocation || "second treatment site";
+  const combinedSiteLabel =
+    siteSnapshots.length === 2 ? `${firstSiteLocation} and ${secondSiteLocation}` : firstSiteLocation;
+
+  return `Patient evaluated today during the current course of radiation therapy for ${combinedSiteLabel}. Current dose reviewed. Patient reports good tolerance with no pain or new or worsening symptoms. Focused skin exam shows mild expected erythema without breakdown, ulceration, or infection. No changes required; ongoing skin care, anticipated acute effects, and the plan to continue radiation therapy as prescribed were reviewed.`;
+}
+
 export function shouldIncludeExamVitals(noteType: NoteType, includeExamVitals: boolean | undefined): boolean {
   if (noteType !== "consult_sim" && noteType !== "otv") {
     return false;
@@ -722,10 +743,7 @@ export function buildDefaultStructuredFields(
     lastTreatmentDate: defaults.lastTreatmentDate ?? "",
     focusedExam: `An exam was performed including the ${combinedSiteLabel}.`,
     healingDescription: `Appropriately healing biopsy site distributed on the ${combinedSiteLabel}.`,
-    examComment:
-      noteType === "otv"
-        ? "Patient evaluated today during the current course of radiation therapy. Current dose reviewed. Patient reports good tolerance with no pain or new or worsening symptoms. Focused skin exam shows mild expected erythema without breakdown, ulceration, or infection. No changes required; ongoing skin care, anticipated acute effects, and the plan to continue radiation therapy as prescribed were reviewed."
-        : "",
+    examComment: noteType === "otv" ? getDefaultOtvNote(siteSnapshots) : "",
     impressionPlanComments:
       noteType === "consult_sim"
         ? "The patient has decided to proceed with radiation treatment instead of surgery due to concerns with scarring, healing, and closure.\n\nTime was spent by the physician and radiation therapist assessing and managing the patient on the date of the encounter doing the following: preparing to see the patient (eg: review of tests), obtaining and/or reviewing separately obtained history, performing a medically appropriate examination and/or evaluation, counseling and educating the patient/family/caregiver, ordering medications, tests, or procedures, referring and communicating with other health care professionals, documenting clinical information in the electronic or other health record, and care coordination.\n\nThe patient will undergo radiation therapy treatment for non-melanoma skin cancer. A simulation was medically necessary to measure the lesion and to determine the appropriate flex-shield blocking to assure adequate coverage of the target lesion while sparing normal tissue. On today's visit, following informed consent, the treatment field was demarcated, and depth measurements were performed for the radiation therapy treatment plan. Multiple clinical setup photographs were taken which will be used for the development of the prescription and treatment plan. All relevant information specifically regarding this patient's superficial skin lesion will be reviewed by a Board-Certified Radiation Oncologist, who will provide me with an advisory opinion as to treatment dose, number of fractions/ treatments, and treatment depth. I will consider his recommendation, along with all other aspects of this patient's condition, including patient's treatment preference, other comorbidities, and move forward with this patient's care.\n\nThis plan will be the initial intent for treatment. The final approved plan will be determined based on what is clinically acceptable and technically feasible and reflected in the approved prescription."

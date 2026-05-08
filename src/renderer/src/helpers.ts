@@ -10,6 +10,7 @@ import {
   formatVitals,
   getAutoNumberOfBlocks,
   getDefaultPhysicsComment,
+  isFinalTreatmentEligible,
   normalizeVacLokAreaValue,
   normalizeWorksheetDeviceDetailsForSite,
   normalizeVacLokPlacement,
@@ -302,7 +303,9 @@ export function buildVisitPreviewText(
         additionalDevices: formatAdditionalDevicesForSite(site2RenderBase)
       };
 
-  const finalTreatmentSection = buildFinalTreatmentSection(!!note.structuredFields.finalTreatment);
+  const finalTreatmentSection = buildFinalTreatmentSection(
+    !!note.structuredFields.finalTreatment && isFinalTreatmentEligible(note.treatmentNumber, course.prescribedFractions)
+  );
   const mipsSection = buildMipsSection(!!note.structuredFields.addMips);
 
   const renderedText = renderTemplate(template.templateText, {
@@ -324,6 +327,7 @@ export function buildVisitPreviewText(
       prescribedFractions: course.prescribedFractions > 0 ? course.prescribedFractions : ""
     },
     settings: {
+      supervisingPhysician: settings?.supervisingPhysician ?? "",
       dermatologyOfficeName: settings?.dermatologyOfficeName ?? ""
     },
     site1,

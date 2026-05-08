@@ -33,11 +33,13 @@ import {
   formatVitals,
   getAutoNumberOfBlocks,
   getCurrentFraction,
+  getDefaultOtvNote,
   getDefaultPhysicsComment,
   getMaxSitePrescribedFractions,
   getNextTreatmentNumber,
   getSuggestedNoteType,
   getTemplateKey,
+  isFinalTreatmentEligible,
   normalizeVacLokAreaValue,
   refreshVisitSiteSnapshots,
   normalizeWorksheetDeviceDetailsForSite,
@@ -1151,17 +1153,27 @@ export class RadiationNoteService {
       courseSites = this.repository.fetchSites([course.id]);
     }
 
+      const settings = this.repository.getSettingsRecord();
+      const finalTreatmentEligible =
+        input.noteType !== "consult_sim" &&
+        isFinalTreatmentEligible(input.treatmentNumber, course.prescribedFractions);
       const structuredFields = {
         ...input.structuredFields,
           additionalNotes: input.structuredFields.additionalNotes ?? "",
-          finalTreatment: Boolean(input.structuredFields.finalTreatment),
+          finalTreatment: Boolean(input.structuredFields.finalTreatment) && finalTreatmentEligible,
           prescribedFractionsInput,
           projectedFractionsInput,
           biopsyDate: normalizedSiteSnapshots[0]?.biopsyDate || input.structuredFields.biopsyDate || "",
         lastTreatmentDate: input.structuredFields.lastTreatmentDate ?? "",
+        examComment:
+          input.noteType === "otv"
+            ? input.structuredFields.examComment?.trim() || getDefaultOtvNote(normalizedSiteSnapshots)
+            : input.structuredFields.examComment ?? "",
         physicsComment:
           input.structuredFields.physicsComment?.trim() ||
           getDefaultPhysicsComment(input.noteType),
+        supervisedBy:
+          input.structuredFields.supervisedBy?.trim() || settings.supervisingPhysician,
         siteSnapshots: refreshVisitSiteSnapshots(
           input.noteType,
           courseSites.map((site) => ({
@@ -1853,7 +1865,7 @@ export class RadiationNoteService {
     this.assertUnlocked();
     return {
       settings: this.repository.toSettingsView(this.repository.getSettingsRecord()),
-      savedOptions: []
+      savedOptions: this.repository.getSavedOptions()
     };
   }
 
@@ -1889,6 +1901,11 @@ export class RadiationNoteService {
         dermatologyOfficeLogoUpload: undefined,
         removeDermatologyOfficeLogo: undefined
       });
+
+    const supervisingPhysician = input.supervisingPhysician.trim();
+    if (input.rememberSupervisingPhysician && supervisingPhysician) {
+      this.repository.rememberOption("physician", supervisingPhysician, normalizeOptionValue(supervisingPhysician));
+    }
 
     return this.repository.toSettingsView(this.repository.getSettingsRecord());
   }
@@ -1980,6 +1997,10 @@ export class RadiationNoteService {
               site.prescribedFractions ?? null
             )
       );
+      const settings = this.repository.getSettingsRecord();
+      const finalTreatmentEligible =
+        visit.noteType !== "consult_sim" &&
+        isFinalTreatmentEligible(visit.treatmentNumber, course.prescribedFractions);
       const refreshedNote: VisitInput = {
         id: visit.id,
         patientId: visit.patientId,
@@ -1993,7 +2014,7 @@ export class RadiationNoteService {
         structuredFields: {
           ...visit.structuredFields,
           additionalNotes: visit.structuredFields.additionalNotes ?? "",
-          finalTreatment: Boolean(visit.structuredFields.finalTreatment),
+          finalTreatment: Boolean(visit.structuredFields.finalTreatment) && finalTreatmentEligible,
           prescribedFractionsInput:
             visit.structuredFields.prescribedFractionsInput ??
             (visit.noteType !== "consult_sim"
@@ -2012,6 +2033,12 @@ export class RadiationNoteService {
           physicsComment:
             visit.structuredFields.physicsComment?.trim() ||
             getDefaultPhysicsComment(visit.noteType),
+          examComment:
+            visit.noteType === "otv"
+              ? visit.structuredFields.examComment?.trim() || getDefaultOtvNote(resolvedSiteSnapshots)
+              : visit.structuredFields.examComment ?? "",
+          supervisedBy:
+            visit.structuredFields.supervisedBy?.trim() || settings.supervisingPhysician,
           siteSnapshots: resolvedSiteSnapshots
         },
         generatedText: visit.generatedText,
@@ -2146,7 +2173,9 @@ export class RadiationNoteService {
         additionalDevices: formatAdditionalDevicesForSite(site2Base)
       };
 
-    const finalTreatmentSection = buildFinalTreatmentSection(note.structuredFields.finalTreatment);
+    const finalTreatmentSection = buildFinalTreatmentSection(
+      note.structuredFields.finalTreatment && isFinalTreatmentEligible(note.treatmentNumber, course.prescribedFractions)
+    );
     const mipsSection = buildMipsSection(note.structuredFields.addMips);
 
     const renderedText = renderTemplate(template.templateText, {

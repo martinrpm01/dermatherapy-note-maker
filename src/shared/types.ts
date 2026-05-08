@@ -32,6 +32,7 @@ export interface AssetReference {
 }
 export type SavedOptionType =
   | "therapist"
+  | "physician"
   | "body_location"
   | "treatment_location"
   | "machine"
@@ -57,6 +58,7 @@ export interface AppSettingsView {
   appName: string;
   defaultTherapist: string;
   supervisingPhysician: string;
+  rememberSupervisingPhysician?: boolean;
   dermatologyOfficeName: string;
   dermatologyOfficeLogoAsset: AssetReference | null;
   dermatologyOfficeLogoUpload?: StoredAssetUpload | null;

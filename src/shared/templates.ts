@@ -391,7 +391,7 @@ Exam:
 {{structured.focusedExam}}
 
 Exam Comment:
-Patient evaluated today during the current course of radiation therapy for {{site1.diagnosisText}} of the {{site1.bodyLocation}}. Current dose reviewed {{site1.cumulativeDose}}/{{site1.totalDose}} cGy in {{visit.treatmentNumber}} of {{course.prescribedFractions}} fractions. Patient reports good tolerance with no pain or new or worsening symptoms. Focused skin exam shows mild expected erythema without breakdown, ulceration, or infection. No changes required; reviewed ongoing skin care, anticipated acute effects, and the plan to continue radiation therapy as prescribed.
+{{structured.examComment}}
 
 Exam Vitals:
 Blood Pressure: {{vitals.bloodPressure}}

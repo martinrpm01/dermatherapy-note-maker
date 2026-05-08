@@ -1194,6 +1194,87 @@ describe("RadiationNoteService workflow", () => {
     expect(otvDraft.note.generatedText).toContain('See attached Documents within patient chart "Weekly Physics Check".');
   });
 
+  it("uses editable OTV notes for one-site and two-site visits", async () => {
+    const { course } = await createPatientAndCourse();
+    const oneSiteOtvDraft = service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 5 });
+    oneSiteOtvDraft.note.structuredFields.examComment = "Custom one-site OTV wording for today.";
+    const savedOneSiteOtv = service.saveVisit(oneSiteOtvDraft.note);
+    expect(savedOneSiteOtv.generatedText).toContain("Custom one-site OTV wording for today.");
+
+    const patient = service.savePatient({
+      firstName: "Tessa",
+      lastName: "Two",
+      mrn: "MRN-OTV2",
+      dob: "1962-02-14",
+      sex: "Female",
+      notes: ""
+    });
+    const twoSiteCourse = service.saveCourse({
+      patientId: patient.id,
+      courseName: "Two Site OTV Course",
+      courseType: "two_site",
+      prescribedFractions: 10,
+      startDate: "2026-04-01",
+      sites: [
+        {
+          siteNumber: 1,
+          bodyLocation: "Left cheek",
+          treatmentLocationText: "Left cheek",
+          diagnosisText: "Basal cell carcinoma",
+          icd10: "C44.319",
+          numberOfBlocks: 1,
+          lesionSize: "8",
+          treatmentDepth: "3",
+          coneSize: "20",
+          cutoutSize: "10",
+          shields: "",
+          machine: "Xoft Elekta 1200 SPX",
+          energyKv: "50kV",
+          treatmentInterval: "bi-weekly",
+          additionalDevices: "",
+          dailyDose: 400,
+          totalDose: 4000
+        },
+        {
+          siteNumber: 2,
+          bodyLocation: "Right ear",
+          treatmentLocationText: "Right ear",
+          diagnosisText: "Squamous cell carcinoma",
+          icd10: "C44.222",
+          numberOfBlocks: 1,
+          lesionSize: "10",
+          treatmentDepth: "3",
+          coneSize: "20",
+          cutoutSize: "12",
+          shields: "",
+          machine: "Xoft Elekta 1200 SPX",
+          energyKv: "50kV",
+          treatmentInterval: "bi-weekly",
+          additionalDevices: "",
+          dailyDose: 400,
+          totalDose: 4000
+        }
+      ]
+    });
+    const twoSiteOtvDraft = service.buildVisitDraft(twoSiteCourse.id, "next_treatment", undefined, { treatmentNumber: 5 });
+    twoSiteOtvDraft.note.structuredFields.examComment = "Custom two-site OTV wording for today.";
+    const savedTwoSiteOtv = service.saveVisit(twoSiteOtvDraft.note);
+    expect(savedTwoSiteOtv.generatedText).toContain("Custom two-site OTV wording for today.");
+  });
+
+  it("only renders final treatment wording on the prescribed final treatment", async () => {
+    const { course } = await createPatientAndCourse();
+    const earlyDraft = service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 14 });
+    earlyDraft.note.structuredFields.finalTreatment = true;
+    const savedEarly = service.saveVisit(earlyDraft.note);
+    expect(savedEarly.generatedText).not.toContain("Patient successfully completed the prescribed course");
+
+    const finalDraft = service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 15 });
+    finalDraft.note.structuredFields.finalTreatment = true;
+    const savedFinal = service.saveVisit(finalDraft.note);
+    expect(savedFinal.generatedText).toContain("Patient successfully completed the prescribed course");
+  });
+
   it("keeps course-derived values in the live preview when treatment number changes note type", async () => {
     const { patient, course } = await createPatientAndCourse();
     const firstDraft = service.buildVisitDraft(course.id, "next_treatment");
@@ -1621,6 +1702,29 @@ describe("RadiationNoteService workflow", () => {
     const settings = service.getSettingsPayload().settings;
     expect(settings.appName).toBe("ClearSkin Hub");
     expect(settings.defaultTherapist).toBe("Jamie RT(T)");
+  });
+
+  it("saves physician options and uses the selected supervising physician on notes", async () => {
+    const initialPayload = service.getSettingsPayload();
+    service.saveSettings({
+      ...initialPayload.settings,
+      supervisingPhysician: "Avery Bennett, M.D.",
+      rememberSupervisingPhysician: true
+    });
+
+    const physicianOption = service
+      .getSettingsPayload()
+      .savedOptions.find((option) => option.type === "physician" && option.value === "Avery Bennett, M.D.");
+    expect(physicianOption).toBeTruthy();
+
+    const { course } = await createPatientAndCourse();
+    const draft = service.buildVisitDraft(course.id, "next_treatment");
+    draft.note.structuredFields.supervisedBy = "Avery Bennett, M.D.";
+    const saved = service.saveVisit(draft.note);
+    expect(saved.generatedText).toContain("Avery Bennett, M.D. -");
+
+    service.deleteSavedOption(physicianOption!.id);
+    expect(service.getSettingsPayload().savedOptions.some((option) => option.id === physicianOption!.id)).toBe(false);
   });
 
   it("auto-selects note types by treatment number and allows manual override", async () => {

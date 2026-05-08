@@ -1636,10 +1636,20 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
   async function saveSettingsForm() {
     if (!settingsPayload) return;
     if (!appClient) return;
-    const settings = await appClient.saveSettings(settingsPayload.settings);
-    setSettingsPayload((current) => (current ? { ...current, settings } : current));
-    setBoot((current) => (current ? { ...current, settings } : current));
+    await appClient.saveSettings(settingsPayload.settings);
+    const nextPayload = await appClient.getSettingsPayload();
+    setSettingsPayload(nextPayload);
+    setBoot((current) => (current ? { ...current, settings: nextPayload.settings } : current));
     showToast("Settings updated.");
+  }
+
+  async function deleteSavedOption(optionId: string) {
+    if (!appClient) return;
+    await appClient.deleteSavedOption(optionId);
+    const nextPayload = await appClient.getSettingsPayload();
+    setSettingsPayload(nextPayload);
+    setBoot((current) => (current ? { ...current, settings: nextPayload.settings } : current));
+    showToast("Removed from list.");
   }
 
   async function saveTemplateDraft() {
@@ -2300,6 +2310,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
             onSave={() => void saveSettingsForm()}
             onSubmitPin={() => void submitPinChange()}
             onLockApp={() => void lockApp()}
+            onDeleteSavedOption={(optionId) => void deleteSavedOption(optionId)}
             onLogoSelected={(file) => {
               void startLogoCrop(file, "settings");
             }}

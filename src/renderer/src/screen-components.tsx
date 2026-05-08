@@ -3002,6 +3002,7 @@ export function SettingsScreen(props: {
   onLockApp: () => void;
   onLogoSelected: (file: File | undefined) => void;
   onRemoveLogo: () => void;
+  onDeleteSavedOption: (optionId: string) => void;
 }) {
   const resolvedLogoSrc = useResolvedAssetUrl(props.appClient, props.settingsPayload.settings.dermatologyOfficeLogoAsset);
   const currentLogoSrc = props.settingsPayload.settings.dermatologyOfficeLogoUpload?.dataUrl
@@ -3009,6 +3010,7 @@ export function SettingsScreen(props: {
     || props.defaultLogoSrc;
   const [updateBusy, setUpdateBusy] = useState(false);
   const [updateCheck, setUpdateCheck] = useState<AppUpdateCheckResult | null>(null);
+  const savedPhysicians = props.settingsPayload.savedOptions.filter((option) => option.type === "physician");
 
   async function checkForUpdates() {
     if (!props.appClient) {
@@ -3067,6 +3069,39 @@ export function SettingsScreen(props: {
             Supervising Physician Name
             <input placeholder="e.g. Avery Bennett, M.D." value={props.settingsPayload.settings.supervisingPhysician} onChange={(event) => props.onSettingsChange({ ...props.settingsPayload.settings, supervisingPhysician: event.target.value })} />
           </label>
+          <label className="checkbox-line">
+            <input
+              type="checkbox"
+              checked={!!props.settingsPayload.settings.rememberSupervisingPhysician}
+              onChange={(event) =>
+                props.onSettingsChange({
+                  ...props.settingsPayload.settings,
+                  rememberSupervisingPhysician: event.target.checked
+                })
+              }
+            />
+            Save to physician list
+          </label>
+          <div className="saved-option-list">
+            <span className="strong">Physician List</span>
+            {savedPhysicians.length ? (
+              savedPhysicians.map((option) => (
+                <div className="saved-option-row" key={option.id}>
+                  <span>{option.value}</span>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label={`Remove ${option.value}`}
+                    onClick={() => props.onDeleteSavedOption(option.id)}
+                  >
+                    X
+                  </button>
+                </div>
+              ))
+            ) : (
+              <p className="muted">No saved physicians yet.</p>
+            )}
+          </div>
           <label>
             Dermatology Office Name
             <input placeholder="e.g. Northfield Skin Clinic" value={props.settingsPayload.settings.dermatologyOfficeName} onChange={(event) => props.onSettingsChange({ ...props.settingsPayload.settings, dermatologyOfficeName: event.target.value })} />

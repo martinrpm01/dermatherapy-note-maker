@@ -26,11 +26,15 @@ import {
   formatVitals,
   getCurrentFraction,
   getAutoNumberOfBlocks,
+  getDefaultOtvNote,
+  getDefaultPhysicsComment,
   getMaxSitePrescribedFractions,
   getNextTreatmentNumber,
   getSuggestedNoteType,
   getTemplateKey,
+  isFinalTreatmentEligible,
   normalizeVacLokAreaValue,
+  normalizeOptionValue,
   refreshVisitSiteSnapshots,
   normalizeWorksheetDeviceDetailsForSite,
   normalizeVacLokPlacement,
@@ -354,6 +358,10 @@ export class BrowserAppClient implements AppClient {
             site.prescribedFractions ?? null
           )
     );
+    const settings = structuredDataStore.getSettingsRecord();
+    const finalTreatmentEligible =
+      visit.noteType !== "consult_sim" &&
+      isFinalTreatmentEligible(visit.treatmentNumber, course.prescribedFractions);
     const refreshedNote: VisitInput = {
       id: visit.id,
       patientId: visit.patientId,
@@ -367,6 +375,7 @@ export class BrowserAppClient implements AppClient {
       structuredFields: {
         ...visit.structuredFields,
         additionalNotes: visit.structuredFields.additionalNotes ?? "",
+        finalTreatment: Boolean(visit.structuredFields.finalTreatment) && finalTreatmentEligible,
         prescribedFractionsInput:
           visit.structuredFields.prescribedFractionsInput ??
           (visit.noteType !== "consult_sim"
@@ -378,6 +387,15 @@ export class BrowserAppClient implements AppClient {
           (visit.noteType === "consult_sim" ? getMaxSitePrescribedFractions(resolvedSiteSnapshots) : null),
         biopsyDate: visit.structuredFields.biopsyDate || course.startDate || "",
         lastTreatmentDate: visit.structuredFields.lastTreatmentDate ?? course.startDate ?? "",
+        examComment:
+          visit.noteType === "otv"
+            ? visit.structuredFields.examComment?.trim() || getDefaultOtvNote(resolvedSiteSnapshots)
+            : visit.structuredFields.examComment ?? "",
+        physicsComment:
+          visit.structuredFields.physicsComment?.trim() ||
+          getDefaultPhysicsComment(visit.noteType),
+        supervisedBy:
+          visit.structuredFields.supervisedBy?.trim() || settings.supervisingPhysician,
         startRadiationDate:
           visit.noteType === "consult_sim"
             ? scheduleDates.treatmentStartDate ?? visit.structuredFields.startRadiationDate ?? ""
@@ -1442,13 +1460,27 @@ export class BrowserAppClient implements AppClient {
       courseSites = structuredDataStore.fetchSites([course.id]);
     }
 
+    const settings = structuredDataStore.getSettingsRecord();
+    const finalTreatmentEligible =
+      input.noteType !== "consult_sim" &&
+      isFinalTreatmentEligible(input.treatmentNumber, course.prescribedFractions);
       const structuredFields = {
         ...input.structuredFields,
         additionalNotes: input.structuredFields.additionalNotes ?? "",
+        finalTreatment: Boolean(input.structuredFields.finalTreatment) && finalTreatmentEligible,
         prescribedFractionsInput,
         projectedFractionsInput,
         biopsyDate: normalizedSiteSnapshots[0]?.biopsyDate || input.structuredFields.biopsyDate || "",
         lastTreatmentDate: input.structuredFields.lastTreatmentDate ?? "",
+      examComment:
+        input.noteType === "otv"
+          ? input.structuredFields.examComment?.trim() || getDefaultOtvNote(normalizedSiteSnapshots)
+          : input.structuredFields.examComment ?? "",
+      physicsComment:
+        input.structuredFields.physicsComment?.trim() ||
+        getDefaultPhysicsComment(input.noteType),
+      supervisedBy:
+        input.structuredFields.supervisedBy?.trim() || settings.supervisingPhysician,
       siteSnapshots: refreshVisitSiteSnapshots(
         input.noteType,
         courseSites.map((site) => ({
@@ -2223,11 +2255,13 @@ export class BrowserAppClient implements AppClient {
   async getSettingsPayload(): Promise<SettingsPayload> {
     this.assertUnlocked();
     const structuredDataStore = await this.getStructuredDataStore();
+    const settings = {
+      ...structuredDataStore.toSettingsView(structuredDataStore.getSettingsRecord()),
+      inactivityTimeoutMinutes: 5
+    };
+
     return {
-      settings: {
-        ...structuredDataStore.toSettingsView(structuredDataStore.getSettingsRecord()),
-        inactivityTimeoutMinutes: 5
-      },
+      settings,
       savedOptions: structuredDataStore.getSavedOptions()
     };
   }
@@ -2266,6 +2300,11 @@ export class BrowserAppClient implements AppClient {
       dermatologyOfficeLogoUpload: undefined,
       removeDermatologyOfficeLogo: undefined
     });
+
+    const supervisingPhysician = input.supervisingPhysician.trim();
+    if (input.rememberSupervisingPhysician && supervisingPhysician) {
+      structuredDataStore.rememberOption("physician", supervisingPhysician, normalizeOptionValue(supervisingPhysician));
+    }
 
     await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
     return {
