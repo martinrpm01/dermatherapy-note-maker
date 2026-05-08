@@ -46,6 +46,7 @@ Build a production-quality, local-first radiation treatment note application for
 - Add tests for note-selection logic, archive/restore flows, dose calculations, template override persistence, and PDF regeneration behavior.
 - Document install, database, run, and packaging steps in the README.
 - Run the Desktop shortcut launch verification only when changing startup, packaging, Electron shell, or shortcut-related behavior, or when explicitly requested.
+- For user-facing desktop app changes that are pushed to `main`, update the downloadable Windows installer/portable EXE from the same commit before calling the work done. Use the desktop release workflow or a new `desktop-v*` tag, and verify the GitHub release/artifact contains fresh `ClearSkin-Hub-Setup.exe` and `ClearSkin-Hub-Portable.exe`; if this cannot be completed, clearly tell the user the installer is still stale.
 
 ## Forbidden Behaviors
 
