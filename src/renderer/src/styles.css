@@ -694,6 +694,56 @@ label select {
   white-space: nowrap;
 }
 
+.course-schedule-menu {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.course-schedule-trigger {
+  min-width: 104px;
+}
+
+.course-schedule-popover {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  z-index: 30;
+  width: max-content;
+  min-width: 190px;
+  max-width: min(260px, calc(100vw - 2rem));
+  padding: 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 14px 34px rgba(8, 45, 68, 0.2);
+  display: grid;
+  gap: 0.25rem;
+}
+
+.course-schedule-popover button {
+  width: 100%;
+  min-height: 42px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.course-schedule-popover button:hover,
+.course-schedule-popover button:focus-visible {
+  background: #e9f5fb;
+}
+
+.course-schedule-popover .danger-action {
+  color: var(--danger);
+}
+
 .empty-state {
   text-align: center;
 }
@@ -1273,6 +1323,27 @@ input.search {
   margin: auto;
 }
 
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.modal-header h3 {
+  margin: 0;
+  min-width: 0;
+}
+
+.modal-header button {
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  flex: 0 0 auto;
+}
+
 .modal-card input,
 .modal-card select,
 .modal-card textarea {
@@ -1621,6 +1692,12 @@ input.search {
   .patient-form-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.course-action-row .course-schedule-popover button {
+  min-width: 0;
+  justify-content: flex-start;
+  text-align: left;
 }
 
 .numpad-field {
@@ -2091,9 +2168,23 @@ input.search {
 }
 
 .schedule-modal {
-  width: min(920px, calc(100vw - 1.5rem));
+  width: min(980px, calc(100vw - 1rem));
   max-height: calc(100dvh - 1.5rem);
   overflow: auto;
+}
+
+.schedule-modal > .form-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.schedule-modal > .form-grid .field.wide {
+  grid-column: span 2;
+}
+
+.schedule-modal input,
+.schedule-modal select {
+  min-height: 44px;
 }
 
 .schedule-subpanel {
@@ -2127,6 +2218,27 @@ input.search {
   border-radius: 8px;
   padding: 0.45rem 0.65rem;
   background: #ffffff;
+}
+
+@media (max-width: 900px) {
+  .schedule-modal > .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .schedule-modal {
+    width: min(100%, calc(100vw - 0.5rem));
+    max-height: calc(100dvh - 0.5rem);
+  }
+
+  .schedule-modal > .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .schedule-modal > .form-grid .field.wide {
+    grid-column: auto;
+  }
 }
 
 @media (max-width: 900px) {

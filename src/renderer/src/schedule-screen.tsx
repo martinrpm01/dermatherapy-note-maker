@@ -762,18 +762,38 @@ export function printPatientSchedule(patientName: string, appointments: Schedule
           th { border: 1px solid #222; background: #e8e8e8; padding: 5px; font-size: 12px; }
           td { border: 1px solid #222; height: 92px; vertical-align: top; padding: 5px; font-size: 12px; }
           td div { margin-top: 6px; font-weight: 700; }
+          .schedule-close {
+            position: fixed;
+            top: 12px;
+            right: 12px;
+            z-index: 10;
+            width: 44px;
+            height: 44px;
+            border: 1px solid #9fb8c9;
+            border-radius: 999px;
+            background: #fff;
+            color: #123a58;
+            font: 700 22px Arial, sans-serif;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(18, 58, 88, 0.16);
+          }
           .empty { background: #f1f1f1; }
           .month { break-after: page; page-break-after: always; }
           .month:last-child { break-after: auto; page-break-after: auto; }
+          @media print {
+            .schedule-close { display: none; }
+          }
         </style>
       </head>
       <body>
+        <button class="schedule-close" type="button" aria-label="Close schedule">X</button>
         <h1>${escapeHtml(patientName)} Treatment Schedule</h1>
         ${monthHtml}
       </body>
     </html>
   `);
   win.document.close();
+  win.document.querySelector<HTMLButtonElement>(".schedule-close")?.addEventListener("click", () => win.close());
   win.focus();
   window.setTimeout(() => win.print(), 250);
 }

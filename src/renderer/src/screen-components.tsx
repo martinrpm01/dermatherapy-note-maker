@@ -69,6 +69,63 @@ function getCourseConsentDocument(courseDetail: PatientDetail["courses"][number]
   return courseDetail.documents.find((document) => document.documentType === "consent_form") ?? null;
 }
 
+function CourseScheduleMenu(props: {
+  hasSchedule: boolean;
+  onOpenSchedule: () => void;
+  onPrintSchedule: () => void;
+  onDeleteSchedule: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handlePointerDown(event: PointerEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [open]);
+
+  function runAction(action: () => void) {
+    setOpen(false);
+    action();
+  }
+
+  return (
+    <div className="course-schedule-menu" ref={menuRef}>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        className="course-schedule-trigger"
+        onClick={() => setOpen((current) => !current)}
+      >
+        Schedule
+      </button>
+      {open ? (
+        <div className="course-schedule-popover" role="menu">
+          <button type="button" role="menuitem" onClick={() => runAction(props.onOpenSchedule)}>
+            {props.hasSchedule ? "Create / Edit Schedule" : "Create Schedule"}
+          </button>
+          {props.hasSchedule ? (
+            <>
+              <button type="button" role="menuitem" onClick={() => runAction(props.onPrintSchedule)}>
+                Print Schedule
+              </button>
+              <button type="button" role="menuitem" className="danger-action" onClick={() => runAction(props.onDeleteSchedule)}>
+                Delete Schedule
+              </button>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 type BlockedPreflightSection = {
   title: string;
   items: string[];
@@ -2410,16 +2467,12 @@ export function PatientScreen(props: {
               <button className="documents-button" onClick={() => props.onEditPathIntake(courseDetail.course.id)}>Documents</button>
               <button onClick={() => props.onEditCourse(courseDetail.course.id)}>Edit Course</button>
               {courseDetail.course.status === "active" ? (
-                scheduledCourseIds.has(courseDetail.course.id) ? (
-                  <>
-                    <button onClick={() => props.onPrintCourseSchedule(courseDetail.course.id)}>Print Schedule</button>
-                    <button style={{ color: "var(--danger)", borderColor: "var(--danger)" }} onClick={() => void deleteCourseSchedule(courseDetail.course.id)}>
-                      Delete Schedule
-                    </button>
-                  </>
-                ) : (
-                  <button onClick={() => props.onScheduleCourse(courseDetail.course.id)}>Create Schedule</button>
-                )
+                <CourseScheduleMenu
+                  hasSchedule={scheduledCourseIds.has(courseDetail.course.id)}
+                  onOpenSchedule={() => props.onScheduleCourse(courseDetail.course.id)}
+                  onPrintSchedule={() => props.onPrintCourseSchedule(courseDetail.course.id)}
+                  onDeleteSchedule={() => void deleteCourseSchedule(courseDetail.course.id)}
+                />
               ) : null}
               <button className="primary" onClick={() => props.onOpenVisit(courseDetail.course.id, "next_treatment")}>
                 Start Today's Note
