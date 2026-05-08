@@ -253,7 +253,9 @@ function buildStructuredFields(detail: DocumentOnlyDetail, syntheticSites: Treat
   return {
     chiefComplaint: "",
     additionalNotes: "",
+    includeExamVitals: true,
     finalTreatment: false,
+    finalTreatmentNote: "",
     prescribedFractionsInput: null,
     projectedFractionsInput: Math.max(0, ...siteSnapshots.map((site) => site.prescribedFractions ?? 0)) || null,
     biopsyDate: detail.record.biopsyDate,
@@ -276,6 +278,7 @@ function buildStructuredFields(detail: DocumentOnlyDetail, syntheticSites: Treat
     startRadiationDate: "",
     ultrasoundPerformed: "",
     addMips: false,
+    mipsNote: "",
     siteSnapshots
   };
 }

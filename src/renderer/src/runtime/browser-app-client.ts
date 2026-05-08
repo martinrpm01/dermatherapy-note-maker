@@ -26,6 +26,8 @@ import {
   formatVitals,
   getCurrentFraction,
   getAutoNumberOfBlocks,
+  getDefaultFinalTreatmentNote,
+  getDefaultMipsNote,
   getDefaultOtvNote,
   getDefaultPhysicsComment,
   getMaxSitePrescribedFractions,
@@ -376,6 +378,8 @@ export class BrowserAppClient implements AppClient {
         ...visit.structuredFields,
         additionalNotes: visit.structuredFields.additionalNotes ?? "",
         finalTreatment: Boolean(visit.structuredFields.finalTreatment) && finalTreatmentEligible,
+        finalTreatmentNote:
+          visit.structuredFields.finalTreatmentNote?.trim() || getDefaultFinalTreatmentNote(),
         prescribedFractionsInput:
           visit.structuredFields.prescribedFractionsInput ??
           (visit.noteType !== "consult_sim"
@@ -394,6 +398,7 @@ export class BrowserAppClient implements AppClient {
         physicsComment:
           visit.structuredFields.physicsComment?.trim() ||
           getDefaultPhysicsComment(visit.noteType),
+        mipsNote: visit.structuredFields.mipsNote?.trim() || getDefaultMipsNote(),
         supervisedBy:
           visit.structuredFields.supervisedBy?.trim() || settings.supervisingPhysician,
         startRadiationDate:
@@ -1337,6 +1342,11 @@ export class BrowserAppClient implements AppClient {
         } else if (course.prescribedFractions <= 0) {
           structuredFields.prescribedFractionsInput = course.prescribedFractions > 0 ? course.prescribedFractions : null;
         }
+        const finalTreatmentFraction =
+          course.prescribedFractions > 0
+            ? course.prescribedFractions
+            : getMaxSitePrescribedFractions(structuredFields.siteSnapshots);
+        structuredFields.finalTreatment = isFinalTreatmentEligible(treatmentNumber, finalTreatmentFraction);
       }
 
       const note: VisitInput = {
@@ -1468,6 +1478,8 @@ export class BrowserAppClient implements AppClient {
         ...input.structuredFields,
         additionalNotes: input.structuredFields.additionalNotes ?? "",
         finalTreatment: Boolean(input.structuredFields.finalTreatment) && finalTreatmentEligible,
+        finalTreatmentNote:
+          input.structuredFields.finalTreatmentNote?.trim() || getDefaultFinalTreatmentNote(),
         prescribedFractionsInput,
         projectedFractionsInput,
         biopsyDate: normalizedSiteSnapshots[0]?.biopsyDate || input.structuredFields.biopsyDate || "",
@@ -1479,6 +1491,7 @@ export class BrowserAppClient implements AppClient {
       physicsComment:
         input.structuredFields.physicsComment?.trim() ||
         getDefaultPhysicsComment(input.noteType),
+      mipsNote: input.structuredFields.mipsNote?.trim() || getDefaultMipsNote(),
       supervisedBy:
         input.structuredFields.supervisedBy?.trim() || settings.supervisingPhysician,
       siteSnapshots: refreshVisitSiteSnapshots(

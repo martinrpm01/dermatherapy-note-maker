@@ -4,6 +4,8 @@ import {
   applyAutomaticDoseValuesToSiteSnapshot,
   NOTE_TYPE_LABELS,
   formatBloodPressure,
+  getDefaultFinalTreatmentNote,
+  getDefaultMipsNote,
   getDefaultOtvNote,
   getDefaultPhysicsComment,
   getMaxSitePrescribedFractions,
@@ -598,6 +600,30 @@ const showProjectedFractionsInput = false;
               );
             })()}
           </div>
+          {editor.note.noteType === "otv" ? (
+            <label>
+              OTV Note
+              <textarea
+                className="otv-note-textarea"
+                value={editor.note.structuredFields.examComment ?? ""}
+                onChange={(event) =>
+                  props.onUpdate(
+                    (current) => ({
+                      ...current,
+                      note: {
+                        ...current.note,
+                        structuredFields: {
+                          ...current.note.structuredFields,
+                          examComment: event.target.value
+                        }
+                      }
+                    }),
+                    { regenerate: true, overwriteEdited: !props.textDirty }
+                  )
+                }
+              />
+            </label>
+          ) : null}
           <label>
             Additional Notes
             <textarea
@@ -619,29 +645,6 @@ const showProjectedFractionsInput = false;
               }
             />
           </label>
-          {editor.note.noteType === "otv" ? (
-            <label>
-              OTV Note
-              <textarea
-                value={editor.note.structuredFields.examComment ?? ""}
-                onChange={(event) =>
-                  props.onUpdate(
-                    (current) => ({
-                      ...current,
-                      note: {
-                        ...current.note,
-                        structuredFields: {
-                          ...current.note.structuredFields,
-                          examComment: event.target.value
-                        }
-                      }
-                    }),
-                    { regenerate: true, overwriteEdited: !props.textDirty }
-                  )
-                }
-              />
-            </label>
-          ) : null}
           {editor.note.noteType === "consult_sim" ? (
             <div className="form-grid">
               {editor.note.structuredFields.siteSnapshots.map((site, index) => (
@@ -726,33 +729,6 @@ const showProjectedFractionsInput = false;
           )}
           {(editor.note.noteType === "consult_sim" || editor.note.noteType === "otv") && (
             <div>
-              <div className="summary-checkboxes" style={{ marginBottom: "0.4rem" }}>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={shouldIncludeExamVitals(
-                      editor.note.noteType,
-                      editor.note.structuredFields.includeExamVitals
-                    )}
-                    onChange={(event) =>
-                      props.onUpdate(
-                        (current) => ({
-                          ...current,
-                          note: {
-                            ...current.note,
-                            structuredFields: {
-                              ...current.note.structuredFields,
-                              includeExamVitals: event.target.checked
-                            }
-                          }
-                        }),
-                        { regenerate: true, overwriteEdited: !props.textDirty }
-                      )
-                    }
-                  />
-                  Include Exam Vitals
-                </label>
-              </div>
               {shouldIncludeExamVitals(editor.note.noteType, editor.note.structuredFields.includeExamVitals) ? (
                 <>
                   <h4 style={{ margin: "0 0 0.4rem" }}>Exam Vitals</h4>
@@ -815,43 +791,62 @@ const showProjectedFractionsInput = false;
               </label>
             )}
             {otvEligible ? (
-              <div className="checkbox-with-help">
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={editor.note.noteType === "otv"}
-                    onChange={(event) =>
-                      props.onUpdate(
-                        (current) => ({
-                          ...current,
-                          note: {
-                            ...current.note,
-                            noteType: event.target.checked ? "otv" : "standard_treatment",
-                            structuredFields: {
-                              ...current.note.structuredFields,
-                              examComment: event.target.checked
-                                ? current.note.structuredFields.examComment?.trim() ||
-                                  getDefaultOtvNote(current.note.structuredFields.siteSnapshots)
-                                : current.note.structuredFields.examComment,
-                              physicsComment: event.target.checked
-                                ? current.note.structuredFields.physicsComment?.trim() || getDefaultPhysicsComment("otv")
-                                : current.note.structuredFields.physicsComment
-                            }
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={editor.note.noteType === "otv"}
+                  onChange={(event) =>
+                    props.onUpdate(
+                      (current) => ({
+                        ...current,
+                        note: {
+                          ...current.note,
+                          noteType: event.target.checked ? "otv" : "standard_treatment",
+                          structuredFields: {
+                            ...current.note.structuredFields,
+                            examComment: event.target.checked
+                              ? current.note.structuredFields.examComment?.trim() ||
+                                getDefaultOtvNote(current.note.structuredFields.siteSnapshots)
+                              : current.note.structuredFields.examComment,
+                            physicsComment: event.target.checked
+                              ? current.note.structuredFields.physicsComment?.trim() || getDefaultPhysicsComment("otv")
+                              : current.note.structuredFields.physicsComment
                           }
-                        }),
-                        { regenerate: true, overwriteEdited: true }
-                      )
-                    }
-                  />
-                  OTV?
-                </label>
-                <span className="help-chip" tabIndex={0} aria-label="OTV help">
-                  ?
-                  <span className="help-popover">
-                    Uncheck if this should be a normal treatment visit instead of OTV, for example when the doctor is out of office.
-                  </span>
-                </span>
-              </div>
+                        }
+                      }),
+                      { regenerate: true, overwriteEdited: true }
+                    )
+                  }
+                />
+                OTV
+              </label>
+            ) : null}
+            {(editor.note.noteType === "consult_sim" || editor.note.noteType === "otv") ? (
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={shouldIncludeExamVitals(
+                    editor.note.noteType,
+                    editor.note.structuredFields.includeExamVitals
+                  )}
+                  onChange={(event) =>
+                    props.onUpdate(
+                      (current) => ({
+                        ...current,
+                        note: {
+                          ...current.note,
+                          structuredFields: {
+                            ...current.note.structuredFields,
+                            includeExamVitals: event.target.checked
+                          }
+                        }
+                      }),
+                      { regenerate: true, overwriteEdited: !props.textDirty }
+                    )
+                  }
+                />
+                Exam Vitals
+              </label>
             ) : null}
             {finalTreatmentEligible && (
               <label className="checkbox-label">
@@ -864,7 +859,10 @@ const showProjectedFractionsInput = false;
                       ...current.note,
                       structuredFields: {
                         ...current.note.structuredFields,
-                        finalTreatment: event.target.checked
+                        finalTreatment: event.target.checked,
+                        finalTreatmentNote: event.target.checked
+                          ? current.note.structuredFields.finalTreatmentNote?.trim() || getDefaultFinalTreatmentNote()
+                          : current.note.structuredFields.finalTreatmentNote
                       }
                     }
                   }), { regenerate: true, overwriteEdited: true })}
@@ -882,14 +880,67 @@ const showProjectedFractionsInput = false;
                     ...current.note,
                     structuredFields: {
                       ...current.note.structuredFields,
-                      addMips: event.target.checked
+                      addMips: event.target.checked,
+                      mipsNote: event.target.checked
+                        ? current.note.structuredFields.mipsNote?.trim() || getDefaultMipsNote()
+                        : current.note.structuredFields.mipsNote
                     }
                   }
                 }), { regenerate: true, overwriteEdited: true })}
               />
-              Add MIPS
+              MIPS
             </label>
           </div>
+          {(editor.note.structuredFields.finalTreatment || editor.note.structuredFields.addMips) ? (
+            <div className="checkbox-note-fields">
+              {editor.note.structuredFields.finalTreatment ? (
+                <label>
+                  Final Treatment Note
+                  <textarea
+                    value={editor.note.structuredFields.finalTreatmentNote ?? getDefaultFinalTreatmentNote()}
+                    onChange={(event) =>
+                      props.onUpdate(
+                        (current) => ({
+                          ...current,
+                          note: {
+                            ...current.note,
+                            structuredFields: {
+                              ...current.note.structuredFields,
+                              finalTreatmentNote: event.target.value
+                            }
+                          }
+                        }),
+                        { regenerate: true, overwriteEdited: !props.textDirty }
+                      )
+                    }
+                  />
+                </label>
+              ) : null}
+              {editor.note.structuredFields.addMips ? (
+                <label>
+                  MIPS Note
+                  <textarea
+                    value={editor.note.structuredFields.mipsNote ?? getDefaultMipsNote()}
+                    onChange={(event) =>
+                      props.onUpdate(
+                        (current) => ({
+                          ...current,
+                          note: {
+                            ...current.note,
+                            structuredFields: {
+                              ...current.note.structuredFields,
+                              mipsNote: event.target.value
+                            }
+                          }
+                        }),
+                        { regenerate: true, overwriteEdited: !props.textDirty }
+                      )
+                    }
+                  />
+                </label>
+              ) : null}
+            </div>
+          ) : null}
           <div className="site-grid">
             {editor.note.structuredFields.siteSnapshots.map((site) => (
               <div className="subpanel" key={site.siteNumber}>

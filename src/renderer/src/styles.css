@@ -844,6 +844,20 @@ button.tab-active {
   min-height: 64px;
 }
 
+.form-panel textarea.otv-note-textarea {
+  min-height: 12rem;
+}
+
+.checkbox-note-fields {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.checkbox-note-fields textarea {
+  min-height: 8rem;
+}
+
 .note-panel {
   align-content: start;
   grid-template-rows: auto minmax(0, 1fr) auto;
@@ -1018,6 +1032,10 @@ input.search {
 
 .compact-form-panel textarea:not(.note-textarea):not(.template-textarea) {
   min-height: 56px;
+}
+
+.compact-form-panel textarea.otv-note-textarea {
+  min-height: 11rem;
 }
 
 .compact-form-panel h3,

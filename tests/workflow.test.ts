@@ -1270,9 +1270,15 @@ describe("RadiationNoteService workflow", () => {
     expect(savedEarly.generatedText).not.toContain("Patient successfully completed the prescribed course");
 
     const finalDraft = service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 15 });
-    finalDraft.note.structuredFields.finalTreatment = true;
+    expect(finalDraft.note.structuredFields.finalTreatment).toBe(true);
+    finalDraft.note.structuredFields.finalTreatmentNote = "Custom final treatment instructions for this course.";
+    finalDraft.note.structuredFields.addMips = true;
+    finalDraft.note.structuredFields.mipsNote = "Custom MIPS wording for this encounter.";
     const savedFinal = service.saveVisit(finalDraft.note);
-    expect(savedFinal.generatedText).toContain("Patient successfully completed the prescribed course");
+    expect(savedFinal.generatedText).toContain("Custom final treatment instructions for this course.");
+    expect(savedFinal.generatedText).not.toContain("Patient successfully completed the prescribed course");
+    expect(savedFinal.generatedText).toContain("MIPS:\nCustom MIPS wording for this encounter.");
+    expect(savedFinal.generatedText).not.toContain("Quality measures have been documented for this encounter");
   });
 
   it("keeps course-derived values in the live preview when treatment number changes note type", async () => {

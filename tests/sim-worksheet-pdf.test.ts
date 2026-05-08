@@ -95,7 +95,9 @@ function createVisit(siteSnapshots: SiteSnapshot[]): VisitNoteRecord {
     structuredFields: {
       chiefComplaint: "",
       additionalNotes: "Test note",
+      includeExamVitals: true,
       finalTreatment: false,
+      finalTreatmentNote: "",
       prescribedFractionsInput: null,
       projectedFractionsInput: 10,
       biopsyDate: "2026-04-10",
@@ -118,6 +120,7 @@ function createVisit(siteSnapshots: SiteSnapshot[]): VisitNoteRecord {
       startRadiationDate: "",
       ultrasoundPerformed: "",
       addMips: false,
+      mipsNote: "",
       siteSnapshots
     },
     generatedText: "",

@@ -34,6 +34,7 @@ import type {
   VisitAssetRecordSet
 } from "../../../shared/storage";
 import { DEFAULT_TEMPLATE_DEFINITIONS } from "../../../shared/templates";
+import { getDefaultFinalTreatmentNote, getDefaultMipsNote } from "../../../shared/note-rules";
 
 type BrowserStoreName =
   | "settings"
@@ -1408,11 +1409,19 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
     this.courseDocuments = this.asMap(await this.getAllFromStore<CourseDocumentRecord>("courseDocuments"));
     const rawVisitNotes = await this.getAllFromStore<VisitNoteRecord>("visitNotes");
     const normalizedVisitNotes = rawVisitNotes.map((note) => {
-      // Migrate older records that predate the addMips field
-      const sf = note.structuredFields as VisitNoteRecord["structuredFields"] & { addMips?: boolean };
+      const sf = note.structuredFields as VisitNoteRecord["structuredFields"] & {
+        addMips?: boolean;
+        finalTreatmentNote?: string;
+        mipsNote?: string;
+      };
       return {
         ...note,
-        structuredFields: { ...sf, addMips: sf.addMips ?? false }
+        structuredFields: {
+          ...sf,
+          addMips: sf.addMips ?? false,
+          finalTreatmentNote: sf.finalTreatmentNote?.trim() || getDefaultFinalTreatmentNote(),
+          mipsNote: sf.mipsNote?.trim() || getDefaultMipsNote()
+        }
       };
     });
     this.visitNotes = this.asMap(normalizedVisitNotes);

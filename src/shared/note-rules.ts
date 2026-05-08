@@ -717,6 +717,14 @@ export function stripExamVitalsSection(
   );
 }
 
+export function getDefaultFinalTreatmentNote(): string {
+  return "Patient successfully completed the prescribed course of radiation therapy. The total dose and number of fractions were delivered as planned. The patient tolerated treatment well. Post treatment instructions were provided to the patient, with follow up to occur in 4-8 weeks.";
+}
+
+export function getDefaultMipsNote(): string {
+  return "Quality measures have been documented for this encounter in accordance with Merit-based Incentive Payment System (MIPS) requirements.";
+}
+
 export function buildDefaultStructuredFields(
   noteType: NoteType,
   siteSnapshots: SiteSnapshot[],
@@ -737,6 +745,7 @@ export function buildDefaultStructuredFields(
     additionalNotes: "",
     includeExamVitals: true,
     finalTreatment: false,
+    finalTreatmentNote: getDefaultFinalTreatmentNote(),
     prescribedFractionsInput: null,
     projectedFractionsInput: null,
     biopsyDate: defaults.biopsyDate ?? "",
@@ -772,6 +781,7 @@ export function buildDefaultStructuredFields(
     startRadiationDate: "",
     ultrasoundPerformed: "",
     addMips: false,
+    mipsNote: getDefaultMipsNote(),
     siteSnapshots: normalizedSnapshots
   };
 }

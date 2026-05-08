@@ -33,6 +33,8 @@ import {
   formatVitals,
   getAutoNumberOfBlocks,
   getCurrentFraction,
+  getDefaultFinalTreatmentNote,
+  getDefaultMipsNote,
   getDefaultOtvNote,
   getDefaultPhysicsComment,
   getMaxSitePrescribedFractions,
@@ -206,20 +208,20 @@ function isLockedFileError(error: unknown) {
   );
 }
 
-function buildFinalTreatmentSection(enabled: boolean) {
+function buildFinalTreatmentSection(enabled: boolean, value?: string) {
   if (!enabled) {
     return "";
   }
 
-  return "Patient successfully completed the prescribed course of radiation therapy. The total dose and number of fractions were delivered as planned. The patient tolerated treatment well. Post treatment instructions were provided to the patient, with follow up to occur in 4-8 weeks.\n";
+  return `${value?.trim() || getDefaultFinalTreatmentNote()}\n`;
 }
 
-function buildMipsSection(enabled: boolean) {
+function buildMipsSection(enabled: boolean, value?: string) {
   if (!enabled) {
     return "";
   }
 
-  return "MIPS:\nQuality measures have been documented for this encounter in accordance with Merit-based Incentive Payment System (MIPS) requirements.\n";
+  return `MIPS:\n${value?.trim() || getDefaultMipsNote()}\n`;
 }
 
 function injectFinalTreatmentSection(renderedText: string, finalTreatmentSection: string) {
@@ -1040,6 +1042,11 @@ export class RadiationNoteService {
         } else if (course.prescribedFractions <= 0) {
           structuredFields.prescribedFractionsInput = course.prescribedFractions > 0 ? course.prescribedFractions : null;
         }
+        const finalTreatmentFraction =
+          course.prescribedFractions > 0
+            ? course.prescribedFractions
+            : getMaxSitePrescribedFractions(structuredFields.siteSnapshots);
+        structuredFields.finalTreatment = isFinalTreatmentEligible(treatmentNumber, finalTreatmentFraction);
       }
 
       const note: VisitInput = {
@@ -1162,6 +1169,8 @@ export class RadiationNoteService {
         ...input.structuredFields,
           additionalNotes: input.structuredFields.additionalNotes ?? "",
           finalTreatment: Boolean(input.structuredFields.finalTreatment) && finalTreatmentEligible,
+          finalTreatmentNote:
+            input.structuredFields.finalTreatmentNote?.trim() || getDefaultFinalTreatmentNote(),
           prescribedFractionsInput,
           projectedFractionsInput,
           biopsyDate: normalizedSiteSnapshots[0]?.biopsyDate || input.structuredFields.biopsyDate || "",
@@ -1173,6 +1182,7 @@ export class RadiationNoteService {
         physicsComment:
           input.structuredFields.physicsComment?.trim() ||
           getDefaultPhysicsComment(input.noteType),
+        mipsNote: input.structuredFields.mipsNote?.trim() || getDefaultMipsNote(),
         supervisedBy:
           input.structuredFields.supervisedBy?.trim() || settings.supervisingPhysician,
         siteSnapshots: refreshVisitSiteSnapshots(
@@ -2021,6 +2031,8 @@ export class RadiationNoteService {
           ...visit.structuredFields,
           additionalNotes: visit.structuredFields.additionalNotes ?? "",
           finalTreatment: Boolean(visit.structuredFields.finalTreatment) && finalTreatmentEligible,
+          finalTreatmentNote:
+            visit.structuredFields.finalTreatmentNote?.trim() || getDefaultFinalTreatmentNote(),
           prescribedFractionsInput:
             visit.structuredFields.prescribedFractionsInput ??
             (visit.noteType !== "consult_sim"
@@ -2043,6 +2055,7 @@ export class RadiationNoteService {
             visit.noteType === "otv"
               ? visit.structuredFields.examComment?.trim() || getDefaultOtvNote(resolvedSiteSnapshots)
               : visit.structuredFields.examComment ?? "",
+          mipsNote: visit.structuredFields.mipsNote?.trim() || getDefaultMipsNote(),
           supervisedBy:
             visit.structuredFields.supervisedBy?.trim() || settings.supervisingPhysician,
           siteSnapshots: resolvedSiteSnapshots
@@ -2180,9 +2193,10 @@ export class RadiationNoteService {
       };
 
     const finalTreatmentSection = buildFinalTreatmentSection(
-      note.structuredFields.finalTreatment && isFinalTreatmentEligible(note.treatmentNumber, course.prescribedFractions)
+      note.structuredFields.finalTreatment && isFinalTreatmentEligible(note.treatmentNumber, course.prescribedFractions),
+      note.structuredFields.finalTreatmentNote
     );
-    const mipsSection = buildMipsSection(note.structuredFields.addMips);
+    const mipsSection = buildMipsSection(note.structuredFields.addMips, note.structuredFields.mipsNote);
 
     const renderedText = renderTemplate(template.templateText, {
       patient: {

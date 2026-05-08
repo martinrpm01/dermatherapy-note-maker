@@ -329,6 +329,7 @@ export interface VisitStructuredFields {
   additionalNotes: string;
   includeExamVitals: boolean;
   finalTreatment: boolean;
+  finalTreatmentNote: string;
   prescribedFractionsInput: number | null;
   projectedFractionsInput: number | null;
   biopsyDate: string;
@@ -351,6 +352,7 @@ export interface VisitStructuredFields {
   startRadiationDate: string;
   ultrasoundPerformed: string;
   addMips: boolean;
+  mipsNote: string;
   siteSnapshots: SiteSnapshot[];
 }
 

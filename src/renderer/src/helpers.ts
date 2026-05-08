@@ -9,6 +9,8 @@ import {
   formatDisplayDate,
   formatVitals,
   getAutoNumberOfBlocks,
+  getDefaultFinalTreatmentNote,
+  getDefaultMipsNote,
   getDefaultPhysicsComment,
   isFinalTreatmentEligible,
   normalizeVacLokAreaValue,
@@ -65,20 +67,20 @@ function getDefaultTreatmentDepth(value: string) {
   return value.trim() || DEFAULT_TREATMENT_DEPTH;
 }
 
-function buildFinalTreatmentSection(enabled: boolean) {
+function buildFinalTreatmentSection(enabled: boolean, value?: string) {
   if (!enabled) {
     return "";
   }
 
-  return "Patient successfully completed the prescribed course of radiation therapy. The total dose and number of fractions were delivered as planned. The patient tolerated treatment well. Post treatment instructions were provided to the patient, with follow up to occur in 4-8 weeks.\n";
+  return `${value?.trim() || getDefaultFinalTreatmentNote()}\n`;
 }
 
-function buildMipsSection(enabled: boolean) {
+function buildMipsSection(enabled: boolean, value?: string) {
   if (!enabled) {
     return "";
   }
 
-  return "MIPS:\nQuality measures have been documented for this encounter in accordance with Merit-based Incentive Payment System (MIPS) requirements.\n";
+  return `MIPS:\n${value?.trim() || getDefaultMipsNote()}\n`;
 }
 
 function injectFinalTreatmentSection(renderedText: string, finalTreatmentSection: string) {
@@ -304,9 +306,10 @@ export function buildVisitPreviewText(
       };
 
   const finalTreatmentSection = buildFinalTreatmentSection(
-    !!note.structuredFields.finalTreatment && isFinalTreatmentEligible(note.treatmentNumber, course.prescribedFractions)
+    !!note.structuredFields.finalTreatment && isFinalTreatmentEligible(note.treatmentNumber, course.prescribedFractions),
+    note.structuredFields.finalTreatmentNote
   );
-  const mipsSection = buildMipsSection(!!note.structuredFields.addMips);
+  const mipsSection = buildMipsSection(!!note.structuredFields.addMips, note.structuredFields.mipsNote);
 
   const renderedText = renderTemplate(template.templateText, {
     patient: {
