@@ -39,6 +39,45 @@ export class ElectronAppClient implements AppClient {
     return this.api.getDashboardSnapshot();
   }
 
+  getScheduleSnapshot(startDate: string, endDate: string) {
+    return this.api.getScheduleSnapshot(startDate, endDate);
+  }
+
+  saveScheduleAppointment(input: Parameters<AppClient["saveScheduleAppointment"]>[0]) {
+    return this.api.saveScheduleAppointment(input);
+  }
+
+  deleteScheduleAppointment(appointmentId: string) {
+    return this.api.deleteScheduleAppointment(appointmentId);
+  }
+
+  deleteCourseTreatmentSchedule(courseId: string) {
+    return this.api.deleteCourseTreatmentSchedule(courseId);
+  }
+
+  updateScheduleAppointmentStatus(
+    appointmentId: string,
+    status: Parameters<AppClient["updateScheduleAppointmentStatus"]>[1]
+  ) {
+    return this.api.updateScheduleAppointmentStatus(appointmentId, status);
+  }
+
+  saveScheduleBlock(input: Parameters<AppClient["saveScheduleBlock"]>[0]) {
+    return this.api.saveScheduleBlock(input);
+  }
+
+  deleteScheduleBlock(blockId: string) {
+    return this.api.deleteScheduleBlock(blockId);
+  }
+
+  saveScheduleSettings(input: Parameters<AppClient["saveScheduleSettings"]>[0]) {
+    return this.api.saveScheduleSettings(input);
+  }
+
+  completeScheduleAppointmentForVisit(visitId: string) {
+    return this.api.completeScheduleAppointmentForVisit(visitId);
+  }
+
   getDocumentOnlySnapshot() {
     return this.api.getDocumentOnlySnapshot();
   }
@@ -134,9 +173,10 @@ export class ElectronAppClient implements AppClient {
   buildVisitDraft(
     courseId: string,
     mode?: Parameters<AppClient["buildVisitDraft"]>[1],
-    existingVisitId?: string
+    existingVisitId?: string,
+    options?: Parameters<AppClient["buildVisitDraft"]>[3]
   ) {
-    return this.api.buildVisitDraft(courseId, mode, existingVisitId);
+    return this.api.buildVisitDraft(courseId, mode, existingVisitId, options);
   }
 
   saveVisit(input: Parameters<AppClient["saveVisit"]>[0]) {

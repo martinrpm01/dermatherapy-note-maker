@@ -12,6 +12,12 @@ import type {
   GeneratedPdfRecord,
   PatientInput,
   PatientRecord,
+  ScheduleAppointmentInput,
+  ScheduleAppointmentRecord,
+  ScheduleAppointmentStatus,
+  ScheduleBlockInput,
+  ScheduleBlockRecord,
+  ScheduleSettingsView,
   SavedOptionRecord,
   SavedOptionType,
   StoredAssetUpload,
@@ -83,6 +89,22 @@ export interface StructuredDataStore {
   fetchCourses(whereClause?: string, params?: SqlValue[]): TreatmentCourseRecord[];
   fetchCourse(courseId: string): TreatmentCourseRecord | null;
   saveCourse(input: CourseInput): TreatmentCourseRecord;
+  fetchScheduleAppointments(startDate: string, endDate: string): ScheduleAppointmentRecord[];
+  fetchScheduleAppointment(appointmentId: string): ScheduleAppointmentRecord | null;
+  saveScheduleAppointment(input: ScheduleAppointmentInput): ScheduleAppointmentRecord;
+  deleteScheduleAppointment(appointmentId: string): void;
+  deletePatientSchedule(patientId: string): number;
+  deleteCourseTreatmentSchedule(courseId: string): number;
+  updateScheduleAppointmentStatus(
+    appointmentId: string,
+    status: ScheduleAppointmentStatus
+  ): ScheduleAppointmentRecord;
+  fetchScheduleBlocks(startDate: string, endDate: string): ScheduleBlockRecord[];
+  fetchScheduleBlock(blockId: string): ScheduleBlockRecord | null;
+  saveScheduleBlock(input: ScheduleBlockInput): ScheduleBlockRecord;
+  deleteScheduleBlock(blockId: string): void;
+  getScheduleSettings(): ScheduleSettingsView;
+  saveScheduleSettings(input: ScheduleSettingsView): ScheduleSettingsView;
   updateCoursePrescribedFractions(courseId: string, prescribedFractions: number): void;
   updateCourseSitePrescribedFractions(courseId: string, siteNumber: 1 | 2, prescribedFractions: number): void;
   updateCourseSiteDoseValues(courseId: string, siteNumber: 1 | 2, dailyDose: number, totalDose: number): void;

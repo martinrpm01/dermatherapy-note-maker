@@ -98,6 +98,41 @@ function formatDigitsAsDate(digits: string): string {
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
 }
 
+function shouldUseTouchOptimizedInputs(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  if (window.rtNoteApi) {
+    return false;
+  }
+
+  const userAgent = window.navigator.userAgent ?? "";
+  const platform = window.navigator.platform ?? "";
+  const touchPoints = window.navigator.maxTouchPoints ?? 0;
+  const isAppleTouchDevice = /iPad|iPhone|iPod/i.test(userAgent) || (platform === "MacIntel" && touchPoints > 1);
+  const hasCoarsePointer = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+
+  return isAppleTouchDevice || hasCoarsePointer;
+}
+
+function normalizeBloodPressureEditableValue(value: string) {
+  const cleaned = value.replace(/[^\d/]/g, "");
+  const slashIndex = cleaned.indexOf("/");
+  if (slashIndex === -1) {
+    return cleaned;
+  }
+  return `${cleaned.slice(0, slashIndex).replace(/\//g, "")}/${cleaned.slice(slashIndex + 1).replace(/\//g, "")}`;
+}
+
+function toEditableBloodPressureValue(value: string) {
+  return value.replace(/\s*mmhg\s*$/i, "").trim();
+}
+
+function digitsOnly(value: string) {
+  return value.replace(/\D/g, "");
+}
+
 function formatLesionSize(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -715,7 +750,44 @@ function NumPadToReplace({ onPress, onBackspace, extraKey }: { onPress: (c: stri
   );
 }
 
-export function DobInput(props: { value: string; onChange: (value: string) => void }) {
+function DesktopDateInput(props: { value: string; onChange: (value: string) => void }) {
+  const [displayValue, setDisplayValue] = useState(() => props.value ? formatDisplayDate(props.value) : "");
+
+  useEffect(() => {
+    setDisplayValue(props.value ? formatDisplayDate(props.value) : "");
+  }, [props.value]);
+
+  function handleChange(value: string) {
+    const digits = digitsOnly(value).slice(0, 8);
+    const formatted = formatDigitsAsDate(digits);
+    setDisplayValue(formatted);
+    if (digits.length === 0 || digits.length === 8) {
+      props.onChange(digits.length === 8 ? parseMmDdYyyy(formatted) : "");
+    }
+  }
+
+  function handleBlur() {
+    const parsed = parseMmDdYyyy(displayValue);
+    if (!parsed) {
+      props.onChange("");
+    }
+    setDisplayValue(parsed ? formatDisplayDate(parsed) : displayValue.trim());
+  }
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      autoComplete="off"
+      placeholder="MM/DD/YYYY"
+      value={displayValue}
+      onChange={(event) => handleChange(event.target.value)}
+      onBlur={handleBlur}
+    />
+  );
+}
+
+function TouchDateInput(props: { value: string; onChange: (value: string) => void }) {
   const [displayValue, setDisplayValue] = useState(() => props.value ? formatDisplayDate(props.value) : "");
   const field = useNumPadField();
 
@@ -775,6 +847,10 @@ export function DobInput(props: { value: string; onChange: (value: string) => vo
   );
 }
 
+export function DobInput(props: { value: string; onChange: (value: string) => void }) {
+  return shouldUseTouchOptimizedInputs() ? <TouchDateInput {...props} /> : <DesktopDateInput {...props} />;
+}
+
 export function VisitDateInput(props: { value: string; onChange: (value: string) => void }) {
   return <DobInput {...props} />;
 }
@@ -793,12 +869,43 @@ export function CalendarDateInput(props: { value: string; onChange: (value: stri
   );
 }
 
-export function BloodPressureInput(props: { value: string; onChange: (value: string) => void }) {
-  const [displayValue, setDisplayValue] = useState(() => props.value.replace(/\s*mmhg\s*$/i, "").trim());
+function DesktopBloodPressureInput(props: { value: string; onChange: (value: string) => void }) {
+  const [displayValue, setDisplayValue] = useState(() => toEditableBloodPressureValue(props.value));
+
+  useEffect(() => {
+    setDisplayValue(toEditableBloodPressureValue(props.value));
+  }, [props.value]);
+
+  function handleChange(value: string) {
+    const next = normalizeBloodPressureEditableValue(value);
+    setDisplayValue(next);
+    props.onChange(next);
+  }
+
+  function handleBlur() {
+    const formatted = formatBloodPressure(displayValue);
+    props.onChange(formatted);
+    setDisplayValue(toEditableBloodPressureValue(formatted));
+  }
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      placeholder="e.g. 120/80"
+      value={displayValue}
+      onChange={(event) => handleChange(event.target.value)}
+      onBlur={handleBlur}
+    />
+  );
+}
+
+function TouchBloodPressureInput(props: { value: string; onChange: (value: string) => void }) {
+  const [displayValue, setDisplayValue] = useState(() => toEditableBloodPressureValue(props.value));
   const field = useNumPadField();
 
   useEffect(() => {
-    if (!field.isActive) setDisplayValue(props.value.replace(/\s*mmhg\s*$/i, "").trim());
+    if (!field.isActive) setDisplayValue(toEditableBloodPressureValue(props.value));
   }, [field.isActive, props.value]);
 
   function syncValue(next: string, closeAfterSync = false) {
@@ -811,17 +918,8 @@ export function BloodPressureInput(props: { value: string; onChange: (value: str
     }
   }
 
-  function normalizeEditableValue(value: string) {
-    const cleaned = value.replace(/[^\d/]/g, "");
-    const slashIndex = cleaned.indexOf("/");
-    if (slashIndex === -1) {
-      return cleaned;
-    }
-    return `${cleaned.slice(0, slashIndex).replace(/\//g, "")}/${cleaned.slice(slashIndex + 1).replace(/\//g, "")}`;
-  }
-
   function handlePress(character: string) {
-    const currentValue = normalizeEditableValue(field.allSelected ? "" : displayValue);
+    const currentValue = normalizeBloodPressureEditableValue(field.allSelected ? "" : displayValue);
     let next = currentValue;
 
     if (character === "/") {
@@ -839,7 +937,7 @@ export function BloodPressureInput(props: { value: string; onChange: (value: str
     }
 
     field.clearSelection();
-    syncValue(normalizeEditableValue(next), false);
+    syncValue(normalizeBloodPressureEditableValue(next), false);
   }
 
   function handleBackspace() {
@@ -883,7 +981,25 @@ export function BloodPressureInput(props: { value: string; onChange: (value: str
   );
 }
 
-export function NumericInput(props: { value: string | number; onChange: (value: string) => void; placeholder?: string }) {
+export function BloodPressureInput(props: { value: string; onChange: (value: string) => void }) {
+  return shouldUseTouchOptimizedInputs() ? <TouchBloodPressureInput {...props} /> : <DesktopBloodPressureInput {...props} />;
+}
+
+function DesktopNumericInput(props: { value: string | number; onChange: (value: string) => void; placeholder?: string }) {
+  const display = props.value === "" || props.value == null ? "" : String(props.value);
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      placeholder={props.placeholder}
+      value={display}
+      onChange={(event) => props.onChange(digitsOnly(event.target.value))}
+    />
+  );
+}
+
+function TouchNumericInput(props: { value: string | number; onChange: (value: string) => void; placeholder?: string }) {
   const field = useNumPadField();
   const display = props.value === "" || props.value == null ? "" : String(props.value);
 
@@ -931,7 +1047,60 @@ export function NumericInput(props: { value: string | number; onChange: (value: 
   );
 }
 
+export function NumericInput(props: { value: string | number; onChange: (value: string) => void; placeholder?: string }) {
+  return shouldUseTouchOptimizedInputs() ? <TouchNumericInput {...props} /> : <DesktopNumericInput {...props} />;
+}
+
 function FormattedNumericInput(props: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  toEditable: (value: string) => string;
+  formatter: (value: string) => string;
+}) {
+  return shouldUseTouchOptimizedInputs()
+    ? <TouchFormattedNumericInput {...props} />
+    : <DesktopFormattedNumericInput {...props} />;
+}
+
+function DesktopFormattedNumericInput(props: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  toEditable: (value: string) => string;
+  formatter: (value: string) => string;
+}) {
+  const [displayValue, setDisplayValue] = useState(() => props.toEditable(props.value));
+
+  useEffect(() => {
+    setDisplayValue(props.toEditable(props.value));
+  }, [props.value, props.toEditable]);
+
+  function handleChange(value: string) {
+    const next = digitsOnly(value);
+    setDisplayValue(next);
+    props.onChange(next);
+  }
+
+  function handleBlur() {
+    const formatted = props.formatter(displayValue);
+    props.onChange(formatted);
+    setDisplayValue(props.toEditable(formatted));
+  }
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      placeholder={props.placeholder}
+      value={displayValue}
+      onChange={(event) => handleChange(event.target.value)}
+      onBlur={handleBlur}
+    />
+  );
+}
+
+function TouchFormattedNumericInput(props: {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
@@ -1047,7 +1216,25 @@ export function LesionSizeInput(props: { value: string; onChange: (value: string
   );
 }
 
-export function PinInput(props: { value: string; onChange: (value: string) => void; placeholder?: string; onDone?: () => void }) {
+function DesktopPinInput(props: { value: string; onChange: (value: string) => void; placeholder?: string; onDone?: () => void }) {
+  return (
+    <input
+      type="password"
+      inputMode="numeric"
+      autoComplete="off"
+      placeholder={props.placeholder ?? "PIN"}
+      value={props.value}
+      onChange={(event) => props.onChange(digitsOnly(event.target.value).slice(0, 8))}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          props.onDone?.();
+        }
+      }}
+    />
+  );
+}
+
+function TouchPinInput(props: { value: string; onChange: (value: string) => void; placeholder?: string; onDone?: () => void }) {
   const field = useNumPadField();
 
   function handlePress(digit: string) {
@@ -1101,6 +1288,10 @@ export function PinInput(props: { value: string; onChange: (value: string) => vo
       ) : null}
     </div>
   );
+}
+
+export function PinInput(props: { value: string; onChange: (value: string) => void; placeholder?: string; onDone?: () => void }) {
+  return shouldUseTouchOptimizedInputs() ? <TouchPinInput {...props} /> : <DesktopPinInput {...props} />;
 }
 
 function formatRestoreModeLabel(result: PatientArchivePreflightResult) {
@@ -1672,6 +1863,9 @@ export function DashboardScreen(props: {
   onArchivePatient: (patientId: string) => void;
   onOpenVisit: (courseId: string, mode: "next_treatment" | "consult_sim", existingVisitId?: string) => void;
   onEditPendingCourse: (patientId: string, courseId: string, mode: "intake" | "full") => void;
+  onScheduleCourse: (courseId: string) => void;
+  onPrintCourseSchedule: (courseId: string) => void;
+  onDeleteCourseSchedule: (courseId: string) => boolean | Promise<boolean>;
   onGenerateConsentForm: (courseId: string) => void;
   onUploadConsentForm: (patientId: string, courseId: string) => void;
   onOpenConsentForm: (patientId: string, courseId: string) => void;
@@ -1680,6 +1874,38 @@ export function DashboardScreen(props: {
   const allCourseRows = props.dashboard?.activeCourses || [];
   const pendingRows = props.dashboard?.pendingCourses || [];
   const noCourseRows = props.dashboard?.patientsWithoutCourse || [];
+  const [scheduledCourseIds, setScheduledCourseIds] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    if (!props.appClient) {
+      setScheduledCourseIds(new Set());
+      return;
+    }
+    let cancelled = false;
+    const currentYear = new Date().getFullYear();
+    void props.appClient.getScheduleSnapshot(`${currentYear - 1}-01-01`, `${currentYear + 2}-12-31`).then((snapshot) => {
+      if (cancelled) {
+        return;
+      }
+      setScheduledCourseIds(new Set(snapshot.appointments
+        .filter((appointment) => appointment.appointmentType === "treatment" && appointment.status !== "cancelled" && appointment.courseId)
+        .map((appointment) => appointment.courseId!)));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [props.appClient, props.dashboard]);
+
+  async function deleteDashboardCourseSchedule(courseId: string) {
+    const didDelete = await props.onDeleteCourseSchedule(courseId);
+    if (didDelete) {
+      setScheduledCourseIds((current) => {
+        const next = new Set(current);
+        next.delete(courseId);
+        return next;
+      });
+    }
+  }
 
   // Collect unique patients (from courses + no-course rows), preserve order
   const patientIds: string[] = [];
@@ -1844,6 +2070,16 @@ export function DashboardScreen(props: {
                             <button onClick={() => props.onUploadConsentForm(patientId, row.courseId)}>Import Signed Consent</button>
                           </>
                         )}
+                        {scheduledCourseIds.has(row.courseId) ? (
+                          <>
+                            <button onClick={() => props.onPrintCourseSchedule(row.courseId)}>Print Schedule</button>
+                            <button style={{ color: "var(--danger)", borderColor: "var(--danger)" }} onClick={() => void deleteDashboardCourseSchedule(row.courseId)}>
+                              Delete Schedule
+                            </button>
+                          </>
+                        ) : (
+                          <button onClick={() => props.onScheduleCourse(row.courseId)}>Create Schedule</button>
+                        )}
                         <button className="primary" onClick={() => props.onEditPendingCourse(patientId, row.courseId, "full")}>
                           Complete Course Setup
                         </button>
@@ -1991,6 +2227,9 @@ export function PatientScreen(props: {
   onCompleteCourseSetup: (courseId: string) => void;
   onArchivePatient: () => void;
   onOpenVisit: (courseId: string, mode: "next_treatment" | "consult_sim", existingVisitId?: string) => void;
+  onScheduleCourse: (courseId: string) => void;
+  onPrintCourseSchedule: (courseId: string) => void;
+  onDeleteCourseSchedule: (courseId: string) => boolean | Promise<boolean>;
   onCompleteCourse: (courseId: string) => void;
   onRestoreCourse: (courseId: string) => void;
   onOpenPdf: (asset: AssetReference) => void;
@@ -2004,10 +2243,42 @@ export function PatientScreen(props: {
     ?? detail.courses[0]?.course.id
     ?? "all";
   const [selectedCourseId, setSelectedCourseId] = useState<string>(defaultSelectedCourseId);
+  const [scheduledCourseIds, setScheduledCourseIds] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     setSelectedCourseId(defaultSelectedCourseId);
   }, [defaultSelectedCourseId]);
+
+  useEffect(() => {
+    if (!props.appClient) {
+      setScheduledCourseIds(new Set());
+      return;
+    }
+    let cancelled = false;
+    const currentYear = new Date().getFullYear();
+    void props.appClient.getScheduleSnapshot(`${currentYear - 1}-01-01`, `${currentYear + 2}-12-31`).then((snapshot) => {
+      if (cancelled) {
+        return;
+      }
+      setScheduledCourseIds(new Set(snapshot.appointments
+        .filter((appointment) => appointment.appointmentType === "treatment" && appointment.status !== "cancelled" && appointment.courseId)
+        .map((appointment) => appointment.courseId!)));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [props.appClient, detail.patient.id]);
+
+  async function deleteCourseSchedule(courseId: string) {
+    const didDelete = await props.onDeleteCourseSchedule(courseId);
+    if (didDelete) {
+      setScheduledCourseIds((current) => {
+        const next = new Set(current);
+        next.delete(courseId);
+        return next;
+      });
+    }
+  }
 
   const visibleCourses = selectedCourseId === "all"
     ? detail.courses
@@ -2073,6 +2344,16 @@ export function PatientScreen(props: {
                         <button onClick={() => props.onUploadConsentForm(courseDetail.course.patientId, courseDetail.course.id)}>Import Signed Consent</button>
                       </>
                     )}
+                    {scheduledCourseIds.has(courseDetail.course.id) ? (
+                      <>
+                        <button onClick={() => props.onPrintCourseSchedule(courseDetail.course.id)}>Print Schedule</button>
+                        <button style={{ color: "var(--danger)", borderColor: "var(--danger)" }} onClick={() => void deleteCourseSchedule(courseDetail.course.id)}>
+                          Delete Schedule
+                        </button>
+                      </>
+                    ) : (
+                      <button onClick={() => props.onScheduleCourse(courseDetail.course.id)}>Create Schedule</button>
+                    )}
                     <button className="primary" onClick={() => props.onCompleteCourseSetup(courseDetail.course.id)}>
                       Complete Course Setup
                     </button>
@@ -2114,6 +2395,18 @@ export function PatientScreen(props: {
             <div className="button-row course-action-row">
               <button className="documents-button" onClick={() => props.onEditPathIntake(courseDetail.course.id)}>Documents</button>
               <button onClick={() => props.onEditCourse(courseDetail.course.id)}>Edit Course</button>
+              {courseDetail.course.status === "active" ? (
+                scheduledCourseIds.has(courseDetail.course.id) ? (
+                  <>
+                    <button onClick={() => props.onPrintCourseSchedule(courseDetail.course.id)}>Print Schedule</button>
+                    <button style={{ color: "var(--danger)", borderColor: "var(--danger)" }} onClick={() => void deleteCourseSchedule(courseDetail.course.id)}>
+                      Delete Schedule
+                    </button>
+                  </>
+                ) : (
+                  <button onClick={() => props.onScheduleCourse(courseDetail.course.id)}>Create Schedule</button>
+                )
+              ) : null}
               <button className="primary" onClick={() => props.onOpenVisit(courseDetail.course.id, "next_treatment")}>
                 Start Today's Note
               </button>

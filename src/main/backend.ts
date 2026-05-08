@@ -71,10 +71,16 @@ import type {
   PatientInput,
   PatientRecord,
   PdfGenerationResult,
+  ScheduleAppointmentInput,
+  ScheduleAppointmentRecord,
+  ScheduleAppointmentStatus,
+  ScheduleBlockInput,
+  ScheduleSettingsView,
   SettingsPayload,
   SiteSnapshot,
   StoredAssetUpload,
   TreatmentCourseRecord,
+  VisitDraftOptions,
   VisitEditorState,
   VisitInput,
   VisitNoteRecord
@@ -512,7 +518,9 @@ export class RadiationNoteService {
             .filter((visit) => !visit.note.pdfAsset)
             .sort((left, right) => right.note.updatedAt.localeCompare(left.note.updatedAt))[0];
           const currentFraction = getCurrentFraction(visitsForCourse);
-          const shouldStartWithConsult = !hasConsultVisit && course.prescribedFractions <= 0;
+          const hasPlannedConsult = Boolean(course.simConsultDate);
+          const shouldStartWithConsult =
+            !hasConsultVisit && currentFraction === 0 && (hasPlannedConsult || course.prescribedFractions <= 0);
           const suggestedTreatmentNumber = shouldStartWithConsult ? null : getNextTreatmentNumber(visitsForCourse);
           const suggestedNoteType = shouldStartWithConsult ? "consult_sim" : getSuggestedNoteType(suggestedTreatmentNumber);
 
@@ -554,6 +562,7 @@ export class RadiationNoteService {
             courseId: course.id,
             courseName: course.courseName,
             courseType: course.courseType,
+            prescribedFractions: course.prescribedFractions,
             siteSummary: sitesForCourse.map((site) => site.bodyLocation).join(" + "),
             hasConsentForm: documentsForCourse.some((document) => document.documentType === "consent_form")
           };
@@ -563,6 +572,114 @@ export class RadiationNoteService {
       archivedPatients: this.repository.countPatients("status != 'active'"),
       archivedCourses: this.repository.countCourses("status != 'active'")
     };
+  }
+
+  getScheduleSnapshot(startDate: string, endDate: string) {
+    this.assertUnlocked();
+    const dashboard = this.getDashboardSnapshot();
+    const pendingCourses = dashboard.pendingCourses.map((course) => ({
+      ...course,
+      currentFraction: 0,
+      suggestedTreatmentNumber: 1,
+      suggestedNoteType: "standard_treatment" as const,
+      nextTemplateKey: getTemplateKey(course.courseType, "standard_treatment"),
+      latestDraftVisitId: null,
+      latestDraftUpdatedAt: null
+    }));
+    return {
+      appointments: this.repository.fetchScheduleAppointments(startDate, endDate),
+      blocks: this.repository.fetchScheduleBlocks(startDate, endDate),
+      settings: this.repository.getScheduleSettings(),
+      activeCourses: [...pendingCourses, ...dashboard.activeCourses]
+    };
+  }
+
+  saveScheduleAppointment(input: ScheduleAppointmentInput) {
+    this.assertUnlocked();
+    const saved = this.repository.saveScheduleAppointment(input);
+    if (saved.courseId) {
+      this.repository.syncCourseScheduleDates(saved.courseId);
+    }
+    return this.repository.fetchScheduleAppointment(saved.id) ?? saved;
+  }
+
+  deleteScheduleAppointment(appointmentId: string) {
+    this.assertUnlocked();
+    const existing = this.repository.fetchScheduleAppointment(appointmentId);
+    this.repository.deleteScheduleAppointment(appointmentId);
+    if (existing?.courseId) {
+      this.repository.syncCourseScheduleDates(existing.courseId);
+    }
+  }
+
+  deleteCourseTreatmentSchedule(courseId: string) {
+    this.assertUnlocked();
+    return this.repository.deleteCourseTreatmentSchedule(courseId);
+  }
+
+  updateScheduleAppointmentStatus(appointmentId: string, status: ScheduleAppointmentStatus) {
+    this.assertUnlocked();
+    const saved = this.repository.updateScheduleAppointmentStatus(appointmentId, status);
+    if (saved.courseId) {
+      this.repository.syncCourseScheduleDates(saved.courseId);
+    }
+    return this.repository.fetchScheduleAppointment(saved.id) ?? saved;
+  }
+
+  saveScheduleBlock(input: ScheduleBlockInput) {
+    this.assertUnlocked();
+    return this.repository.saveScheduleBlock(input);
+  }
+
+  deleteScheduleBlock(blockId: string) {
+    this.assertUnlocked();
+    this.repository.deleteScheduleBlock(blockId);
+  }
+
+  saveScheduleSettings(input: ScheduleSettingsView) {
+    this.assertUnlocked();
+    return this.repository.saveScheduleSettings(input);
+  }
+
+  completeScheduleAppointmentForVisit(visitId: string): ScheduleAppointmentRecord | null {
+    this.assertUnlocked();
+    const visit = this.repository.fetchVisit(visitId);
+    if (!visit || visit.status !== "finalized") {
+      return null;
+    }
+
+    const matchingAppointments = this.repository
+      .fetchScheduleAppointments("1900-01-01", "2999-12-31")
+      .filter((appointment) => appointment.status !== "completed")
+      .filter((appointment) => {
+        if (appointment.courseId && appointment.courseId !== visit.courseId) {
+          return false;
+        }
+        if (appointment.patientId && appointment.patientId !== visit.patientId) {
+          return false;
+        }
+        if (visit.noteType === "consult_sim") {
+          return appointment.appointmentType === "sim_consult";
+        }
+        if (appointment.appointmentType !== "treatment") {
+          return false;
+        }
+        if (visit.treatmentNumber !== null) {
+          return appointment.appointmentNumber === visit.treatmentNumber;
+        }
+        return appointment.appointmentNumber === null && appointment.appointmentDate === visit.visitDate;
+      })
+      .sort((left, right) => {
+        const leftDateRank = left.appointmentDate === visit.visitDate ? 0 : 1;
+        const rightDateRank = right.appointmentDate === visit.visitDate ? 0 : 1;
+        if (leftDateRank !== rightDateRank) {
+          return leftDateRank - rightDateRank;
+        }
+        return `${left.appointmentDate}|${left.startTime}`.localeCompare(`${right.appointmentDate}|${right.startTime}`);
+      });
+
+    const target = matchingAppointments[0];
+    return target ? this.repository.updateScheduleAppointmentStatus(target.id, "completed") : null;
   }
 
   getDocumentOnlySnapshot(): DocumentOnlySnapshot {
@@ -759,7 +876,9 @@ export class RadiationNoteService {
         numberOfBlocks: getAutoNumberOfBlocks("standard_treatment", site.cutoutSize)
       }))
     };
-    return this.repository.saveCourse(normalizedInput);
+    const course = this.repository.saveCourse(normalizedInput);
+    this.repository.trimCourseTreatmentAppointments(course.id, course.prescribedFractions);
+    return this.repository.fetchCourse(course.id) ?? course;
   }
 
   completeCourse(courseId: string) {
@@ -809,7 +928,12 @@ export class RadiationNoteService {
     this.assetStore.cleanupEmptyDirectoryChain(path.dirname(courseFolder), this.assetStore.rootDir);
   }
 
-  buildVisitDraft(courseId: string, mode: "next_treatment" | "consult_sim" = "next_treatment", existingVisitId?: string) {
+  buildVisitDraft(
+    courseId: string,
+    mode: "next_treatment" | "consult_sim" = "next_treatment",
+    existingVisitId?: string,
+    options: VisitDraftOptions = {}
+  ) {
     this.assertUnlocked();
     if (existingVisitId) {
       return this.loadExistingVisit(existingVisitId);
@@ -831,8 +955,23 @@ export class RadiationNoteService {
     const sites = this.repository.fetchSites([courseId]);
     const visits = this.repository.fetchVisitsByCourseIds([courseId]);
     const hasConsultVisit = visits.some((visit) => visit.note.noteType === "consult_sim");
-    const shouldStartWithConsult = mode === "next_treatment" && !hasConsultVisit && course.prescribedFractions <= 0;
-    const treatmentNumber = mode === "consult_sim" || shouldStartWithConsult ? null : getNextTreatmentNumber(visits);
+    const currentFraction = getCurrentFraction(visits);
+    const scheduleDates = this.repository.syncCourseScheduleDates(course.id);
+    const hasPlannedConsult = Boolean(scheduleDates.simConsultDate || course.simConsultDate);
+    const scheduledTreatmentNumber =
+      mode !== "consult_sim" && typeof options.treatmentNumber === "number" && options.treatmentNumber > 0
+        ? Math.trunc(options.treatmentNumber)
+        : null;
+    const shouldStartWithConsult =
+      scheduledTreatmentNumber === null &&
+      mode === "next_treatment" &&
+      !hasConsultVisit &&
+      currentFraction === 0 &&
+      (hasPlannedConsult || course.prescribedFractions <= 0);
+    const treatmentNumber =
+      mode === "consult_sim" || shouldStartWithConsult
+        ? null
+        : scheduledTreatmentNumber ?? getNextTreatmentNumber(visits);
     if (mode === "next_treatment" && treatmentNumber === null) {
       if (!shouldStartWithConsult) {
         throw new Error("This course has reached the maximum treatment number.");
@@ -868,6 +1007,9 @@ export class RadiationNoteService {
       ...site,
       biopsyDate: site.biopsyDate || course.startDate || ""
     }));
+    if (noteType === "consult_sim" && scheduleDates.treatmentStartDate) {
+      structuredFields.startRadiationDate = scheduleDates.treatmentStartDate;
+    }
       if (noteType !== "consult_sim") {
         if (treatmentNumber === 1) {
           siteSnapshots = fillMissingSitePrescribedFractions(
@@ -900,7 +1042,7 @@ export class RadiationNoteService {
       const note: VisitInput = {
         patientId: patient.id,
         courseId: course.id,
-        visitDate: noteType === "consult_sim" ? course.simConsultDate || todayIso() : todayIso(),
+        visitDate: options.visitDate || (noteType === "consult_sim" ? scheduleDates.simConsultDate || course.simConsultDate || todayIso() : todayIso()),
         noteType,
         treatmentNumber,
         status: "draft",
@@ -976,6 +1118,7 @@ export class RadiationNoteService {
     let courseUpdated = false;
     if (prescribedFractionsInput && prescribedFractionsInput > 0 && prescribedFractionsInput !== course.prescribedFractions) {
       this.repository.updateCoursePrescribedFractions(course.id, prescribedFractionsInput);
+      this.repository.trimCourseTreatmentAppointments(course.id, prescribedFractionsInput);
       courseUpdated = true;
     }
     if (input.noteType !== "consult_sim") {
@@ -1814,6 +1957,7 @@ export class RadiationNoteService {
 
       const sites = this.repository.fetchSites([course.id]);
       const courseDocuments = visit.noteType === "consult_sim" ? this.repository.fetchCourseDocuments(course.id) : [];
+      const scheduleDates = this.repository.syncCourseScheduleDates(course.id);
       const refreshedSiteSnapshots = refreshVisitSiteSnapshots(
         visit.noteType,
         sites,
@@ -1840,7 +1984,7 @@ export class RadiationNoteService {
         id: visit.id,
         patientId: visit.patientId,
         courseId: visit.courseId,
-        visitDate: visit.visitDate,
+        visitDate: visit.noteType === "consult_sim" ? scheduleDates.simConsultDate || course.simConsultDate || visit.visitDate : visit.visitDate,
         noteType: visit.noteType,
         treatmentNumber: visit.treatmentNumber,
         status: visit.status,
@@ -1861,6 +2005,10 @@ export class RadiationNoteService {
             (visit.noteType === "consult_sim" ? getMaxSitePrescribedFractions(resolvedSiteSnapshots) : null),
           biopsyDate: visit.structuredFields.biopsyDate ?? course.startDate ?? "",
           lastTreatmentDate: visit.structuredFields.lastTreatmentDate ?? course.startDate ?? "",
+          startRadiationDate:
+            visit.noteType === "consult_sim"
+              ? scheduleDates.treatmentStartDate ?? visit.structuredFields.startRadiationDate ?? ""
+              : visit.structuredFields.startRadiationDate ?? "",
           physicsComment:
             visit.structuredFields.physicsComment?.trim() ||
             getDefaultPhysicsComment(visit.noteType),

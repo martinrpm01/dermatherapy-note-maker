@@ -5,7 +5,7 @@ import { appendFileSync, cpSync, existsSync, mkdirSync, realpathSync, rmSync, wr
 import { app, BrowserWindow, dialog, ipcMain, net, protocol, shell } from "electron";
 import type { OpenDialogOptions } from "electron";
 
-import type { AssetReference, LaunchReadyScreen } from "../shared/types";
+import type { AssetReference, LaunchReadyScreen, VisitDraftOptions } from "../shared/types";
 import type { PatientArchiveIoHandle } from "../shared/archive";
 import type { RadiationNoteRepository } from "./repository";
 import type { RadiationNoteService } from "./backend";
@@ -169,6 +169,23 @@ function registerIpc() {
   ipcMain.handle("app:wipeAllLocalData", () => service.wipeAllLocalData());
 
   ipcMain.handle("dashboard:getSnapshot", () => service.getDashboardSnapshot());
+  ipcMain.handle("schedule:getSnapshot", (_, startDate: string, endDate: string) =>
+    service.getScheduleSnapshot(startDate, endDate)
+  );
+  ipcMain.handle("schedule:saveAppointment", (_, input) => service.saveScheduleAppointment(input));
+  ipcMain.handle("schedule:deleteAppointment", (_, appointmentId: string) =>
+    service.deleteScheduleAppointment(appointmentId)
+  );
+  ipcMain.handle("schedule:deleteCourseTreatments", (_, courseId: string) =>
+    service.deleteCourseTreatmentSchedule(courseId)
+  );
+  ipcMain.handle("schedule:updateAppointmentStatus", (_, appointmentId: string, status) =>
+    service.updateScheduleAppointmentStatus(appointmentId, status)
+  );
+  ipcMain.handle("schedule:saveBlock", (_, input) => service.saveScheduleBlock(input));
+  ipcMain.handle("schedule:deleteBlock", (_, blockId: string) => service.deleteScheduleBlock(blockId));
+  ipcMain.handle("schedule:saveSettings", (_, input) => service.saveScheduleSettings(input));
+  ipcMain.handle("schedule:completeForVisit", (_, visitId: string) => service.completeScheduleAppointmentForVisit(visitId));
   ipcMain.handle("documents:getSnapshot", () => service.getDocumentOnlySnapshot());
   ipcMain.handle("patient:getDetail", (_, patientId: string) => service.getPatientDetail(patientId));
   ipcMain.handle("completed:list", () => service.listCompleted());
@@ -220,8 +237,8 @@ function registerIpc() {
 
   ipcMain.handle(
     "visit:buildDraft",
-    (_, courseId: string, mode?: "next_treatment" | "consult_sim", existingVisitId?: string) =>
-      service.buildVisitDraft(courseId, mode, existingVisitId)
+    (_, courseId: string, mode?: "next_treatment" | "consult_sim", existingVisitId?: string, options?: VisitDraftOptions) =>
+      service.buildVisitDraft(courseId, mode, existingVisitId, options)
   );
   ipcMain.handle("visit:save", (_, input) => service.saveVisit(input));
   ipcMain.handle("visit:delete", (_, visitId: string) => service.deleteVisit(visitId));

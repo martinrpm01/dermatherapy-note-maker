@@ -15,7 +15,7 @@ describe("Vac-Lok hotfix", () => {
     });
   });
 
-  it("omits Vac-Lok from note-facing additional device text", () => {
+  it("includes Vac-Lok area in note-facing additional device text", () => {
     expect(
       formatAdditionalDevicesForSite({
         additionalDevices: "Vac-Lok, Eye Shield, Gum Shield",
@@ -24,7 +24,7 @@ describe("Vac-Lok hotfix", () => {
         worksheetGumShieldPosition: "Upper",
         worksheetLipShieldPosition: "None"
       })
-    ).toBe("Eye Shield - External, Gum Shield - Upper");
+    ).toBe("Eye Shield - External, Gum Shield - Upper, Vac-Lok - Head");
   });
 
   it("still recognizes Vac-Lok for worksheet population from either storage path", () => {

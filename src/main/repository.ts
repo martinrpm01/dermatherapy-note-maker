@@ -20,6 +20,13 @@ import type {
   GeneratedPdfRecord,
   PatientInput,
   PatientRecord,
+  ScheduleAppointmentInput,
+  ScheduleAppointmentRecord,
+  ScheduleAppointmentStatus,
+  ScheduleIntakeSiteInput,
+  ScheduleBlockInput,
+  ScheduleBlockRecord,
+  ScheduleSettingsView,
   SavedOptionRecord,
   SavedOptionType,
   TemplateDefinitionRecord,
@@ -48,6 +55,23 @@ const sqlWasmPath = require.resolve("sql.js/dist/sql-wasm.wasm");
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function parseScheduleIntakeSites(value: string | null | undefined): ScheduleIntakeSiteInput[] {
+  if (!value) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value) as ScheduleIntakeSiteInput[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function serializeScheduleIntakeSites(value: ScheduleIntakeSiteInput[] | null | undefined) {
+  return JSON.stringify(value ?? []);
 }
 
 function makeId(prefix: string) {
@@ -444,6 +468,11 @@ export class RadiationNoteRepository implements StructuredDataStore {
            WHERE patient_id = ? AND status IN ('active', 'pending')`,
           [timestamp, timestamp, patientId]
         );
+        const courseIds = this.queryAll<{ id: string }>(`SELECT id FROM treatment_courses WHERE patient_id = ?`, [patientId]).map(
+          (course) => course.id
+        );
+        const courseClause = courseIds.length ? ` OR course_id IN (${courseIds.map(() => "?").join(",")})` : "";
+        this.run(`DELETE FROM schedule_appointments WHERE patient_id = ?${courseClause}`, [patientId, ...courseIds]);
       }
     });
   }
@@ -672,11 +701,13 @@ export class RadiationNoteRepository implements StructuredDataStore {
           this.run(`DELETE FROM visit_notes WHERE id IN (${vph})`, visitIds);
         }
 
+        this.run(`DELETE FROM schedule_appointments WHERE course_id IN (${ph})`, courseIds);
         this.run(`DELETE FROM course_documents WHERE course_id IN (${ph})`, courseIds);
         this.run(`DELETE FROM treatment_sites WHERE course_id IN (${ph})`, courseIds);
         this.run(`DELETE FROM treatment_courses WHERE id IN (${ph})`, courseIds);
       }
 
+      this.run(`DELETE FROM schedule_appointments WHERE patient_id = ?`, [patientId]);
       this.run(`DELETE FROM patients WHERE id = ?`, [patientId]);
     });
   }
@@ -709,11 +740,12 @@ export class RadiationNoteRepository implements StructuredDataStore {
         this.run(`DELETE FROM course_documents WHERE course_id = ?`, [courseId]);
       }
 
+      this.run(`DELETE FROM schedule_appointments WHERE course_id = ?`, [courseId]);
       this.run(`DELETE FROM treatment_courses WHERE id = ?`, [courseId]);
     });
   }
 
-    saveCourse(input: CourseInput) {
+  saveCourse(input: CourseInput) {
     const courseId = input.id ?? makeId("course");
     const existing = input.id ? this.fetchCourse(input.id) : null;
     const timestamp = nowIso();
@@ -767,6 +799,377 @@ export class RadiationNoteRepository implements StructuredDataStore {
     return this.fetchCourse(courseId)!;
   }
 
+  fetchScheduleAppointments(startDate: string, endDate: string) {
+    return this.queryAll<ScheduleAppointmentRecord & { intakeSitesJson: string }>(
+      `SELECT
+         id,
+         patient_id AS patientId,
+         course_id AS courseId,
+         patient_name AS patientName,
+         patient_first_name AS patientFirstName,
+         patient_last_name AS patientLastName,
+         patient_mrn AS patientMrn,
+         patient_dob AS patientDob,
+         patient_sex AS patientSex,
+         appointment_date AS appointmentDate,
+         start_time AS startTime,
+         end_time AS endTime,
+         appointment_type AS appointmentType,
+         appointment_number AS appointmentNumber,
+         total_appointments AS totalAppointments,
+         status,
+         notes,
+         series_id AS seriesId,
+         intake_course_type AS intakeCourseType,
+         intake_biopsy_date AS intakeBiopsyDate,
+         intake_sites_json AS intakeSitesJson,
+         created_at AS createdAt,
+         updated_at AS updatedAt
+       FROM schedule_appointments
+       WHERE appointment_date BETWEEN ? AND ?
+       ORDER BY appointment_date ASC, start_time ASC, patient_name ASC`,
+      [startDate, endDate]
+    ).map(({ intakeSitesJson, ...appointment }) => ({
+      ...appointment,
+      intakeSites: parseScheduleIntakeSites(intakeSitesJson)
+    }));
+  }
+
+  fetchScheduleAppointment(appointmentId: string) {
+    const appointment = this.queryOne<ScheduleAppointmentRecord & { intakeSitesJson: string }>(
+      `SELECT
+         id,
+         patient_id AS patientId,
+         course_id AS courseId,
+         patient_name AS patientName,
+         patient_first_name AS patientFirstName,
+         patient_last_name AS patientLastName,
+         patient_mrn AS patientMrn,
+         patient_dob AS patientDob,
+         patient_sex AS patientSex,
+         appointment_date AS appointmentDate,
+         start_time AS startTime,
+         end_time AS endTime,
+         appointment_type AS appointmentType,
+         appointment_number AS appointmentNumber,
+         total_appointments AS totalAppointments,
+         status,
+         notes,
+         series_id AS seriesId,
+         intake_course_type AS intakeCourseType,
+         intake_biopsy_date AS intakeBiopsyDate,
+         intake_sites_json AS intakeSitesJson,
+         created_at AS createdAt,
+         updated_at AS updatedAt
+       FROM schedule_appointments
+       WHERE id = ?`,
+      [appointmentId]
+    );
+    if (!appointment) {
+      return null;
+    }
+    const { intakeSitesJson, ...record } = appointment;
+    return {
+      ...record,
+      intakeSites: parseScheduleIntakeSites(intakeSitesJson)
+    };
+  }
+
+  saveScheduleAppointment(input: ScheduleAppointmentInput) {
+    const appointmentId = input.id ?? makeId("appt");
+    const existing = input.id ? this.fetchScheduleAppointment(input.id) : null;
+    const timestamp = nowIso();
+    const record: ScheduleAppointmentRecord = {
+      id: appointmentId,
+      patientId: input.patientId ?? null,
+      courseId: input.courseId ?? null,
+      patientName: input.patientName.trim(),
+      patientFirstName: input.patientFirstName?.trim() ?? existing?.patientFirstName ?? "",
+      patientLastName: input.patientLastName?.trim() ?? existing?.patientLastName ?? "",
+      patientMrn: input.patientMrn?.trim() ?? existing?.patientMrn ?? "",
+      patientDob: input.patientDob?.trim() ?? existing?.patientDob ?? "",
+      patientSex: input.patientSex?.trim() ?? existing?.patientSex ?? "",
+      appointmentDate: input.appointmentDate,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      appointmentType: input.appointmentType,
+      appointmentNumber: input.appointmentNumber ?? null,
+      totalAppointments: input.totalAppointments ?? null,
+      status: input.status ?? existing?.status ?? "scheduled",
+      notes: input.notes?.trim() ?? existing?.notes ?? "",
+      seriesId: input.seriesId ?? existing?.seriesId ?? null,
+      intakeCourseType: input.intakeCourseType ?? existing?.intakeCourseType ?? null,
+      intakeBiopsyDate: input.intakeBiopsyDate?.trim() ?? existing?.intakeBiopsyDate ?? "",
+      intakeSites: input.intakeSites ?? existing?.intakeSites ?? [],
+      createdAt: existing?.createdAt ?? timestamp,
+      updatedAt: timestamp
+    };
+
+    this.mutate(() => {
+      if (existing) {
+        this.run(
+          `UPDATE schedule_appointments
+           SET patient_id = ?, course_id = ?, patient_name = ?, patient_first_name = ?, patient_last_name = ?,
+               patient_mrn = ?, patient_dob = ?, patient_sex = ?, appointment_date = ?, start_time = ?,
+               end_time = ?, appointment_type = ?, appointment_number = ?, total_appointments = ?,
+               status = ?, notes = ?, series_id = ?, intake_course_type = ?, intake_biopsy_date = ?,
+               intake_sites_json = ?, updated_at = ?
+           WHERE id = ?`,
+          [
+            record.patientId,
+            record.courseId,
+            record.patientName,
+            record.patientFirstName,
+            record.patientLastName,
+            record.patientMrn,
+            record.patientDob,
+            record.patientSex,
+            record.appointmentDate,
+            record.startTime,
+            record.endTime,
+            record.appointmentType,
+            record.appointmentNumber,
+            record.totalAppointments,
+            record.status,
+            record.notes,
+            record.seriesId,
+            record.intakeCourseType,
+            record.intakeBiopsyDate,
+            serializeScheduleIntakeSites(record.intakeSites),
+            record.updatedAt,
+            record.id
+          ]
+        );
+      } else {
+        this.run(
+          `INSERT INTO schedule_appointments (
+             id, patient_id, course_id, patient_name, patient_first_name, patient_last_name,
+             patient_mrn, patient_dob, patient_sex, appointment_date, start_time, end_time,
+             appointment_type, appointment_number, total_appointments, status, notes, series_id,
+             intake_course_type, intake_biopsy_date, intake_sites_json, created_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            record.id,
+            record.patientId,
+            record.courseId,
+            record.patientName,
+            record.patientFirstName,
+            record.patientLastName,
+            record.patientMrn,
+            record.patientDob,
+            record.patientSex,
+            record.appointmentDate,
+            record.startTime,
+            record.endTime,
+            record.appointmentType,
+            record.appointmentNumber,
+            record.totalAppointments,
+            record.status,
+            record.notes,
+            record.seriesId,
+            record.intakeCourseType,
+            record.intakeBiopsyDate,
+            serializeScheduleIntakeSites(record.intakeSites),
+            record.createdAt,
+            record.updatedAt
+          ]
+        );
+      }
+    });
+
+    return this.fetchScheduleAppointment(appointmentId)!;
+  }
+
+  deleteScheduleAppointment(appointmentId: string) {
+    this.mutate(() => {
+      this.run("DELETE FROM schedule_appointments WHERE id = ?", [appointmentId]);
+    });
+  }
+
+  deletePatientSchedule(patientId: string) {
+    const courseIds = this.queryAll<{ id: string }>(`SELECT id FROM treatment_courses WHERE patient_id = ?`, [patientId]).map(
+      (course) => course.id
+    );
+    const courseClause = courseIds.length ? ` OR course_id IN (${courseIds.map(() => "?").join(",")})` : "";
+    const params = [patientId, ...courseIds];
+    const count = this.scalar<number>(`SELECT COUNT(*) FROM schedule_appointments WHERE patient_id = ?${courseClause}`, params) ?? 0;
+    if (count > 0) {
+      this.mutate(() => {
+        this.run(`DELETE FROM schedule_appointments WHERE patient_id = ?${courseClause}`, params);
+      });
+    }
+    return count;
+  }
+
+  deleteCourseTreatmentSchedule(courseId: string) {
+    const count =
+      this.scalar<number>(
+        `SELECT COUNT(*) FROM schedule_appointments WHERE course_id = ? AND appointment_type = 'treatment'`,
+        [courseId]
+      ) ?? 0;
+    if (count > 0) {
+      this.mutate(() => {
+        this.run(`DELETE FROM schedule_appointments WHERE course_id = ? AND appointment_type = 'treatment'`, [courseId]);
+      });
+      this.syncCourseScheduleDates(courseId);
+    }
+    return count;
+  }
+
+  updateScheduleAppointmentStatus(appointmentId: string, status: ScheduleAppointmentStatus) {
+    const appointment = this.fetchScheduleAppointment(appointmentId);
+    if (!appointment) {
+      throw new Error("Schedule appointment not found.");
+    }
+
+    return this.saveScheduleAppointment({ ...appointment, status });
+  }
+
+  fetchScheduleBlocks(startDate: string, endDate: string) {
+    return this.queryAll<ScheduleBlockRecord & { recurringWeekdaysJson: string }>(
+      `SELECT
+         id,
+         title,
+         block_date AS blockDate,
+         start_time AS startTime,
+         end_time AS endTime,
+         block_type AS blockType,
+         is_recurring AS isRecurring,
+         recurring_weekdays_json AS recurringWeekdaysJson,
+         created_at AS createdAt,
+         updated_at AS updatedAt
+       FROM schedule_blocks
+       WHERE block_date IS NULL OR block_date BETWEEN ? AND ?
+       ORDER BY COALESCE(block_date, ''), start_time ASC, title ASC`,
+      [startDate, endDate]
+    ).map((block) => ({
+      ...block,
+      isRecurring: Boolean(block.isRecurring),
+      recurringWeekdays: JSON.parse(block.recurringWeekdaysJson || "[]") as number[]
+    }));
+  }
+
+  fetchScheduleBlock(blockId: string) {
+    const block = this.queryOne<ScheduleBlockRecord & { recurringWeekdaysJson: string }>(
+      `SELECT
+         id,
+         title,
+         block_date AS blockDate,
+         start_time AS startTime,
+         end_time AS endTime,
+         block_type AS blockType,
+         is_recurring AS isRecurring,
+         recurring_weekdays_json AS recurringWeekdaysJson,
+         created_at AS createdAt,
+         updated_at AS updatedAt
+       FROM schedule_blocks
+       WHERE id = ?`,
+      [blockId]
+    );
+
+    return block
+      ? {
+          ...block,
+          isRecurring: Boolean(block.isRecurring),
+          recurringWeekdays: JSON.parse(block.recurringWeekdaysJson || "[]") as number[]
+        }
+      : null;
+  }
+
+  saveScheduleBlock(input: ScheduleBlockInput) {
+    const blockId = input.id ?? makeId("block");
+    const existing = input.id ? this.fetchScheduleBlock(input.id) : null;
+    const timestamp = nowIso();
+    const record: ScheduleBlockRecord = {
+      id: blockId,
+      title: input.title.trim(),
+      blockDate: input.blockDate?.trim() || null,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      blockType: input.blockType,
+      isRecurring: Boolean(input.isRecurring),
+      recurringWeekdays: input.recurringWeekdays ?? existing?.recurringWeekdays ?? [],
+      createdAt: existing?.createdAt ?? timestamp,
+      updatedAt: timestamp
+    };
+
+    this.mutate(() => {
+      if (existing) {
+        this.run(
+          `UPDATE schedule_blocks
+           SET title = ?, block_date = ?, start_time = ?, end_time = ?, block_type = ?,
+               is_recurring = ?, recurring_weekdays_json = ?, updated_at = ?
+           WHERE id = ?`,
+          [
+            record.title,
+            record.blockDate,
+            record.startTime,
+            record.endTime,
+            record.blockType,
+            record.isRecurring ? 1 : 0,
+            JSON.stringify(record.recurringWeekdays),
+            record.updatedAt,
+            record.id
+          ]
+        );
+      } else {
+        this.run(
+          `INSERT INTO schedule_blocks (
+             id, title, block_date, start_time, end_time, block_type, is_recurring,
+             recurring_weekdays_json, created_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            record.id,
+            record.title,
+            record.blockDate,
+            record.startTime,
+            record.endTime,
+            record.blockType,
+            record.isRecurring ? 1 : 0,
+            JSON.stringify(record.recurringWeekdays),
+            record.createdAt,
+            record.updatedAt
+          ]
+        );
+      }
+    });
+
+    return this.fetchScheduleBlock(blockId)!;
+  }
+
+  deleteScheduleBlock(blockId: string) {
+    this.mutate(() => {
+      this.run("DELETE FROM schedule_blocks WHERE id = ?", [blockId]);
+    });
+  }
+
+  getScheduleSettings(): ScheduleSettingsView {
+    const record = this.queryOne<ScheduleSettingsView>(
+      `SELECT clinic_start_time AS clinicStartTime, clinic_end_time AS clinicEndTime
+       FROM schedule_settings
+       WHERE id = 1`
+    );
+
+    return record ?? { clinicStartTime: "08:00", clinicEndTime: "17:00" };
+  }
+
+  saveScheduleSettings(input: ScheduleSettingsView): ScheduleSettingsView {
+    const timestamp = nowIso();
+    this.mutate(() => {
+      this.run(
+        `INSERT INTO schedule_settings (id, clinic_start_time, clinic_end_time, created_at, updated_at)
+         VALUES (1, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           clinic_start_time = excluded.clinic_start_time,
+           clinic_end_time = excluded.clinic_end_time,
+           updated_at = excluded.updated_at`,
+        [input.clinicStartTime, input.clinicEndTime, timestamp, timestamp]
+      );
+    });
+
+    return this.getScheduleSettings();
+  }
+
   updateCoursePrescribedFractions(courseId: string, prescribedFractions: number) {
     this.mutate(() => {
       this.run(
@@ -798,6 +1201,109 @@ export class RadiationNoteRepository implements StructuredDataStore {
         [dailyDose, totalDose, nowIso(), courseId, siteNumber]
       );
     });
+  }
+
+  getCourseScheduleDates(courseId: string) {
+    const rows = this.queryAll<Pick<ScheduleAppointmentRecord, "appointmentDate" | "appointmentType">>(
+      `SELECT appointment_date AS appointmentDate, appointment_type AS appointmentType
+       FROM schedule_appointments
+       WHERE course_id = ? AND status != 'cancelled'
+       ORDER BY appointment_date ASC, start_time ASC`,
+      [courseId]
+    );
+    return {
+      simConsultDate: rows.find((row) => row.appointmentType === "sim_consult")?.appointmentDate ?? null,
+      treatmentStartDate: rows.find((row) => row.appointmentType === "treatment")?.appointmentDate ?? null
+    };
+  }
+
+  syncCourseScheduleDates(courseId: string) {
+    const { simConsultDate, treatmentStartDate } = this.getCourseScheduleDates(courseId);
+    const timestamp = nowIso();
+    this.mutate(() => {
+      if (simConsultDate) {
+        this.run(
+          `UPDATE treatment_courses
+           SET sim_consult_date = ?, updated_at = ?
+           WHERE id = ?`,
+          [simConsultDate, timestamp, courseId]
+        );
+      }
+      if (simConsultDate || treatmentStartDate) {
+        const consultVisits = this.queryAll<{ id: string; structuredFieldsJson: string }>(
+          `SELECT id, structured_fields_json AS structuredFieldsJson
+           FROM visit_notes
+           WHERE course_id = ? AND note_type = 'consult_sim'`,
+          [courseId]
+        );
+        for (const visit of consultVisits) {
+          const structuredFields = JSON.parse(visit.structuredFieldsJson) as VisitNoteRecord["structuredFields"];
+          this.run(
+            `UPDATE visit_notes
+             SET visit_date = COALESCE(?, visit_date), structured_fields_json = ?, updated_at = ?
+             WHERE id = ?`,
+            [
+              simConsultDate,
+              JSON.stringify({
+                ...structuredFields,
+                startRadiationDate: treatmentStartDate ?? structuredFields.startRadiationDate ?? ""
+              }),
+              timestamp,
+              visit.id
+            ]
+          );
+        }
+      }
+    });
+    return { simConsultDate, treatmentStartDate };
+  }
+
+  trimCourseTreatmentAppointments(courseId: string, prescribedFractions: number) {
+    if (prescribedFractions <= 0) {
+      return;
+    }
+
+    const appointments = this.fetchScheduleAppointments("0000-01-01", "9999-12-31")
+      .filter((appointment) => appointment.courseId === courseId)
+      .filter((appointment) => appointment.appointmentType === "treatment")
+      .sort((left, right) =>
+        `${left.appointmentDate}|${left.startTime}`.localeCompare(`${right.appointmentDate}|${right.startTime}`)
+      );
+    const extras = appointments.filter((appointment, index) => {
+      if (appointment.status === "completed") {
+        return false;
+      }
+      return (appointment.appointmentNumber ?? index + 1) > prescribedFractions || index >= prescribedFractions;
+    });
+    const extraIds = new Set(extras.map((appointment) => appointment.id));
+    const retainedAppointments = appointments.filter((appointment) => !extraIds.has(appointment.id));
+    const needsTotalUpdate = retainedAppointments.some(
+      (appointment) =>
+        (appointment.appointmentNumber ?? 0) <= prescribedFractions &&
+        appointment.totalAppointments !== prescribedFractions
+    );
+
+    this.mutate(() => {
+      if (needsTotalUpdate) {
+        const timestamp = nowIso();
+        for (const appointment of retainedAppointments) {
+          if ((appointment.appointmentNumber ?? 0) <= prescribedFractions) {
+            this.run(
+              `UPDATE schedule_appointments
+               SET total_appointments = ?, updated_at = ?
+               WHERE id = ?`,
+              [prescribedFractions, timestamp, appointment.id]
+            );
+          }
+        }
+      }
+      for (const appointment of extras) {
+        this.run("DELETE FROM schedule_appointments WHERE id = ?", [appointment.id]);
+      }
+    });
+    if (extras.length || needsTotalUpdate) {
+      this.syncCourseScheduleDates(courseId);
+    }
   }
 
   setCourseStatus(courseId: string, status: TreatmentCourseRecord["status"], endDate: string | null = null) {
@@ -2237,6 +2743,55 @@ export class RadiationNoteRepository implements StructuredDataStore {
         FOREIGN KEY(course_id) REFERENCES treatment_courses(id)
       );
 
+      CREATE TABLE IF NOT EXISTS schedule_settings (
+        id INTEGER PRIMARY KEY,
+        clinic_start_time TEXT NOT NULL DEFAULT '08:00',
+        clinic_end_time TEXT NOT NULL DEFAULT '17:00',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS schedule_appointments (
+        id TEXT PRIMARY KEY,
+        patient_id TEXT,
+        course_id TEXT,
+        patient_name TEXT NOT NULL,
+        patient_first_name TEXT NOT NULL DEFAULT '',
+        patient_last_name TEXT NOT NULL DEFAULT '',
+        patient_mrn TEXT NOT NULL DEFAULT '',
+        patient_dob TEXT NOT NULL DEFAULT '',
+        patient_sex TEXT NOT NULL DEFAULT '',
+        appointment_date TEXT NOT NULL,
+        start_time TEXT NOT NULL,
+        end_time TEXT NOT NULL,
+        appointment_type TEXT NOT NULL,
+        appointment_number INTEGER,
+        total_appointments INTEGER,
+        status TEXT NOT NULL,
+        notes TEXT NOT NULL DEFAULT '',
+        series_id TEXT,
+        intake_course_type TEXT,
+        intake_biopsy_date TEXT NOT NULL DEFAULT '',
+        intake_sites_json TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(patient_id) REFERENCES patients(id),
+        FOREIGN KEY(course_id) REFERENCES treatment_courses(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS schedule_blocks (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        block_date TEXT,
+        start_time TEXT NOT NULL,
+        end_time TEXT NOT NULL,
+        block_type TEXT NOT NULL,
+        is_recurring INTEGER NOT NULL DEFAULT 0,
+        recurring_weekdays_json TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
       CREATE TABLE IF NOT EXISTS template_definitions (
         id TEXT PRIMARY KEY,
         key TEXT NOT NULL UNIQUE,
@@ -2312,6 +2867,14 @@ export class RadiationNoteRepository implements StructuredDataStore {
     try { this.run(`ALTER TABLE generated_pdfs ADD COLUMN file_asset_id TEXT`); } catch { /* already exists */ }
     try { this.run(`ALTER TABLE treatment_sites ADD COLUMN prescribed_fractions INTEGER`); } catch { /* already exists */ }
     try { this.run(`ALTER TABLE treatment_courses ADD COLUMN sim_consult_date TEXT`); } catch { /* already exists */ }
+    try { this.run(`ALTER TABLE schedule_appointments ADD COLUMN patient_first_name TEXT NOT NULL DEFAULT ''`); } catch { /* already exists */ }
+    try { this.run(`ALTER TABLE schedule_appointments ADD COLUMN patient_last_name TEXT NOT NULL DEFAULT ''`); } catch { /* already exists */ }
+    try { this.run(`ALTER TABLE schedule_appointments ADD COLUMN patient_mrn TEXT NOT NULL DEFAULT ''`); } catch { /* already exists */ }
+    try { this.run(`ALTER TABLE schedule_appointments ADD COLUMN patient_dob TEXT NOT NULL DEFAULT ''`); } catch { /* already exists */ }
+    try { this.run(`ALTER TABLE schedule_appointments ADD COLUMN patient_sex TEXT NOT NULL DEFAULT ''`); } catch { /* already exists */ }
+    try { this.run(`ALTER TABLE schedule_appointments ADD COLUMN intake_course_type TEXT`); } catch { /* already exists */ }
+    try { this.run(`ALTER TABLE schedule_appointments ADD COLUMN intake_biopsy_date TEXT NOT NULL DEFAULT ''`); } catch { /* already exists */ }
+    try { this.run(`ALTER TABLE schedule_appointments ADD COLUMN intake_sites_json TEXT NOT NULL DEFAULT '[]'`); } catch { /* already exists */ }
 
     this.backfillMissingAssetIds();
 

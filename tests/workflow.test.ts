@@ -310,6 +310,344 @@ describe("RadiationNoteService workflow", () => {
     expect(savedSites.map((site) => site.siteNumber).sort()).toEqual([1, 2]);
   });
 
+  it("uses scheduled sim consult and first treatment dates in the sim consult note", async () => {
+    const { patient, course } = await createPatientAndCourse();
+
+    service.saveScheduleAppointment({
+      patientId: patient.id,
+      courseId: course.id,
+      patientName: "Derm, Ava",
+      appointmentDate: "2026-05-10",
+      startTime: "09:00",
+      endTime: "09:45",
+      appointmentType: "sim_consult",
+      appointmentNumber: 0,
+      totalAppointments: null
+    });
+    service.saveScheduleAppointment({
+      patientId: patient.id,
+      courseId: course.id,
+      patientName: "Derm, Ava",
+      appointmentDate: "2026-05-20",
+      startTime: "09:00",
+      endTime: "09:15",
+      appointmentType: "treatment",
+      appointmentNumber: 2,
+      totalAppointments: 15
+    });
+    service.saveScheduleAppointment({
+      patientId: patient.id,
+      courseId: course.id,
+      patientName: "Derm, Ava",
+      appointmentDate: "2026-05-18",
+      startTime: "09:00",
+      endTime: "09:15",
+      appointmentType: "treatment",
+      appointmentNumber: 1,
+      totalAppointments: 15
+    });
+
+    const syncedCourse = repository.fetchCourse(course.id);
+    expect(syncedCourse?.simConsultDate).toBe("2026-05-10");
+
+    const consultDraft = service.buildVisitDraft(course.id, "consult_sim");
+    expect(consultDraft.note.visitDate).toBe("2026-05-10");
+    expect(consultDraft.note.structuredFields.startRadiationDate).toBe("2026-05-18");
+    expect(consultDraft.note.generatedText).toContain(formatDisplayDate("2026-05-18"));
+  });
+
+  it("starts today's note as sim consult when a planned consult exists before treatment one", async () => {
+    const { patient, course } = await createPatientAndCourse();
+
+    service.saveScheduleAppointment({
+      patientId: patient.id,
+      courseId: course.id,
+      patientName: "Derm, Ava",
+      appointmentDate: "2026-05-10",
+      startTime: "09:00",
+      endTime: "09:45",
+      appointmentType: "sim_consult",
+      appointmentNumber: 0,
+      totalAppointments: null
+    });
+
+    const dashboardCourse = service
+      .getDashboardSnapshot()
+      .activeCourses.find((row) => row.courseId === course.id);
+    expect(dashboardCourse?.suggestedNoteType).toBe("consult_sim");
+    expect(dashboardCourse?.suggestedTreatmentNumber).toBeNull();
+
+    const draft = service.buildVisitDraft(course.id, "next_treatment");
+    expect(draft.note.noteType).toBe("consult_sim");
+    expect(draft.note.treatmentNumber).toBeNull();
+    expect(draft.note.visitDate).toBe("2026-05-10");
+  });
+
+  it("makes pending courses schedulable and trims projected treatment appointments when actual fractions are lower", async () => {
+    const { patient, course } = await createPatientAndCourse();
+    const pendingCourse = service.saveCourse({
+      id: course.id,
+      patientId: patient.id,
+      courseName: course.courseName,
+      courseType: course.courseType,
+      prescribedFractions: 10,
+      startDate: course.startDate,
+      simConsultDate: course.simConsultDate ?? undefined,
+      status: "pending",
+      sites: repository.fetchSites([course.id]).map((site) => ({
+        id: site.id,
+        siteNumber: site.siteNumber,
+        bodyLocation: site.bodyLocation,
+        treatmentLocationText: site.treatmentLocationText,
+        diagnosisText: site.diagnosisText,
+        icd10: site.icd10,
+        numberOfBlocks: site.numberOfBlocks,
+        lesionSize: site.lesionSize,
+        treatmentDepth: site.treatmentDepth,
+        coneSize: site.coneSize,
+        cutoutSize: site.cutoutSize,
+        shields: site.shields,
+        machine: site.machine,
+        energyKv: site.energyKv,
+        treatmentInterval: site.treatmentInterval,
+        additionalDevices: site.additionalDevices,
+        dailyDose: site.dailyDose,
+        totalDose: site.totalDose,
+        prescribedFractions: 10
+      }))
+    });
+
+    const scheduleCourse = service
+      .getScheduleSnapshot("2026-01-01", "2026-12-31")
+      .activeCourses.find((row) => row.courseId === pendingCourse.id);
+    expect(scheduleCourse?.prescribedFractions).toBe(10);
+    expect(scheduleCourse?.suggestedTreatmentNumber).toBe(1);
+
+    for (let index = 1; index <= 10; index += 1) {
+      service.saveScheduleAppointment({
+        patientId: patient.id,
+        courseId: pendingCourse.id,
+        patientName: "Derm, Ava",
+        appointmentDate: `2026-05-${String(index + 10).padStart(2, "0")}`,
+        startTime: "09:00",
+        endTime: "09:15",
+        appointmentType: "treatment",
+        appointmentNumber: index,
+        totalAppointments: 10
+      });
+    }
+    expect(repository.fetchScheduleAppointments("2026-05-01", "2026-05-31")).toHaveLength(10);
+
+    service.saveCourse({
+      id: pendingCourse.id,
+      patientId: patient.id,
+      courseName: pendingCourse.courseName,
+      courseType: pendingCourse.courseType,
+      prescribedFractions: 8,
+      startDate: pendingCourse.startDate,
+      simConsultDate: pendingCourse.simConsultDate ?? undefined,
+      status: "active",
+      sites: repository.fetchSites([pendingCourse.id]).map((site) => ({
+        id: site.id,
+        siteNumber: site.siteNumber,
+        bodyLocation: site.bodyLocation,
+        treatmentLocationText: site.treatmentLocationText,
+        diagnosisText: site.diagnosisText,
+        icd10: site.icd10,
+        numberOfBlocks: site.numberOfBlocks,
+        lesionSize: site.lesionSize,
+        treatmentDepth: site.treatmentDepth,
+        coneSize: site.coneSize,
+        cutoutSize: site.cutoutSize,
+        shields: site.shields,
+        machine: site.machine,
+        energyKv: site.energyKv,
+        treatmentInterval: site.treatmentInterval,
+        additionalDevices: site.additionalDevices,
+        dailyDose: site.dailyDose,
+        totalDose: site.totalDose,
+        prescribedFractions: 8
+      }))
+    });
+
+    const remainingAppointments = repository.fetchScheduleAppointments("2026-05-01", "2026-05-31");
+    expect(remainingAppointments).toHaveLength(8);
+    expect(remainingAppointments.map((appointment) => appointment.appointmentNumber)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+  });
+
+  it("trims and relabels the treatment schedule when treatment one changes prescribed fractions", async () => {
+    const { patient, course } = await createPatientAndCourse();
+
+    for (let index = 1; index <= 10; index += 1) {
+      service.saveScheduleAppointment({
+        patientId: patient.id,
+        courseId: course.id,
+        patientName: "Derm, Ava",
+        appointmentDate: `2026-06-${String(index + 1).padStart(2, "0")}`,
+        startTime: "13:00",
+        endTime: "13:15",
+        appointmentType: "treatment",
+        appointmentNumber: index,
+        totalAppointments: 10
+      });
+    }
+
+    const draft = service.buildVisitDraft(course.id, "next_treatment");
+    expect(draft.note.treatmentNumber).toBe(1);
+
+    service.saveVisit({
+      ...draft.note,
+      structuredFields: {
+        ...draft.note.structuredFields,
+        prescribedFractionsInput: 8
+      }
+    });
+
+    expect(repository.fetchCourse(course.id)?.prescribedFractions).toBe(8);
+    const remainingAppointments = repository.fetchScheduleAppointments("2026-06-01", "2026-06-30");
+    expect(remainingAppointments).toHaveLength(8);
+    expect(remainingAppointments.map((appointment) => appointment.appointmentNumber)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(new Set(remainingAppointments.map((appointment) => appointment.totalAppointments))).toEqual(new Set([8]));
+  });
+
+  it("deletes a course treatment schedule without removing the sim consult appointment", async () => {
+    const { patient, course } = await createPatientAndCourse();
+    service.saveScheduleAppointment({
+      patientId: patient.id,
+      courseId: course.id,
+      patientName: "Derm, Ava",
+      appointmentDate: "2026-05-04",
+      startTime: "09:00",
+      endTime: "09:45",
+      appointmentType: "sim_consult",
+      appointmentNumber: 0,
+      totalAppointments: null
+    });
+    service.saveScheduleAppointment({
+      patientId: patient.id,
+      courseId: course.id,
+      patientName: "Derm, Ava",
+      appointmentDate: "2026-05-06",
+      startTime: "09:00",
+      endTime: "09:15",
+      appointmentType: "treatment",
+      appointmentNumber: 1,
+      totalAppointments: 2
+    });
+    service.saveScheduleAppointment({
+      patientId: patient.id,
+      courseId: course.id,
+      patientName: "Derm, Ava",
+      appointmentDate: "2026-05-08",
+      startTime: "09:00",
+      endTime: "09:15",
+      appointmentType: "treatment",
+      appointmentNumber: 2,
+      totalAppointments: 2
+    });
+
+    expect(service.deleteCourseTreatmentSchedule(course.id)).toBe(2);
+
+    const remainingAppointments = repository.fetchScheduleAppointments("2026-05-01", "2026-05-31");
+    expect(remainingAppointments).toHaveLength(1);
+    expect(remainingAppointments[0].appointmentType).toBe("sim_consult");
+  });
+
+  it("removes linked schedule appointments when a patient is archived", async () => {
+    const { patient, course } = await createPatientAndCourse();
+    service.saveScheduleAppointment({
+      patientId: patient.id,
+      courseId: course.id,
+      patientName: "Derm, Ava",
+      appointmentDate: "2026-05-04",
+      startTime: "09:00",
+      endTime: "09:45",
+      appointmentType: "sim_consult",
+      appointmentNumber: 0,
+      totalAppointments: null
+    });
+    service.saveScheduleAppointment({
+      patientId: patient.id,
+      courseId: course.id,
+      patientName: "Derm, Ava",
+      appointmentDate: "2026-05-06",
+      startTime: "09:00",
+      endTime: "09:15",
+      appointmentType: "treatment",
+      appointmentNumber: 1,
+      totalAppointments: 1
+    });
+    expect(repository.fetchScheduleAppointments("2026-05-01", "2026-05-31")).toHaveLength(2);
+
+    service.archivePatient(patient.id);
+
+    expect(repository.fetchScheduleAppointments("2026-05-01", "2026-05-31")).toHaveLength(0);
+  });
+
+  it("completes the matching treatment schedule appointment by treatment number when a note is finalized", async () => {
+    const { patient, course } = await createPatientAndCourse();
+    service.saveScheduleAppointment({
+      patientId: patient.id,
+      courseId: course.id,
+      patientName: "Derm, Ava",
+      appointmentDate: "2026-12-15",
+      startTime: "09:00",
+      endTime: "09:15",
+      appointmentType: "treatment",
+      appointmentNumber: 1,
+      totalAppointments: 15
+    });
+
+    const draft = service.buildVisitDraft(course.id, "next_treatment");
+    expect(draft.note.treatmentNumber).toBe(1);
+    expect(draft.note.visitDate).not.toBe("2026-12-15");
+
+    const savedVisit = service.saveVisit({ ...draft.note, status: "finalized" });
+    const completedAppointment = service.completeScheduleAppointmentForVisit(savedVisit.id);
+
+    expect(completedAppointment?.status).toBe("completed");
+    const scheduleAppointments = repository.fetchScheduleAppointments("2026-12-01", "2026-12-31");
+    expect(scheduleAppointments[0].status).toBe("completed");
+  });
+
+  it("starts a scheduled treatment draft with the appointment date and treatment number", async () => {
+    const { course } = await createPatientAndCourse();
+
+    const draft = service.buildVisitDraft(course.id, "next_treatment", undefined, {
+      visitDate: "2026-12-15",
+      treatmentNumber: 6
+    });
+
+    expect(draft.note.visitDate).toBe("2026-12-15");
+    expect(draft.note.treatmentNumber).toBe(6);
+    expect(draft.note.noteType).toBe("standard_treatment");
+  });
+
+  it("completes the matching sim consult schedule appointment even when the note date differs", async () => {
+    const { patient, course } = await createPatientAndCourse();
+    service.saveScheduleAppointment({
+      patientId: patient.id,
+      courseId: course.id,
+      patientName: "Derm, Ava",
+      appointmentDate: "2026-12-10",
+      startTime: "09:00",
+      endTime: "09:45",
+      appointmentType: "sim_consult",
+      appointmentNumber: 0,
+      totalAppointments: null
+    });
+
+    const draft = service.buildVisitDraft(course.id, "consult_sim");
+    expect(draft.note.visitDate).toBe("2026-12-10");
+
+    const savedVisit = service.saveVisit({ ...draft.note, visitDate: "2026-11-30", status: "finalized" });
+    const completedAppointment = service.completeScheduleAppointmentForVisit(savedVisit.id);
+
+    expect(completedAppointment?.status).toBe("completed");
+    const scheduleAppointments = repository.fetchScheduleAppointments("2026-12-01", "2026-12-31");
+    expect(scheduleAppointments[0].status).toBe("completed");
+  });
+
   it("defaults the treatment machine text when a site machine is blank", async () => {
     const { patient, course } = await createPatientAndCourse();
 
@@ -1083,7 +1421,7 @@ describe("RadiationNoteService workflow", () => {
     });
 
     const consultDraft = service.buildVisitDraft(course.id, "consult_sim");
-    expect(consultDraft.note.generatedText).toContain("Additional Treatment Devices: Eye Shield, Ear Shield, Custom Shield - Nose Shield");
+    expect(consultDraft.note.generatedText).toContain("Additional Tx devices: Eye Shield, Ear Shield, Special Set-up - Nose Shield");
     expect(consultDraft.note.generatedText).toContain(
       "The simulation was complicated by the following factors: Proximity to eye and ear (shielding vital organ)"
     );
@@ -1503,11 +1841,11 @@ describe("RadiationNoteService workflow", () => {
     });
 
     const reopened = service.buildVisitDraft(course.id, "consult_sim", savedConsult.id);
-    expect(reopened.note.generatedText).toContain("Additional Treatment Devices: Eye Shield");
-    expect(reopened.note.editedText).toContain("Additional Treatment Devices: Eye Shield");
+    expect(reopened.note.generatedText).toContain("Additional Tx devices: Eye Shield");
+    expect(reopened.note.editedText).toContain("Additional Tx devices: Eye Shield");
 
     const resaved = service.saveVisit(reopened.note);
-    expect(resaved.generatedText).toContain("Additional Treatment Devices: Eye Shield");
+    expect(resaved.generatedText).toContain("Additional Tx devices: Eye Shield");
   });
 
   it("keeps remembered options hidden and allows a dermatology logo override with default fallback", async () => {

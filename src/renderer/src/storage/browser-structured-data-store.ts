@@ -10,6 +10,12 @@ import type {
   GeneratedPdfRecord,
   PatientInput,
   PatientRecord,
+  ScheduleAppointmentInput,
+  ScheduleAppointmentRecord,
+  ScheduleAppointmentStatus,
+  ScheduleBlockInput,
+  ScheduleBlockRecord,
+  ScheduleSettingsView,
   SavedOptionRecord,
   SavedOptionType,
   TemplateDefinitionRecord,
@@ -43,12 +49,15 @@ type BrowserStoreName =
   | "visitPhotos"
   | "visitAttachments"
   | "generatedPdfs"
+  | "scheduleAppointments"
+  | "scheduleBlocks"
+  | "scheduleSettings"
   | "templates";
 
 type SqlValue = string | number | null;
 
 const DATABASE_NAME = "dermatherapy-note-maker-browser";
-const DATABASE_VERSION = 3;
+const DATABASE_VERSION = 4;
 
 const DEFAULT_SETTINGS_RECORD: AppSettingsRecord = {
   id: 1,
@@ -64,6 +73,11 @@ const DEFAULT_SETTINGS_RECORD: AppSettingsRecord = {
   inactivityTimeoutMinutes: 5,
   createdAt: new Date(0).toISOString(),
   updatedAt: new Date(0).toISOString()
+};
+
+const DEFAULT_SCHEDULE_SETTINGS: ScheduleSettingsView = {
+  clinicStartTime: "08:00",
+  clinicEndTime: "17:00"
 };
 
 function nowIso() {
@@ -192,6 +206,9 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
   private visitPhotos = new Map<string, VisitPhotoRecord>();
   private visitAttachments = new Map<string, VisitAttachmentRecord>();
   private generatedPdfs = new Map<string, GeneratedPdfRecord>();
+  private scheduleAppointments = new Map<string, ScheduleAppointmentRecord>();
+  private scheduleBlocks = new Map<string, ScheduleBlockRecord>();
+  private scheduleSettings: ScheduleSettingsView = { ...DEFAULT_SCHEDULE_SETTINGS };
   private templates = new Map<string, TemplateDefinitionRecord>();
   private pendingWrites: Promise<void> = Promise.resolve();
   private initialized = false;
@@ -209,6 +226,20 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
 
   async flush() {
     await this.pendingWrites;
+  }
+
+  private normalizeScheduleAppointment(appointment: ScheduleAppointmentRecord): ScheduleAppointmentRecord {
+    return {
+      ...appointment,
+      patientFirstName: appointment.patientFirstName ?? "",
+      patientLastName: appointment.patientLastName ?? "",
+      patientMrn: appointment.patientMrn ?? "",
+      patientDob: appointment.patientDob ?? "",
+      patientSex: appointment.patientSex ?? "",
+      intakeCourseType: appointment.intakeCourseType ?? null,
+      intakeBiopsyDate: appointment.intakeBiopsyDate ?? "",
+      intakeSites: appointment.intakeSites ?? []
+    };
   }
 
   async wipeAllData() {
@@ -234,6 +265,9 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
     this.visitPhotos.clear();
     this.visitAttachments.clear();
     this.generatedPdfs.clear();
+    this.scheduleAppointments.clear();
+    this.scheduleBlocks.clear();
+    this.scheduleSettings = { ...DEFAULT_SCHEDULE_SETTINGS };
     this.templates.clear();
   }
 
@@ -375,6 +409,7 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
         this.courses.set(course.id, nextCourse);
         this.queuePut("courses", nextCourse);
       }
+      this.deletePatientSchedule(patientId);
     }
   }
 
@@ -593,6 +628,160 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
     return course;
   }
 
+  fetchScheduleAppointments(startDate: string, endDate: string) {
+    this.ensureInitialized();
+    return [...this.scheduleAppointments.values()]
+      .filter((appointment) => appointment.appointmentDate >= startDate && appointment.appointmentDate <= endDate)
+      .sort((left, right) =>
+        `${left.appointmentDate}|${left.startTime}|${left.patientName}`.localeCompare(
+          `${right.appointmentDate}|${right.startTime}|${right.patientName}`
+        )
+      )
+      .map((appointment) => this.normalizeScheduleAppointment(appointment));
+  }
+
+  fetchScheduleAppointment(appointmentId: string) {
+    this.ensureInitialized();
+    const appointment = this.scheduleAppointments.get(appointmentId) ?? null;
+    return appointment ? this.normalizeScheduleAppointment(appointment) : null;
+  }
+
+  saveScheduleAppointment(input: ScheduleAppointmentInput) {
+    this.ensureInitialized();
+    const existing = input.id ? this.scheduleAppointments.get(input.id) ?? null : null;
+    const record: ScheduleAppointmentRecord = {
+      id: input.id ?? makeId("appt"),
+      patientId: input.patientId ?? null,
+      courseId: input.courseId ?? null,
+      patientName: input.patientName.trim(),
+      patientFirstName: input.patientFirstName?.trim() ?? existing?.patientFirstName ?? "",
+      patientLastName: input.patientLastName?.trim() ?? existing?.patientLastName ?? "",
+      patientMrn: input.patientMrn?.trim() ?? existing?.patientMrn ?? "",
+      patientDob: input.patientDob?.trim() ?? existing?.patientDob ?? "",
+      patientSex: input.patientSex?.trim() ?? existing?.patientSex ?? "",
+      appointmentDate: input.appointmentDate,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      appointmentType: input.appointmentType,
+      appointmentNumber: input.appointmentNumber ?? null,
+      totalAppointments: input.totalAppointments ?? null,
+      status: input.status ?? existing?.status ?? "scheduled",
+      notes: input.notes?.trim() ?? existing?.notes ?? "",
+      seriesId: input.seriesId ?? existing?.seriesId ?? null,
+      intakeCourseType: input.intakeCourseType ?? existing?.intakeCourseType ?? null,
+      intakeBiopsyDate: input.intakeBiopsyDate?.trim() ?? existing?.intakeBiopsyDate ?? "",
+      intakeSites: input.intakeSites ?? existing?.intakeSites ?? [],
+      createdAt: existing?.createdAt ?? nowIso(),
+      updatedAt: nowIso()
+    };
+
+    this.scheduleAppointments.set(record.id, record);
+    this.queuePut("scheduleAppointments", record);
+    return record;
+  }
+
+  deleteScheduleAppointment(appointmentId: string) {
+    this.ensureInitialized();
+    this.scheduleAppointments.delete(appointmentId);
+    this.queueDelete("scheduleAppointments", appointmentId);
+  }
+
+  deletePatientSchedule(patientId: string) {
+    this.ensureInitialized();
+    const courseIds = new Set(this.fetchCourses("patient_id = ?", [patientId]).map((course) => course.id));
+    const targets = [...this.scheduleAppointments.values()].filter(
+      (appointment) => appointment.patientId === patientId || (appointment.courseId ? courseIds.has(appointment.courseId) : false)
+    );
+    for (const appointment of targets) {
+      this.scheduleAppointments.delete(appointment.id);
+      this.queueDelete("scheduleAppointments", appointment.id);
+    }
+    return targets.length;
+  }
+
+  deleteCourseTreatmentSchedule(courseId: string) {
+    this.ensureInitialized();
+    const targets = [...this.scheduleAppointments.values()].filter(
+      (appointment) => appointment.courseId === courseId && appointment.appointmentType === "treatment"
+    );
+    for (const appointment of targets) {
+      this.scheduleAppointments.delete(appointment.id);
+      this.queueDelete("scheduleAppointments", appointment.id);
+    }
+    if (targets.length) {
+      this.syncCourseScheduleDates(courseId);
+    }
+    return targets.length;
+  }
+
+  updateScheduleAppointmentStatus(appointmentId: string, status: ScheduleAppointmentStatus) {
+    this.ensureInitialized();
+    const appointment = this.scheduleAppointments.get(appointmentId);
+    if (!appointment) {
+      throw new Error("Schedule appointment not found.");
+    }
+
+    return this.saveScheduleAppointment({ ...appointment, status });
+  }
+
+  fetchScheduleBlocks(startDate: string, endDate: string) {
+    this.ensureInitialized();
+    return [...this.scheduleBlocks.values()]
+      .filter((block) => block.blockDate === null || (block.blockDate >= startDate && block.blockDate <= endDate))
+      .sort((left, right) =>
+        `${left.blockDate ?? ""}|${left.startTime}|${left.title}`.localeCompare(
+          `${right.blockDate ?? ""}|${right.startTime}|${right.title}`
+        )
+      );
+  }
+
+  fetchScheduleBlock(blockId: string) {
+    this.ensureInitialized();
+    return this.scheduleBlocks.get(blockId) ?? null;
+  }
+
+  saveScheduleBlock(input: ScheduleBlockInput) {
+    this.ensureInitialized();
+    const existing = input.id ? this.scheduleBlocks.get(input.id) ?? null : null;
+    const record: ScheduleBlockRecord = {
+      id: input.id ?? makeId("block"),
+      title: input.title.trim(),
+      blockDate: input.blockDate?.trim() || null,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      blockType: input.blockType,
+      isRecurring: Boolean(input.isRecurring),
+      recurringWeekdays: input.recurringWeekdays ?? existing?.recurringWeekdays ?? [],
+      createdAt: existing?.createdAt ?? nowIso(),
+      updatedAt: nowIso()
+    };
+
+    this.scheduleBlocks.set(record.id, record);
+    this.queuePut("scheduleBlocks", record);
+    return record;
+  }
+
+  deleteScheduleBlock(blockId: string) {
+    this.ensureInitialized();
+    this.scheduleBlocks.delete(blockId);
+    this.queueDelete("scheduleBlocks", blockId);
+  }
+
+  getScheduleSettings() {
+    this.ensureInitialized();
+    return { ...this.scheduleSettings };
+  }
+
+  saveScheduleSettings(input: ScheduleSettingsView) {
+    this.ensureInitialized();
+    this.scheduleSettings = {
+      clinicStartTime: input.clinicStartTime,
+      clinicEndTime: input.clinicEndTime
+    };
+    this.queuePut("scheduleSettings", { id: 1, ...this.scheduleSettings });
+    return this.getScheduleSettings();
+  }
+
   updateCoursePrescribedFractions(courseId: string, prescribedFractions: number) {
     this.ensureInitialized();
     const course = this.requireRecord(this.courses, courseId, "Course");
@@ -623,6 +812,95 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
     const next = { ...site, dailyDose, totalDose, updatedAt: nowIso() };
     this.sites.set(site.id, next);
     this.queuePut("sites", next);
+  }
+
+  getCourseScheduleDates(courseId: string) {
+    this.ensureInitialized();
+    const appointments = [...this.scheduleAppointments.values()]
+      .filter((appointment) => appointment.courseId === courseId && appointment.status !== "cancelled")
+      .sort((left, right) =>
+        `${left.appointmentDate}|${left.startTime}`.localeCompare(`${right.appointmentDate}|${right.startTime}`)
+      );
+    return {
+      simConsultDate: appointments.find((appointment) => appointment.appointmentType === "sim_consult")?.appointmentDate ?? null,
+      treatmentStartDate: appointments.find((appointment) => appointment.appointmentType === "treatment")?.appointmentDate ?? null
+    };
+  }
+
+  syncCourseScheduleDates(courseId: string) {
+    this.ensureInitialized();
+    const { simConsultDate, treatmentStartDate } = this.getCourseScheduleDates(courseId);
+    const timestamp = nowIso();
+    const course = this.courses.get(courseId);
+    if (course && simConsultDate) {
+      const nextCourse = { ...course, simConsultDate, updatedAt: timestamp };
+      this.courses.set(courseId, nextCourse);
+      this.queuePut("courses", nextCourse);
+    }
+
+    if (simConsultDate || treatmentStartDate) {
+      const consultVisits = [...this.visitNotes.values()].filter(
+        (visit) => visit.courseId === courseId && visit.noteType === "consult_sim"
+      );
+      for (const visit of consultVisits) {
+        const nextVisit: VisitNoteRecord = {
+          ...visit,
+          visitDate: simConsultDate ?? visit.visitDate,
+          structuredFields: {
+            ...visit.structuredFields,
+            startRadiationDate: treatmentStartDate ?? visit.structuredFields.startRadiationDate ?? ""
+          },
+          updatedAt: timestamp
+        };
+        this.visitNotes.set(visit.id, nextVisit);
+        this.queuePut("visitNotes", nextVisit);
+      }
+    }
+
+    return { simConsultDate, treatmentStartDate };
+  }
+
+  trimCourseTreatmentAppointments(courseId: string, prescribedFractions: number) {
+    this.ensureInitialized();
+    if (prescribedFractions <= 0) {
+      return;
+    }
+
+    const appointments = [...this.scheduleAppointments.values()]
+      .filter((appointment) => appointment.courseId === courseId)
+      .filter((appointment) => appointment.appointmentType === "treatment")
+      .sort((left, right) =>
+        `${left.appointmentDate}|${left.startTime}`.localeCompare(`${right.appointmentDate}|${right.startTime}`)
+      );
+    const extras = appointments.filter((appointment, index) => {
+      if (appointment.status === "completed") {
+        return false;
+      }
+      return (appointment.appointmentNumber ?? index + 1) > prescribedFractions || index >= prescribedFractions;
+    });
+    const extraIds = new Set(extras.map((appointment) => appointment.id));
+    const retainedAppointments = appointments.filter((appointment) => !extraIds.has(appointment.id));
+    const timestamp = nowIso();
+    let totalUpdated = false;
+    for (const appointment of retainedAppointments) {
+      if ((appointment.appointmentNumber ?? 0) <= prescribedFractions && appointment.totalAppointments !== prescribedFractions) {
+        const next: ScheduleAppointmentRecord = {
+          ...appointment,
+          totalAppointments: prescribedFractions,
+          updatedAt: timestamp
+        };
+        this.scheduleAppointments.set(next.id, next);
+        this.queuePut("scheduleAppointments", next);
+        totalUpdated = true;
+      }
+    }
+    for (const appointment of extras) {
+      this.scheduleAppointments.delete(appointment.id);
+      this.queueDelete("scheduleAppointments", appointment.id);
+    }
+    if (extras.length || totalUpdated) {
+      this.syncCourseScheduleDates(courseId);
+    }
   }
 
   setCourseStatus(courseId: string, status: TreatmentCourseRecord["status"], endDate?: string | null) {
@@ -872,6 +1150,10 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
       this.sites.delete(site.id);
       this.queueDelete("sites", site.id);
     }
+    for (const appointment of [...this.scheduleAppointments.values()].filter((item) => item.courseId === courseId)) {
+      this.scheduleAppointments.delete(appointment.id);
+      this.queueDelete("scheduleAppointments", appointment.id);
+    }
     this.courses.delete(courseId);
     this.queueDelete("courses", courseId);
   }
@@ -880,6 +1162,10 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
     this.ensureInitialized();
     for (const course of this.fetchCourses("patient_id = ?", [patientId])) {
       this.deleteCourseRecords(course.id);
+    }
+    for (const appointment of [...this.scheduleAppointments.values()].filter((item) => item.patientId === patientId)) {
+      this.scheduleAppointments.delete(appointment.id);
+      this.queueDelete("scheduleAppointments", appointment.id);
     }
     this.patients.delete(patientId);
     this.queueDelete("patients", patientId);
@@ -1118,10 +1404,23 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
     this.visitPhotos = this.asMap(await this.getAllFromStore<VisitPhotoRecord>("visitPhotos"));
     this.visitAttachments = this.asMap(await this.getAllFromStore<VisitAttachmentRecord>("visitAttachments"));
     this.generatedPdfs = this.asMap(await this.getAllFromStore<GeneratedPdfRecord>("generatedPdfs"));
+    this.scheduleAppointments = this.asMap(await this.getAllFromStore<ScheduleAppointmentRecord>("scheduleAppointments"));
+    this.scheduleBlocks = this.asMap(await this.getAllFromStore<ScheduleBlockRecord>("scheduleBlocks"));
+    const [scheduleSettings] = await this.getAllFromStore<ScheduleSettingsView & { id: number }>("scheduleSettings");
+    this.scheduleSettings = scheduleSettings
+      ? {
+          clinicStartTime: scheduleSettings.clinicStartTime,
+          clinicEndTime: scheduleSettings.clinicEndTime
+        }
+      : { ...DEFAULT_SCHEDULE_SETTINGS };
     this.templates = this.asMap(await this.getAllFromStore<TemplateDefinitionRecord>("templates"));
 
     if (!settings) {
       this.queuePut("settings", this.settings);
+      await this.flush();
+    }
+    if (!scheduleSettings) {
+      this.queuePut("scheduleSettings", { id: 1, ...this.scheduleSettings });
       await this.flush();
     }
   }
@@ -1238,6 +1537,9 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
         ensureStore("visitPhotos", "id");
         ensureStore("visitAttachments", "id");
         ensureStore("generatedPdfs", "id");
+        ensureStore("scheduleAppointments", "id");
+        ensureStore("scheduleBlocks", "id");
+        ensureStore("scheduleSettings", "id");
         ensureStore("templates", "id");
       };
 

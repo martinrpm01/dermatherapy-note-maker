@@ -14,6 +14,16 @@ const api: ElectronApi = {
   wipeAllLocalData: () => ipcRenderer.invoke("app:wipeAllLocalData"),
 
   getDashboardSnapshot: () => ipcRenderer.invoke("dashboard:getSnapshot"),
+  getScheduleSnapshot: (startDate, endDate) => ipcRenderer.invoke("schedule:getSnapshot", startDate, endDate),
+  saveScheduleAppointment: (input) => ipcRenderer.invoke("schedule:saveAppointment", input),
+  deleteScheduleAppointment: (appointmentId) => ipcRenderer.invoke("schedule:deleteAppointment", appointmentId),
+  deleteCourseTreatmentSchedule: (courseId) => ipcRenderer.invoke("schedule:deleteCourseTreatments", courseId),
+  updateScheduleAppointmentStatus: (appointmentId, status) =>
+    ipcRenderer.invoke("schedule:updateAppointmentStatus", appointmentId, status),
+  saveScheduleBlock: (input) => ipcRenderer.invoke("schedule:saveBlock", input),
+  deleteScheduleBlock: (blockId) => ipcRenderer.invoke("schedule:deleteBlock", blockId),
+  saveScheduleSettings: (input) => ipcRenderer.invoke("schedule:saveSettings", input),
+  completeScheduleAppointmentForVisit: (visitId) => ipcRenderer.invoke("schedule:completeForVisit", visitId),
   getDocumentOnlySnapshot: () => ipcRenderer.invoke("documents:getSnapshot"),
   getPatientDetail: (patientId) => ipcRenderer.invoke("patient:getDetail", patientId),
   listCompleted: () => ipcRenderer.invoke("completed:list"),
@@ -40,8 +50,8 @@ const api: ElectronApi = {
   restoreCourse: (courseId) => ipcRenderer.invoke("course:restore", courseId),
   deleteCourse: (courseId) => ipcRenderer.invoke("course:delete", courseId),
 
-  buildVisitDraft: (courseId, mode, existingVisitId) =>
-    ipcRenderer.invoke("visit:buildDraft", courseId, mode, existingVisitId),
+  buildVisitDraft: (courseId, mode, existingVisitId, options) =>
+    ipcRenderer.invoke("visit:buildDraft", courseId, mode, existingVisitId, options),
   saveVisit: (input) => ipcRenderer.invoke("visit:save", input),
   deleteVisit: (visitId) => ipcRenderer.invoke("visit:delete", visitId),
   generatePdf: (visitId) => ipcRenderer.invoke("visit:generatePdf", visitId),

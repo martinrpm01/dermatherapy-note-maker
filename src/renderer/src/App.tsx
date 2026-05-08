@@ -42,6 +42,7 @@ import {
   PendingCourseIntakeModal
 } from "./modal-components";
 import { VisitEditorScreen } from "./visit-editor-screen";
+import { ScheduleScreen, printPatientSchedule } from "./schedule-screen";
 import appBrandLogo from "./assets/clear-skin-app-logo.jpg";
 import defaultNoteLogo from "./assets/clear-skin-note-logo.jpg";
 import brandIcon from "./assets/dermatherapy-icon.png";
@@ -59,21 +60,24 @@ import type {
   PatientRecord,
   PatientDetail,
   PatientInput,
+  ScheduleAppointmentRecord,
   SettingsPayload,
   StoredAssetUpload,
   TemplateDefinitionRecord,
   TreatmentCourseRecord,
   TreatmentSiteRecord,
+  VisitDraftOptions,
   VisitEditorState
 } from "../../shared/types";
 
 type Screen =
   | { name: "dashboard" }
   | { name: "patient"; patientId: string }
-  | { name: "visit"; courseId: string; mode: "next_treatment" | "consult_sim"; existingVisitId?: string }
+  | { name: "visit"; courseId: string; mode: "next_treatment" | "consult_sim"; existingVisitId?: string; visitDate?: string; treatmentNumber?: number | null }
   | { name: "completed" }
   | { name: "archive" }
   | { name: "documents" }
+  | { name: "schedule"; courseId?: string }
   | { name: "settings" };
 
 type CourseModalMode = "intake" | "full";
@@ -862,7 +866,12 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     if (screen.name === "archive") void loadArchive();
     if (screen.name === "documents") void loadDocumentOnly();
     if (screen.name === "patient") void loadPatient(screen.patientId);
-    if (screen.name === "visit") void loadVisit(screen.courseId, screen.mode, screen.existingVisitId);
+    if (screen.name === "visit") {
+      void loadVisit(screen.courseId, screen.mode, screen.existingVisitId, {
+        visitDate: screen.visitDate,
+        treatmentNumber: screen.treatmentNumber
+      });
+    }
   }, [screen, boot, authGateActive]);
 
   useEffect(() => {
@@ -948,12 +957,23 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     }
   }
 
-  async function loadVisit(courseId: string, mode: "next_treatment" | "consult_sim", existingVisitId?: string) {
+  async function loadVisit(
+    courseId: string,
+    mode: "next_treatment" | "consult_sim",
+    existingVisitId?: string,
+    options?: VisitDraftOptions
+  ) {
     if (!appClient) return;
-    const editor = await appClient.buildVisitDraft(courseId, mode, existingVisitId);
-    setVisitEditor(editor);
-    setTextDirty(false);
-    autosaveSignatureRef.current = JSON.stringify(buildAutosaveVisitInput(editor.note));
+    try {
+      const editor = await appClient.buildVisitDraft(courseId, mode, existingVisitId, options);
+      setVisitEditor(editor);
+      setTextDirty(false);
+      autosaveSignatureRef.current = JSON.stringify(buildAutosaveVisitInput(editor.note));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not start that note.";
+      showToast(message);
+      setScreen({ name: "schedule" });
+    }
   }
 
   async function lockApp() {
@@ -1182,6 +1202,66 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function printCourseSchedule(courseId: string) {
+    if (!appClient) return;
+    const currentYear = new Date().getFullYear();
+    const snapshot = await appClient.getScheduleSnapshot(`${currentYear - 1}-01-01`, `${currentYear + 2}-12-31`);
+    const appointments = snapshot.appointments
+      .filter((appointment) => appointment.courseId === courseId && appointment.appointmentType === "treatment" && appointment.status !== "cancelled")
+      .sort((left, right) => `${left.appointmentDate}|${left.startTime}`.localeCompare(`${right.appointmentDate}|${right.startTime}`));
+    if (!appointments.length) {
+      window.alert("No treatment schedule has been created for this course yet.");
+      return;
+    }
+    printPatientSchedule(appointments[0].patientName, appointments);
+  }
+
+  async function deleteCourseTreatmentSchedule(courseId: string) {
+    if (!appClient) return false;
+    if (!window.confirm("Delete all treatment appointments for this course? This keeps the patient chart and notes, but removes the treatment schedule from the calendar.")) {
+      return false;
+    }
+    const deletedCount = await appClient.deleteCourseTreatmentSchedule(courseId);
+    if (patientDetail?.patient.id) {
+      await loadPatient(patientDetail.patient.id);
+    }
+    await loadDashboard();
+    showToast(deletedCount ? "Treatment schedule deleted." : "No treatment appointments were found.");
+    return true;
+  }
+
+  async function startScheduleAppointmentNote(appointment: ScheduleAppointmentRecord) {
+    if (!appClient) return;
+    if (appointment.appointmentType === "follow_up") {
+      window.alert("Follow-up appointments can be tracked on the schedule, but follow-up note generation is not built yet.");
+      return;
+    }
+    if (!appointment.courseId || !appointment.patientId) {
+      window.alert("Link this appointment to Active Patients before starting a note.");
+      return;
+    }
+
+    const detail = await appClient.getPatientDetail(appointment.patientId).catch(() => null);
+    const courseDetail = detail?.courses.find((item) => item.course.id === appointment.courseId);
+    if (!detail || !courseDetail) {
+      window.alert("This scheduled appointment is not linked to a patient course.");
+      return;
+    }
+    if (courseDetail.course.status === "pending") {
+      setScreen({ name: "patient", patientId: appointment.patientId });
+      showToast("Complete course setup before starting this scheduled note.");
+      return;
+    }
+
+    setScreen({
+      name: "visit",
+      courseId: appointment.courseId,
+      mode: appointment.appointmentType === "sim_consult" ? "consult_sim" : "next_treatment",
+      visitDate: appointment.appointmentDate,
+      treatmentNumber: appointment.appointmentType === "treatment" ? appointment.appointmentNumber : null
+    });
   }
 
   async function deleteCourseForm() {
@@ -1476,6 +1556,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
       if (generatePdf) {
         const pdfResult = await appClient.generatePdf(saved.id);
         revealTarget = pdfResult.pdfAsset;
+        await appClient.completeScheduleAppointmentForVisit(saved.id);
         await loadPatient(currentPatientId);
         setScreen({ name: "patient", patientId: currentPatientId });
       } else {
@@ -1812,7 +1893,8 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
             <p className="muted">Local-first treatment note workflow</p>
           </div>
           <nav>
-            <button className={screen.name === "dashboard" ? "nav active" : "nav"} onClick={() => setScreen({ name: "dashboard" })}>Active Workflow</button>
+            <button className={screen.name === "schedule" ? "nav active" : "nav"} onClick={() => setScreen({ name: "schedule" })}>Schedule</button>
+            <button className={screen.name === "dashboard" ? "nav active" : "nav"} onClick={() => setScreen({ name: "dashboard" })}>Active Patients</button>
             <button className={screen.name === "completed" ? "nav active" : "nav"} onClick={() => setScreen({ name: "completed" })}>Completed Patients</button>
             <button className={screen.name === "archive" ? "nav active" : "nav"} onClick={() => setScreen({ name: "archive" })}>Archive</button>
             <button className={screen.name === "documents" ? "nav active" : "nav"} onClick={() => setScreen({ name: "documents" })}>Consent / Sim Docs</button>
@@ -1837,7 +1919,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
               if (!appClient) return;
               await appClient.archivePatient(patientId);
               await refreshWorkflowSnapshots();
-              showToast("Patient moved to Archive.");
+              showToast("Patient moved to Archive and schedule removed.");
             })()}
               onOpenVisit={(courseId, mode, existingVisitId) => setScreen({ name: "visit", courseId, mode, existingVisitId })}
               onEditPendingCourse={(patientId, courseId, mode) => void (async () => {
@@ -1854,6 +1936,9 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
               })()}
               onGenerateConsentForm={(courseId) => void generateConsentFormForCourse(courseId)}
               onUploadConsentForm={(patientId, courseId) => void uploadConsentFormForCourse(patientId, courseId)}
+              onScheduleCourse={(courseId) => setScreen({ name: "schedule", courseId })}
+              onPrintCourseSchedule={(courseId) => void printCourseSchedule(courseId)}
+              onDeleteCourseSchedule={(courseId) => deleteCourseTreatmentSchedule(courseId)}
               onOpenConsentForm={(patientId, courseId) => void (async () => {
                 if (!appClient) return;
               const detail = await appClient.getPatientDetail(patientId);
@@ -1918,8 +2003,12 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
               await appClient.archivePatient(patientDetail.patient.id);
               setScreen({ name: "dashboard" });
               await loadDashboard();
+              showToast("Patient moved to Archive and schedule removed.");
             })()}
             onOpenVisit={(courseId, mode, existingVisitId) => setScreen({ name: "visit", courseId, mode, existingVisitId })}
+            onScheduleCourse={(courseId) => setScreen({ name: "schedule", courseId })}
+            onPrintCourseSchedule={(courseId) => void printCourseSchedule(courseId)}
+            onDeleteCourseSchedule={(courseId) => deleteCourseTreatmentSchedule(courseId)}
             onCompleteCourse={(courseId) => void (async () => {
               if (!appClient) return;
               await appClient.completeCourse(courseId);
@@ -2111,6 +2200,16 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
             onGenerateSimWorksheet={(recordId) => void openDocumentOnlyWorksheetSetup(recordId)}
             onOpenConsent={(asset) => void appClient?.openAsset(asset)}
             onOpenSimWorksheet={(asset) => void appClient?.openAsset(asset)}
+          />
+        ) : null}
+
+        {screen.name === "schedule" ? (
+          <ScheduleScreen
+            appClient={appClient}
+            initialCourseId={screen.courseId}
+            onOpenPatient={(patientId) => setScreen({ name: "patient", patientId })}
+            onStartAppointmentNote={(appointment) => void startScheduleAppointmentNote(appointment)}
+            onNotify={showToast}
           />
         ) : null}
 

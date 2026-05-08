@@ -10,6 +10,9 @@ export type NoteType = "consult_sim" | "first_fraction" | "standard_treatment" |
 export type PatientStatus = "active" | "archived" | "deleted";
 export type CourseStatus = "pending" | "active" | "completed" | "archived";
 export type VisitStatus = "draft" | "finalized" | "archived";
+export type ScheduleAppointmentType = "treatment" | "sim_consult" | "follow_up";
+export type ScheduleAppointmentStatus = "scheduled" | "completed" | "missed" | "cancelled" | "rescheduled";
+export type ScheduleBlockType = "holiday" | "closed" | "unavailable";
 export type LaunchReadyScreen = "loading" | "pin_setup" | "unlock" | "dashboard";
 export type AssetKind =
   | "patient_face_photo"
@@ -157,6 +160,58 @@ export interface GeneratedPdfRecord {
   fileAsset: AssetReference;
   versionNumber: number;
   createdAt: string;
+}
+
+export interface ScheduleAppointmentRecord {
+  id: string;
+  patientId: string | null;
+  courseId: string | null;
+  patientName: string;
+  patientFirstName: string;
+  patientLastName: string;
+  patientMrn: string;
+  patientDob: string;
+  patientSex: string;
+  appointmentDate: string;
+  startTime: string;
+  endTime: string;
+  appointmentType: ScheduleAppointmentType;
+  appointmentNumber: number | null;
+  totalAppointments: number | null;
+  status: ScheduleAppointmentStatus;
+  notes: string;
+  seriesId: string | null;
+  intakeCourseType: Exclude<CourseType, "consult"> | null;
+  intakeBiopsyDate: string;
+  intakeSites: ScheduleIntakeSiteInput[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ScheduleIntakeSiteInput {
+  siteNumber: 1 | 2;
+  treatmentLocationText: string;
+  diagnosisText: string;
+  icd10: string;
+  projectedFractions: number | null;
+}
+
+export interface ScheduleBlockRecord {
+  id: string;
+  title: string;
+  blockDate: string | null;
+  startTime: string;
+  endTime: string;
+  blockType: ScheduleBlockType;
+  isRecurring: boolean;
+  recurringWeekdays: number[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ScheduleSettingsView {
+  clinicStartTime: string;
+  clinicEndTime: string;
 }
 
 export interface CourseDocumentRecord {
@@ -489,6 +544,7 @@ export interface DashboardPendingCourseRow {
   courseId: string;
   courseName: string;
   courseType: CourseType;
+  prescribedFractions: number;
   siteSummary: string;
   hasConsentForm: boolean;
 }
@@ -538,6 +594,11 @@ export interface VisitEditorState {
   templateKey: string;
 }
 
+export interface VisitDraftOptions {
+  visitDate?: string;
+  treatmentNumber?: number | null;
+}
+
 export interface BootstrapPayload {
   settings: AppSettingsView;
   requiresPinSetup: boolean;
@@ -558,6 +619,48 @@ export interface DashboardSnapshot {
   patientsWithoutCourse: DashboardPatientRow[];
   archivedPatients: number;
   archivedCourses: number;
+}
+
+export interface ScheduleSnapshot {
+  appointments: ScheduleAppointmentRecord[];
+  blocks: ScheduleBlockRecord[];
+  settings: ScheduleSettingsView;
+  activeCourses: DashboardCourseRow[];
+}
+
+export interface ScheduleAppointmentInput {
+  id?: string;
+  patientId?: string | null;
+  courseId?: string | null;
+  patientName: string;
+  patientFirstName?: string;
+  patientLastName?: string;
+  patientMrn?: string;
+  patientDob?: string;
+  patientSex?: string;
+  appointmentDate: string;
+  startTime: string;
+  endTime: string;
+  appointmentType: ScheduleAppointmentType;
+  appointmentNumber?: number | null;
+  totalAppointments?: number | null;
+  status?: ScheduleAppointmentStatus;
+  notes?: string;
+  seriesId?: string | null;
+  intakeCourseType?: Exclude<CourseType, "consult"> | null;
+  intakeBiopsyDate?: string;
+  intakeSites?: ScheduleIntakeSiteInput[];
+}
+
+export interface ScheduleBlockInput {
+  id?: string;
+  title: string;
+  blockDate?: string | null;
+  startTime: string;
+  endTime: string;
+  blockType: ScheduleBlockType;
+  isRecurring?: boolean;
+  recurringWeekdays?: number[];
 }
 
 export interface SettingsPayload {
@@ -586,6 +689,18 @@ export interface AppClient {
   resetPinWithRecoveryCode: (recoveryCode: string, nextPin: string) => Promise<string | null>;
   wipeAllLocalData: () => Promise<void>;
   getDashboardSnapshot: () => Promise<DashboardSnapshot>;
+  getScheduleSnapshot: (startDate: string, endDate: string) => Promise<ScheduleSnapshot>;
+  saveScheduleAppointment: (input: ScheduleAppointmentInput) => Promise<ScheduleAppointmentRecord>;
+  deleteScheduleAppointment: (appointmentId: string) => Promise<void>;
+  deleteCourseTreatmentSchedule: (courseId: string) => Promise<number>;
+  updateScheduleAppointmentStatus: (
+    appointmentId: string,
+    status: ScheduleAppointmentStatus
+  ) => Promise<ScheduleAppointmentRecord>;
+  saveScheduleBlock: (input: ScheduleBlockInput) => Promise<ScheduleBlockRecord>;
+  deleteScheduleBlock: (blockId: string) => Promise<void>;
+  saveScheduleSettings: (input: ScheduleSettingsView) => Promise<ScheduleSettingsView>;
+  completeScheduleAppointmentForVisit: (visitId: string) => Promise<ScheduleAppointmentRecord | null>;
   getDocumentOnlySnapshot: () => Promise<DocumentOnlySnapshot>;
   getPatientDetail: (patientId: string) => Promise<PatientDetail>;
   listCompleted: () => Promise<ArchiveSnapshot>;
@@ -612,7 +727,8 @@ export interface AppClient {
   buildVisitDraft: (
     courseId: string,
     mode?: "next_treatment" | "consult_sim",
-    existingVisitId?: string
+    existingVisitId?: string,
+    options?: VisitDraftOptions
   ) => Promise<VisitEditorState>;
   saveVisit: (input: VisitInput) => Promise<VisitNoteRecord>;
   deleteVisit: (visitId: string) => Promise<void>;

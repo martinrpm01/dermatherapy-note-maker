@@ -44,6 +44,7 @@ import type {
   DocumentOnlySnapshot,
   PatientRecord,
   SettingsPayload,
+  VisitDraftOptions,
   VisitEditorState,
   VisitInput,
   VisitNoteRecord
@@ -329,6 +330,7 @@ export class BrowserAppClient implements AppClient {
 
     const sites = structuredDataStore.fetchSites([course.id]);
     const courseDocuments = visit.noteType === "consult_sim" ? structuredDataStore.fetchCourseDocuments(course.id) : [];
+    const scheduleDates = structuredDataStore.syncCourseScheduleDates(course.id);
     const refreshedSiteSnapshots = refreshVisitSiteSnapshots(
       visit.noteType,
       sites,
@@ -355,7 +357,7 @@ export class BrowserAppClient implements AppClient {
       id: visit.id,
       patientId: visit.patientId,
       courseId: visit.courseId,
-      visitDate: visit.visitDate,
+      visitDate: visit.noteType === "consult_sim" ? scheduleDates.simConsultDate || course.simConsultDate || visit.visitDate : visit.visitDate,
       noteType: visit.noteType,
       treatmentNumber: visit.treatmentNumber,
       status: visit.status,
@@ -375,6 +377,10 @@ export class BrowserAppClient implements AppClient {
           (visit.noteType === "consult_sim" ? getMaxSitePrescribedFractions(resolvedSiteSnapshots) : null),
         biopsyDate: visit.structuredFields.biopsyDate || course.startDate || "",
         lastTreatmentDate: visit.structuredFields.lastTreatmentDate ?? course.startDate ?? "",
+        startRadiationDate:
+          visit.noteType === "consult_sim"
+            ? scheduleDates.treatmentStartDate ?? visit.structuredFields.startRadiationDate ?? ""
+            : visit.structuredFields.startRadiationDate ?? "",
         siteSnapshots: resolvedSiteSnapshots
       },
       generatedText: visit.generatedText,
@@ -662,7 +668,9 @@ export class BrowserAppClient implements AppClient {
             .filter((visit) => !visit.note.pdfAsset)
             .sort((left, right) => right.note.updatedAt.localeCompare(left.note.updatedAt))[0];
           const currentFraction = getCurrentFraction(visitsForCourse);
-          const shouldStartWithConsult = !hasConsultVisit && course.prescribedFractions <= 0;
+          const hasPlannedConsult = Boolean(course.simConsultDate);
+          const shouldStartWithConsult =
+            !hasConsultVisit && currentFraction === 0 && (hasPlannedConsult || course.prescribedFractions <= 0);
           const suggestedTreatmentNumber = shouldStartWithConsult ? null : getNextTreatmentNumber(visitsForCourse);
           const suggestedNoteType = shouldStartWithConsult
             ? "consult_sim"
@@ -706,6 +714,7 @@ export class BrowserAppClient implements AppClient {
             courseId: course.id,
             courseName: course.courseName,
             courseType: course.courseType,
+            prescribedFractions: course.prescribedFractions,
             siteSummary: sitesForCourse.map((site) => site.bodyLocation).join(" + "),
             hasConsentForm: documentsForCourse.some((document) => document.documentType === "consent_form")
           };
@@ -715,6 +724,141 @@ export class BrowserAppClient implements AppClient {
       archivedPatients: structuredDataStore.fetchPatients("1 = 1", []).filter((patient) => patient.status !== "active").length,
       archivedCourses: structuredDataStore.fetchCourses("1 = 1", []).filter((course) => course.status !== "active").length
     };
+  }
+
+  async getScheduleSnapshot(startDate: string, endDate: string) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const dashboard = await this.getDashboardSnapshot();
+    const pendingCourses = dashboard.pendingCourses.map((course) => ({
+      ...course,
+      currentFraction: 0,
+      suggestedTreatmentNumber: 1,
+      suggestedNoteType: "standard_treatment" as const,
+      nextTemplateKey: getTemplateKey(course.courseType, "standard_treatment"),
+      latestDraftVisitId: null,
+      latestDraftUpdatedAt: null
+    }));
+    return {
+      appointments: structuredDataStore.fetchScheduleAppointments(startDate, endDate),
+      blocks: structuredDataStore.fetchScheduleBlocks(startDate, endDate),
+      settings: structuredDataStore.getScheduleSettings(),
+      activeCourses: [...pendingCourses, ...dashboard.activeCourses]
+    };
+  }
+
+  async saveScheduleAppointment(input: Parameters<AppClient["saveScheduleAppointment"]>[0]) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const saved = structuredDataStore.saveScheduleAppointment(input);
+    if (saved.courseId) {
+      structuredDataStore.syncCourseScheduleDates(saved.courseId);
+    }
+    await structuredDataStore.flush();
+    return structuredDataStore.fetchScheduleAppointment(saved.id) ?? saved;
+  }
+
+  async deleteScheduleAppointment(appointmentId: string) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const existing = structuredDataStore.fetchScheduleAppointment(appointmentId);
+    structuredDataStore.deleteScheduleAppointment(appointmentId);
+    if (existing?.courseId) {
+      structuredDataStore.syncCourseScheduleDates(existing.courseId);
+    }
+    await structuredDataStore.flush();
+  }
+
+  async deleteCourseTreatmentSchedule(courseId: string) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const deletedCount = structuredDataStore.deleteCourseTreatmentSchedule(courseId);
+    await structuredDataStore.flush();
+    return deletedCount;
+  }
+
+  async updateScheduleAppointmentStatus(
+    appointmentId: string,
+    status: Parameters<AppClient["updateScheduleAppointmentStatus"]>[1]
+  ) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const saved = structuredDataStore.updateScheduleAppointmentStatus(appointmentId, status);
+    if (saved.courseId) {
+      structuredDataStore.syncCourseScheduleDates(saved.courseId);
+    }
+    await structuredDataStore.flush();
+    return structuredDataStore.fetchScheduleAppointment(saved.id) ?? saved;
+  }
+
+  async saveScheduleBlock(input: Parameters<AppClient["saveScheduleBlock"]>[0]) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const saved = structuredDataStore.saveScheduleBlock(input);
+    await structuredDataStore.flush();
+    return saved;
+  }
+
+  async deleteScheduleBlock(blockId: string) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    structuredDataStore.deleteScheduleBlock(blockId);
+    await structuredDataStore.flush();
+  }
+
+  async saveScheduleSettings(input: Parameters<AppClient["saveScheduleSettings"]>[0]) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const saved = structuredDataStore.saveScheduleSettings(input);
+    await structuredDataStore.flush();
+    return saved;
+  }
+
+  async completeScheduleAppointmentForVisit(visitId: string) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const visit = structuredDataStore.fetchVisit(visitId);
+    if (!visit || visit.status !== "finalized") {
+      return null;
+    }
+
+    const target = structuredDataStore
+      .fetchScheduleAppointments("1900-01-01", "2999-12-31")
+      .filter((appointment) => appointment.status !== "completed")
+      .filter((appointment) => {
+        if (appointment.courseId && appointment.courseId !== visit.courseId) {
+          return false;
+        }
+        if (appointment.patientId && appointment.patientId !== visit.patientId) {
+          return false;
+        }
+        if (visit.noteType === "consult_sim") {
+          return appointment.appointmentType === "sim_consult";
+        }
+        if (appointment.appointmentType !== "treatment") {
+          return false;
+        }
+        if (visit.treatmentNumber !== null) {
+          return appointment.appointmentNumber === visit.treatmentNumber;
+        }
+        return appointment.appointmentNumber === null && appointment.appointmentDate === visit.visitDate;
+      })
+      .sort((left, right) => {
+        const leftDateRank = left.appointmentDate === visit.visitDate ? 0 : 1;
+        const rightDateRank = right.appointmentDate === visit.visitDate ? 0 : 1;
+        if (leftDateRank !== rightDateRank) {
+          return leftDateRank - rightDateRank;
+        }
+        return `${left.appointmentDate}|${left.startTime}`.localeCompare(`${right.appointmentDate}|${right.startTime}`);
+      })[0];
+
+    if (!target) {
+      return null;
+    }
+
+    const saved = structuredDataStore.updateScheduleAppointmentStatus(target.id, "completed");
+    await structuredDataStore.flush();
+    return saved;
   }
 
   async getDocumentOnlySnapshot(): Promise<DocumentOnlySnapshot> {
@@ -943,8 +1087,9 @@ export class BrowserAppClient implements AppClient {
       }))
     };
     const course = structuredDataStore.saveCourse(normalizedInput);
+    structuredDataStore.trimCourseTreatmentAppointments(course.id, course.prescribedFractions);
     await structuredDataStore.flush();
-    return course;
+    return structuredDataStore.fetchCourse(course.id) ?? course;
   }
 
   async saveDocumentOnlyRecord(input: Parameters<AppClient["saveDocumentOnlyRecord"]>[0]) {
@@ -1062,7 +1207,8 @@ export class BrowserAppClient implements AppClient {
   async buildVisitDraft(
     courseId: string,
     mode: Parameters<AppClient["buildVisitDraft"]>[1] = "next_treatment",
-    existingVisitId?: string
+    existingVisitId?: string,
+    options: VisitDraftOptions = {}
   ) {
     this.assertUnlocked();
     if (existingVisitId) {
@@ -1086,8 +1232,23 @@ export class BrowserAppClient implements AppClient {
     const sites = structuredDataStore.fetchSites([courseId]);
     const visits = structuredDataStore.fetchVisitsByCourseIds([courseId]);
     const hasConsultVisit = visits.some((visit) => visit.note.noteType === "consult_sim");
-    const shouldStartWithConsult = mode === "next_treatment" && !hasConsultVisit && course.prescribedFractions <= 0;
-    const treatmentNumber = mode === "consult_sim" || shouldStartWithConsult ? null : getNextTreatmentNumber(visits);
+    const currentFraction = getCurrentFraction(visits);
+    const scheduleDates = structuredDataStore.syncCourseScheduleDates(course.id);
+    const hasPlannedConsult = Boolean(scheduleDates.simConsultDate || course.simConsultDate);
+    const scheduledTreatmentNumber =
+      mode !== "consult_sim" && typeof options.treatmentNumber === "number" && options.treatmentNumber > 0
+        ? Math.trunc(options.treatmentNumber)
+        : null;
+    const shouldStartWithConsult =
+      scheduledTreatmentNumber === null &&
+      mode === "next_treatment" &&
+      !hasConsultVisit &&
+      currentFraction === 0 &&
+      (hasPlannedConsult || course.prescribedFractions <= 0);
+    const treatmentNumber =
+      mode === "consult_sim" || shouldStartWithConsult
+        ? null
+        : scheduledTreatmentNumber ?? getNextTreatmentNumber(visits);
     if (mode === "next_treatment" && treatmentNumber === null && !shouldStartWithConsult) {
       throw new Error("This course has reached the maximum treatment number.");
     }
@@ -1121,6 +1282,9 @@ export class BrowserAppClient implements AppClient {
       ...site,
       biopsyDate: site.biopsyDate || course.startDate || ""
     }));
+    if (noteType === "consult_sim" && scheduleDates.treatmentStartDate) {
+      structuredFields.startRadiationDate = scheduleDates.treatmentStartDate;
+    }
       if (noteType !== "consult_sim") {
         if (treatmentNumber === 1) {
           siteSnapshots = fillMissingSitePrescribedFractions(
@@ -1151,7 +1315,7 @@ export class BrowserAppClient implements AppClient {
       const note: VisitInput = {
         patientId: patient.id,
         courseId: course.id,
-        visitDate: noteType === "consult_sim" ? course.simConsultDate || todayIso() : todayIso(),
+        visitDate: options.visitDate || (noteType === "consult_sim" ? scheduleDates.simConsultDate || course.simConsultDate || todayIso() : todayIso()),
         noteType,
         treatmentNumber,
         status: "draft",
@@ -1232,6 +1396,7 @@ export class BrowserAppClient implements AppClient {
     let courseUpdated = false;
     if (prescribedFractionsInput && prescribedFractionsInput > 0 && prescribedFractionsInput !== course.prescribedFractions) {
       structuredDataStore.updateCoursePrescribedFractions(course.id, prescribedFractionsInput);
+      structuredDataStore.trimCourseTreatmentAppointments(course.id, prescribedFractionsInput);
       courseUpdated = true;
     }
     if (input.noteType !== "consult_sim") {
