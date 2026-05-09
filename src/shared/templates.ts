@@ -85,6 +85,7 @@ export const TEMPLATE_PLACEHOLDERS: TemplatePlaceholderDefinition[] = [
   { token: "structured.followUp", description: "Follow-up wording." },
   { token: "structured.simulationComplications", description: "Simulation complications wording." },
   { token: "structured.treatmentComment", description: "Treatment comment wording." },
+  { token: "structured.treatmentDeliveryStatement", description: "Treatment delivery wording for treatment visits." },
   { token: "structured.physicsComment", description: "Physics consultation wording." },
   { token: "structured.consultReview", description: "Consult review wording." },
   { token: "structured.treatmentOptions", description: "Treatment options wording." },
@@ -139,13 +140,7 @@ Oxygen Saturation: {{vitals.oxygenSaturation}}
 Weight: {{vitals.weight}}
 
 Impression / Plan:
-The patient has decided to proceed with radiation treatment instead of surgery due to concerns with scarring, healing, and closure.
-
-Time was spent by the physician and radiation therapist assessing and managing the patient on the date of the encounter doing the following: preparing to see the patient (eg: review of tests), obtaining and/or reviewing separately obtained history, performing a medically appropriate examination and/or evaluation, counseling and educating the patient/family/caregiver, ordering medications, tests, or procedures, referring and communicating with other health care professionals, documenting clinical information in the electronic or other health record, and care coordination.
-
-The patient will undergo radiation therapy treatment for non-melanoma skin cancer. A simulation was medically necessary to measure the lesion and to determine the appropriate flex-shield blocking to assure adequate coverage of the target lesion while sparing normal tissue. On today's visit, following informed consent, the treatment field was demarcated, and depth measurements were performed for the radiation therapy treatment plan. Multiple clinical setup photographs were taken which will be used for the development of the prescription and treatment plan. All relevant information specifically regarding this patient's superficial skin lesion will be reviewed by a Board-Certified Radiation Oncologist, who will provide me with an advisory opinion as to treatment dose, number of fractions/ treatments, and treatment depth. I will consider his recommendation, along with all other aspects of this patient's condition, including patient's treatment preference, other comorbidities, and move forward with this patient's care.
-
-This plan will be the initial intent for treatment. The final approved plan will be determined based on what is clinically acceptable and technically feasible and reflected in the approved prescription.
+{{structured.impressionPlanComments}}
 
 The following treatment devices and target prescriptions were utilized pending radiation oncologist and medical physics review:
 
@@ -158,38 +153,34 @@ Number of Blocks: {{site1.numberOfBlocks}}
 Type of Blocks: Complex
 {{site1.simulationComplicationsLine}}
 
-Tx site name: {{site1.txSiteName}}
-ICD10: {{site1.icd10}}
+XRT Simulation Details:
 Total Fractions: {{site1.totalFractions}}
 Daily dose: {{site1.dailyDose}} cGy
-Prescribed dose: {{site1.totalDose}} cGy
+Total dose: {{site1.totalDose}} cGy
 Tx depth: {{site1.treatmentDepthDisplay}}
 Cone size: {{site1.coneSizeDisplay}}
 Cutout flex shield size: {{site1.cutoutSizeDisplay}}
 Additional Tx devices: {{site1.additionalDevices}}
+Clinical Setup Photographs Obtained: Yes
+
+Note: This plan will be the initial intent for treatment. The final approved plan will be determined based on what is clinically acceptable and technically feasible and reflected in the approved prescription.
 
 Plan: Consultation for Radiotherapy.
 Location: {{site1.bodyLocation}}
 
-Review:
-{{structured.consultReview}}
+Review: {{structured.consultReview}}
 
-Treatment Options:
-{{structured.treatmentOptions}}
+Treatment Options: {{structured.treatmentOptions}}
 
-Risks and Benefits:
-{{structured.risksAndBenefits}}
+Risks and Benefits: {{structured.risksAndBenefits}}
 
 {{structured.additionalNotesSection}}
 
-Follow Up:
-The patient is scheduled to start Radiation Therapy on {{structured.startRadiationDate}}
+Follow Up: The patient is scheduled to start Radiation Therapy on {{structured.startRadiationDate}}
 
-Additional Information:
-{{visit.therapistName}} was the Radiation Therapist at time of visit.
+Additional Information: {{visit.therapistName}} was the Radiation Therapist at time of visit.
 
-Other Instructions:
-See attachments within chart for further information. (Radiation Therapy Simulation Document & Radiation Therapy Consent Form)
+Other Instructions: See attachments within chart for further information. (Radiation Therapy Simulation Document & Radiation Therapy Consent Form)
 
 After counseling, we decided on the following plan: Schedule Radiotherapy
 
@@ -230,13 +221,17 @@ Exam:
 Impression / Plan Comments:
 {{structured.impressionPlanComments}}
 
-Radiation Therapy Prescription:
-Number of Treatments: {{course.prescribedFractions}}
+Final Approved Prescription:
+Treatment Site: {{site1.txSiteName}}
+Fractions: {{course.prescribedFractions}}
+Frequency: {{site1.treatmentInterval}}
 Treatment Depth: {{site1.treatmentDepthDisplay}}
 Daily Dose: {{site1.dailyDose}} cGy
 Total Dose: {{site1.totalDose}} cGy
-Flex Shield Cutout Size: {{site1.flexShieldCutoutText}}
-Additional Treatment Devices: {{site1.additionalDevices}}
+Energy: {{site1.energyKv}}
+Applicator Size: {{site1.coneSizeDisplay}}
+Flex Shield Cutout: {{site1.cutoutSizeDisplay}}
+Treatment Devices: {{site1.additionalDevices}}
 
 The treatment plan developed by the physicist has been reviewed. There is excellent coverage of the skin lesion, and the plan has been approved. Dosimetry calculation has been performed and verified.
 
@@ -245,8 +240,7 @@ Comments: See document named "Radiation Therapy Dose Calcs" attached to patient 
 1. {{site1.diagnosisText}} ({{site1.icd10}})
 Appropriately healing biopsy site distributed on the {{site1.bodyLocation}}.
 
-Plan:
-Therapeutic Radiation Simulation.
+Plan: Therapeutic Radiation Simulation.
 Number of Treatment Areas: 1
 Number of Blocks: {{site1.numberOfBlocks}}
 Type of Blocks: Simple
@@ -271,19 +265,19 @@ Treatment Depth: {{site1.treatmentDepthDisplay}}
 
 Written consent obtained. The risks and benefits of XRT therapy were discussed in detail. Specifically, the risks of infection, scarring, bleeding, radiation dermatitis, prolonged wound healing, incomplete removal, nerve injury, inability to clear the tumor, and recurrence were addressed. The treatment site was clearly identified and confirmed by the patient. The patient received XRT as outlined above.
 
-Post Care:
-{{structured.postCare}}
+Post Care: {{structured.postCare}}
+
+{{structured.treatmentDeliveryStatement}}
 
 {{structured.treatmentComment}}
-
-{{structured.mipsSection}}
 
 {{structured.additionalNotesSection}}
 
 {{structured.finalTreatmentSection}}
 
-Follow Up:
-{{structured.followUp}}
+Follow Up: {{structured.followUp}}
+
+{{structured.mipsSection}}
 
 Treatment Supervised by:
 
@@ -345,19 +339,19 @@ Treatment Depth: {{site1.treatmentDepthDisplay}}
 
 Written consent obtained. The risks and benefits of XRT therapy were discussed in detail. Specifically, the risks of infection, scarring, bleeding, radiation dermatitis, prolonged wound healing, incomplete removal, nerve injury, inability to clear the tumor, and recurrence were addressed. The treatment site was clearly identified and confirmed by the patient. The patient received XRT as outlined above.
 
-Post Care:
-{{structured.postCare}}
+Post Care: {{structured.postCare}}
+
+{{structured.treatmentDeliveryStatement}}
 
 {{structured.treatmentComment}}
-
-{{structured.mipsSection}}
 
 {{structured.additionalNotesSection}}
 
 {{structured.finalTreatmentSection}}
 
-Follow Up:
-{{structured.followUp}}
+Follow Up: {{structured.followUp}}
+
+{{structured.mipsSection}}
 
 Treatment Supervised by:
 
@@ -428,8 +422,9 @@ Treatment Depth: {{site1.treatmentDepthDisplay}}
 
 Written consent obtained. The risks and benefits of XRT therapy were discussed in detail. Specifically, the risks of infection, scarring, bleeding, radiation dermatitis, prolonged wound healing, incomplete removal, nerve injury, inability to clear the tumor, and recurrence were addressed. The treatment site was clearly identified and confirmed by the patient. The patient received XRT as outlined above.
 
-Post Care:
-{{structured.postCare}}
+Post Care: {{structured.postCare}}
+
+{{structured.treatmentDeliveryStatement}}
 
 {{structured.treatmentComment}}
 
@@ -438,14 +433,13 @@ Location: {{site1.bodyLocation}}
 Physics Consultation: Fraction Number: {{visit.treatmentNumber}} of {{course.prescribedFractions}}
 {{structured.physicsComment}}
 
-{{structured.mipsSection}}
-
 {{structured.additionalNotesSection}}
 
 {{structured.finalTreatmentSection}}
 
-Follow Up:
-{{structured.followUp}}
+Follow Up: {{structured.followUp}}
+
+{{structured.mipsSection}}
 
 Treatment Supervised by:
 
@@ -485,13 +479,7 @@ Oxygen Saturation: {{vitals.oxygenSaturation}}
 Weight: {{vitals.weight}}
 
 Impression / Plan:
-The patient has decided to proceed with radiation treatment instead of surgery due to concerns with scarring, healing, and closure.
-
-Time was spent by the physician and radiation therapist assessing and managing the patient on the date of the encounter doing the following: preparing to see the patient (eg: review of tests), obtaining and/or reviewing separately obtained history, performing a medically appropriate examination and/or evaluation, counseling and educating the patient/family/caregiver, ordering medications, tests, or procedures, referring and communicating with other health care professionals, documenting clinical information in the electronic or other health record, and care coordination.
-
-The patient will undergo radiation therapy treatment for non-melanoma skin cancer. A simulation was medically necessary to measure the lesion and to determine the appropriate flex-shield blocking to assure adequate coverage of the target lesion while sparing normal tissue. On today's visit, following informed consent, the treatment field was demarcated, and depth measurements were performed for the radiation therapy treatment plan. Multiple clinical setup photographs were taken which will be used for the development of the prescription and treatment plan. All relevant information specifically regarding this patient's superficial skin lesion will be reviewed by a Board-Certified Radiation Oncologist, who will provide me with an advisory opinion as to treatment dose, number of fractions/ treatments, and treatment depth. I will consider his recommendation, along with all other aspects of this patient's condition, including patient's treatment preference, other comorbidities, and move forward with this patient's care.
-
-This plan will be the initial intent for treatment. The final approved plan will be determined based on what is clinically acceptable and technically feasible and reflected in the approved prescription.
+{{structured.impressionPlanComments}}
 
 The following treatment devices and target prescriptions were utilized pending radiation oncologist and medical physics review:
 
@@ -504,36 +492,32 @@ Number of Blocks: {{site1.numberOfBlocks}}
 Type of Blocks: Complex
 {{site1.simulationComplicationsLine}}
 
-Tx site name: {{site1.txSiteName}}
-ICD10: {{site1.icd10}}
+XRT Simulation Details Site 1:
 Total Fractions: {{site1.totalFractions}}
 Daily dose: {{site1.dailyDose}} cGy
-Prescribed dose: {{site1.totalDose}} cGy
+Total dose: {{site1.totalDose}} cGy
 Tx depth: {{site1.treatmentDepthDisplay}}
 Cone size: {{site1.coneSizeDisplay}}
 Cutout flex shield size: {{site1.cutoutSizeDisplay}}
 Additional Tx devices: {{site1.additionalDevices}}
+Clinical Setup Photographs Obtained: Yes
+
+Note: This plan will be the initial intent for treatment. The final approved plan will be determined based on what is clinically acceptable and technically feasible and reflected in the approved prescription.
 
 Plan: Consultation for Radiotherapy.
 Location: {{site1.bodyLocation}}
 
-Review:
-{{structured.consultReview}}
+Review: {{structured.consultReview}}
 
-Treatment Options:
-{{structured.treatmentOptions}}
+Treatment Options: {{structured.treatmentOptions}}
 
-Risks and Benefits:
-{{structured.risksAndBenefits}}
+Risks and Benefits: {{structured.risksAndBenefits}}
 
-Follow Up:
-The patient is scheduled to start Radiation Therapy on {{structured.startRadiationDate}}
+Follow Up: The patient is scheduled to start Radiation Therapy on {{structured.startRadiationDate}}
 
-Additional Information:
-{{visit.therapistName}} was the Radiation Therapist at time of visit.
+Additional Information: {{visit.therapistName}} was the Radiation Therapist at time of visit.
 
-Other Instructions:
-See attachments within chart for further information. (Radiation Therapy Simulation Document & Radiation Therapy Consent Form)
+Other Instructions: See attachments within chart for further information. (Radiation Therapy Simulation Document & Radiation Therapy Consent Form)
 
 After counseling, we decided on the following plan: Schedule Radiotherapy
 
@@ -546,36 +530,32 @@ Number of Blocks: {{site2.numberOfBlocks}}
 Type of Blocks: Complex
 {{site2.simulationComplicationsLine}}
 
-Tx site name: {{site2.txSiteName}}
-ICD10: {{site2.icd10}}
+XRT Simulation Details Site 2:
 Total Fractions: {{site2.totalFractions}}
 Daily dose: {{site2.dailyDose}} cGy
-Prescribed dose: {{site2.totalDose}} cGy
+Total dose: {{site2.totalDose}} cGy
 Tx depth: {{site2.treatmentDepthDisplay}}
 Cone size: {{site2.coneSizeDisplay}}
 Cutout flex shield size: {{site2.cutoutSizeDisplay}}
 Additional Tx devices: {{site2.additionalDevices}}
+Clinical Setup Photographs Obtained: Yes
+
+Note: This plan will be the initial intent for treatment. The final approved plan will be determined based on what is clinically acceptable and technically feasible and reflected in the approved prescription.
 
 Plan: Consultation for Radiotherapy.
 Location: {{site2.bodyLocation}}
 
-Review:
-{{structured.consultReview}}
+Review: {{structured.consultReview}}
 
-Treatment Options:
-{{structured.treatmentOptions}}
+Treatment Options: {{structured.treatmentOptions}}
 
-Risks and Benefits:
-{{structured.risksAndBenefits}}
+Risks and Benefits: {{structured.risksAndBenefits}}
 
-Follow Up:
-The patient is scheduled to start Radiation Therapy on {{structured.startRadiationDate}}
+Follow Up: The patient is scheduled to start Radiation Therapy on {{structured.startRadiationDate}}
 
-Additional Information:
-{{visit.therapistName}} was the Radiation Therapist at time of visit.
+Additional Information: {{visit.therapistName}} was the Radiation Therapist at time of visit.
 
-Other Instructions:
-See attachments within chart for further information. (Radiation Therapy Simulation Document & Radiation Therapy Consent Form)
+Other Instructions: See attachments within chart for further information. (Radiation Therapy Simulation Document & Radiation Therapy Consent Form)
 
 After counseling, we decided on the following plan: Schedule Radiotherapy
 
@@ -608,32 +588,40 @@ Sex: {{patient.sex}}    DOB: {{patient.dob}}    MRN: {{patient.mrn}}    Today's 
 
 HPI:
 This is a {{patient.age}} year old {{patient.sexLower}} who:
-1. is following up for {{site1.diagnosisText}} on the {{site1.bodyLocation}} and {{site2.diagnosisText}} on the {{site2.bodyLocation}}.
+1. is following up for {{site1.diagnosisText}} on the {{site1.bodyLocation}}.
+2. is following up for {{site2.diagnosisText}} on the {{site2.bodyLocation}}.
 Last seen on {{structured.lastTreatmentDate}} for Simulation and Consultation for XRT Treatment.
 The patient presents for XRT treatment.
 
 Focused Exam Sites 1 & 2:
 {{structured.focusedExam}}
 
-Radiation Therapy Prescription Site 1:
+Impression / Plan Comments:
 {{structured.impressionPlanComments}}
-Number of Treatments: {{site1.prescribedFractions}}
+
+Final Approved Prescription Site 1:
+Treatment Site: {{site1.txSiteName}}
+Fractions: {{site1.prescribedFractions}}
+Frequency: {{site1.treatmentInterval}}
 Treatment Depth: {{site1.treatmentDepthDisplay}}
 Daily Dose: {{site1.dailyDose}} cGy
 Total Dose: {{site1.totalDose}} cGy
-Flex Shield Cutout Size: {{site1.flexShieldCutoutText}}
-Cone / Applicator: {{site1.coneSizeDisplay}} cone
-Additional Treatment Devices: {{site1.additionalDevices}}
+Energy: {{site1.energyKv}}
+Applicator Size: {{site1.coneSizeDisplay}}
+Flex Shield Cutout: {{site1.cutoutSizeDisplay}}
+Treatment Devices: {{site1.additionalDevices}}
 
-Radiation Therapy Prescription Site 2:
-{{structured.impressionPlanComments}}
-Number of Treatments: {{site2.prescribedFractions}}
+Final Approved Prescription Site 2:
+Treatment Site: {{site2.txSiteName}}
+Fractions: {{site2.prescribedFractions}}
+Frequency: {{site2.treatmentInterval}}
 Treatment Depth: {{site2.treatmentDepthDisplay}}
 Daily Dose: {{site2.dailyDose}} cGy
 Total Dose: {{site2.totalDose}} cGy
-Flex Shield Cutout Size: {{site2.flexShieldCutoutText}}
-Cone / Applicator: {{site2.coneSizeDisplay}} cone
-Additional Treatment Devices: {{site2.additionalDevices}}
+Energy: {{site2.energyKv}}
+Applicator Size: {{site2.coneSizeDisplay}}
+Flex Shield Cutout: {{site2.cutoutSizeDisplay}}
+Treatment Devices: {{site2.additionalDevices}}
 
 The treatment plan developed by the physicist has been reviewed. There is excellent coverage of the skin lesions, and the plan has been approved. Dosimetry calculation has been performed and verified.
 
@@ -693,19 +681,19 @@ Treatment Depth: {{site2.treatmentDepthDisplay}}
 
 Written consent obtained. The risks and benefits of XRT therapy were discussed in detail. Specifically, the risks of infection, scarring, bleeding, radiation dermatitis, prolonged wound healing, incomplete removal, nerve injury, inability to clear the tumor, and recurrence were addressed. The treatment sites were clearly identified and confirmed by the patient. The patient received XRT as outlined above.
 
-Post Care:
-{{structured.postCare}}
+Post Care: {{structured.postCare}}
+
+{{structured.treatmentDeliveryStatement}}
 
 {{structured.treatmentComment}}
-
-{{structured.mipsSection}}
 
 {{structured.additionalNotesSection}}
 
 {{structured.finalTreatmentSection}}
 
-Follow Up:
-{{structured.followUp}}
+Follow Up: {{structured.followUp}}
+
+{{structured.mipsSection}}
 
 Treatment Supervised by:
 
@@ -731,7 +719,8 @@ Sex: {{patient.sex}}    DOB: {{patient.dob}}    MRN: {{patient.mrn}}    Today's 
 
 HPI:
 This is a {{patient.age}} year old {{patient.sexLower}} who:
-1. is following up for {{site1.diagnosisText}} on the {{site1.bodyLocation}} and {{site2.diagnosisText}} on the {{site2.bodyLocation}}.
+1. is following up for {{site1.diagnosisText}} on the {{site1.bodyLocation}}.
+2. is following up for {{site2.diagnosisText}} on the {{site2.bodyLocation}}.
 Patient was last seen on {{structured.lastTreatmentDate}} for XRT treatment.
 The patient presents for XRT treatment.
 
@@ -792,19 +781,19 @@ Treatment Depth: {{site2.treatmentDepthDisplay}}
 
 Written consent obtained. The risks and benefits of XRT therapy were discussed in detail. Specifically, the risks of infection, scarring, bleeding, radiation dermatitis, prolonged wound healing, incomplete removal, nerve injury, inability to clear the tumor, and recurrence were addressed. The treatment sites were clearly identified and confirmed by the patient. The patient received XRT as outlined above.
 
-Post Care:
-{{structured.postCare}}
+Post Care: {{structured.postCare}}
+
+{{structured.treatmentDeliveryStatement}}
 
 {{structured.treatmentComment}}
-
-{{structured.mipsSection}}
 
 {{structured.additionalNotesSection}}
 
 {{structured.finalTreatmentSection}}
 
-Follow Up:
-{{structured.followUp}}
+Follow Up: {{structured.followUp}}
+
+{{structured.mipsSection}}
 
 Treatment Supervised by:
 
@@ -830,7 +819,8 @@ Sex: {{patient.sex}}    DOB: {{patient.dob}}    MRN: {{patient.mrn}}    Today's 
 
 HPI:
 This is a {{patient.age}} year old {{patient.sexLower}} who:
-1. is following up for {{site1.diagnosisText}} on the {{site1.bodyLocation}} and {{site2.diagnosisText}} on the {{site2.bodyLocation}}.
+1. is following up for {{site1.diagnosisText}} on the {{site1.bodyLocation}}.
+2. is following up for {{site2.diagnosisText}} on the {{site2.bodyLocation}}.
 Patient was last seen on {{structured.lastTreatmentDate}} for XRT treatment.
 The patient presents for XRT treatment.
 
@@ -910,19 +900,19 @@ Physics Consultation: Fraction Number: {{visit.treatmentNumber}} of {{site2.pres
 
 Written consent obtained. The risks and benefits of XRT therapy were discussed in detail. Specifically, the risks of infection, scarring, bleeding, radiation dermatitis, prolonged wound healing, incomplete removal, nerve injury, inability to clear the tumor, and recurrence were addressed. The treatment sites were clearly identified and confirmed by the patient. The patient received XRT as outlined above.
 
-Post Care:
-{{structured.postCare}}
+Post Care: {{structured.postCare}}
+
+{{structured.treatmentDeliveryStatement}}
 
 {{structured.treatmentComment}}
-
-{{structured.mipsSection}}
 
 {{structured.additionalNotesSection}}
 
 {{structured.finalTreatmentSection}}
 
-Follow Up:
-{{structured.followUp}}
+Follow Up: {{structured.followUp}}
+
+{{structured.mipsSection}}
 
 Treatment Supervised by:
 

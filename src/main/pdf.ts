@@ -100,18 +100,57 @@ function getAssetExtension(input?: PdfBinaryAssetInput | null) {
   return "";
 }
 
+function detectRasterImageType(input: PdfBinaryAssetInput) {
+  const bytes = input.bytes;
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  ) {
+    return "png";
+  }
+
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return "jpg";
+  }
+
+  const extension = getAssetExtension(input);
+  if (extension === ".png") {
+    return "png";
+  }
+
+  if (extension === ".jpg" || extension === ".jpeg") {
+    return "jpg";
+  }
+
+  return null;
+}
+
 async function embedRasterImage(pdfDoc: PDFDocument, imageInput?: PdfBinaryAssetInput | null) {
   if (!imageInput?.bytes?.length) {
     return null;
   }
 
-  const imageBytes = imageInput.bytes;
-  const extension = getAssetExtension(imageInput);
-  if (extension === ".png") {
-    return pdfDoc.embedPng(imageBytes);
+  const imageType = detectRasterImageType(imageInput);
+  if (!imageType) {
+    return null;
   }
 
-  return pdfDoc.embedJpg(imageBytes);
+  try {
+    return imageType === "png" ? await pdfDoc.embedPng(imageInput.bytes) : await pdfDoc.embedJpg(imageInput.bytes);
+  } catch {
+    try {
+      return imageType === "png" ? await pdfDoc.embedJpg(imageInput.bytes) : await pdfDoc.embedPng(imageInput.bytes);
+    } catch {
+      return null;
+    }
+  }
 }
 
 function splitFrontMatter(noteText: string) {
@@ -343,6 +382,16 @@ function drawWrappedParagraph(
   color: ReturnType<typeof rgb>
 ) {
   const parsed = splitLabelValue(line.trim());
+  if (parsed?.value && parsed.label.trim() === "Plan:") {
+    const wrappedLines = wrapLine(line, page.getWidth() - margin * 2, boldFont, size);
+    let nextY = y;
+    for (const wrappedLine of wrappedLines) {
+      drawSimpleLine(page, wrappedLine, margin, nextY, size, boldFont, color);
+      nextY -= lineHeight;
+    }
+    return nextY;
+  }
+
   if (!parsed || !parsed.value || !shouldBoldBodyLabel(parsed.label)) {
     const wrappedLines = wrapLine(line, page.getWidth() - margin * 2, regularFont, size);
     let nextY = y;
@@ -604,14 +653,14 @@ export async function buildVisitPdf({ noteText, photoInputs, attachmentInputs, l
     }
 
     if (cleanLine.endsWith(":")) {
-      const wrappedHeadingLines = wrapLine(cleanLine, page.getWidth() - margin * 2, boldFont, sectionSize);
+      const wrappedHeadingLines = wrapLine(cleanLine, page.getWidth() - margin * 2, regularFont, bodySize);
       for (const wrappedHeadingLine of wrappedHeadingLines) {
         if (cursorY < margin + bodyLineHeight * 2) {
           page = pdfDoc.addPage(pageSize);
           cursorY = drawVisitPageHeader(page, logo, margin, metadata, regularFont, boldFont);
         }
 
-        drawSimpleLine(page, wrappedHeadingLine, margin, cursorY, sectionSize, boldFont, textColor);
+        drawSimpleLine(page, wrappedHeadingLine, margin, cursorY, bodySize, regularFont, textColor);
         cursorY -= bodyLineHeight;
       }
       cursorY -= 1.5;

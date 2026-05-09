@@ -9,7 +9,7 @@ import { PDFDocument } from "pdf-lib";
 import { RadiationNoteRepository } from "../src/main/repository";
 import { RadiationNoteService } from "../src/main/backend";
 import { DesktopBinaryAssetStore } from "../src/main/storage/desktop-binary-asset-store";
-import { formatDisplayDate, getSuggestedNoteType } from "../src/shared/note-rules";
+import { buildTreatmentDeliveryStatement, formatDisplayDate, getSuggestedNoteType } from "../src/shared/note-rules";
 import { buildVisitPreviewText, createCourseFormFromDetail, createEmptyCourseForm } from "../src/renderer/src/helpers";
 
 const pngDataUrl =
@@ -133,6 +133,22 @@ async function createTwoSitePatientAndCourse() {
   });
 
   return { patient, course };
+}
+
+const defaultMipsBody =
+  "Quality measures have been documented for this encounter in accordance with Merit-based Incentive Payment System (MIPS) requirements.";
+
+function expectMipsImmediatelyBeforeSignature(
+  generatedText: string,
+  signatureHeading: "Supervised by:" | "Treatment Supervised by:",
+  expectedBody = defaultMipsBody
+) {
+  const mipsIndex = generatedText.indexOf("Plan: MIPS");
+  const signatureIndex = generatedText.indexOf(signatureHeading);
+  expect(mipsIndex).toBeGreaterThanOrEqual(0);
+  expect(signatureIndex).toBeGreaterThan(mipsIndex);
+  expect(generatedText).not.toContain("MIPS:\n");
+  expect(generatedText.slice(mipsIndex, signatureIndex).trim()).toBe(`Plan: MIPS\n${expectedBody}`);
 }
 
 describe("RadiationNoteService workflow", () => {
@@ -864,7 +880,7 @@ describe("RadiationNoteService workflow", () => {
 
     firstDraft.note.structuredFields.prescribedFractionsInput = 10;
     const savedFirst = service.saveVisit(firstDraft.note);
-    expect(savedFirst.generatedText).toContain("Number of Treatments: 10");
+    expect(savedFirst.generatedText).toContain("Fractions: 10");
 
     const updatedCourse = service.getPatientDetail(patient.id).courses[0].course;
     expect(updatedCourse.prescribedFractions).toBe(10);
@@ -1139,6 +1155,41 @@ describe("RadiationNoteService workflow", () => {
     expect(consultDraft.note.generatedText).toContain(
       "The following treatment devices and target prescriptions were utilized pending radiation oncologist and medical physics review:"
     );
+    expect(consultDraft.note.generatedText).toContain("Total time of 45 minutes was spent by the physician and radiation therapist");
+    expect(consultDraft.note.generatedText).toContain("The radiation oncologist will provide a recommended treatment plan.");
+    expect(consultDraft.note.generatedText).toContain(
+      "Plan: Therapeutic Radiation Simulation.\nNumber of Treatment Areas: 1\nNumber of Blocks: 1\nType of Blocks: Complex"
+    );
+    expect(consultDraft.note.generatedText).toContain("Plan: Consultation for Radiotherapy.\nLocation: Nasal bridge");
+    expect(consultDraft.note.generatedText).toContain(
+      "XRT Simulation Details:\nTotal Fractions:"
+    );
+    expect(consultDraft.note.generatedText).toContain("Daily dose:");
+    expect(consultDraft.note.generatedText).toContain("Total dose:");
+    expect(consultDraft.note.generatedText).toContain("Tx depth:");
+    expect(consultDraft.note.generatedText).toContain("Cone size:");
+    expect(consultDraft.note.generatedText).toContain("Cutout flex shield size:");
+    expect(consultDraft.note.generatedText).toContain("Additional Tx devices:");
+    expect(consultDraft.note.generatedText).toContain(
+      "Clinical Setup Photographs Obtained: Yes\n\nNote: This plan will be the initial intent for treatment."
+    );
+    expect(consultDraft.note.generatedText).not.toContain("Tx site name:");
+    expect(consultDraft.note.generatedText).not.toContain("ICD10:");
+    expect(consultDraft.note.generatedText).not.toContain("Diagnosis:");
+    expect(consultDraft.note.generatedText).not.toContain("Treatment Site:");
+    expect(consultDraft.note.generatedText).not.toContain("Frequency:");
+    expect(consultDraft.note.generatedText).not.toContain("Energy:");
+    expect(consultDraft.note.generatedText).not.toContain("Lesion Size:");
+    expect(consultDraft.note.generatedText).not.toContain("Notes:");
+    expect(consultDraft.note.generatedText).not.toContain("Treatment Start Date:");
+    expect(consultDraft.note.generatedText).toContain("Review: An extensive history and exam was performed");
+    expect(consultDraft.note.generatedText).toContain("Treatment Options: The various treatment options");
+    expect(consultDraft.note.generatedText).toContain("Risks and Benefits: The rationale for radiotherapy");
+    expect(consultDraft.note.generatedText).toContain("Follow Up: The patient is scheduled to start Radiation Therapy on");
+    expect(consultDraft.note.generatedText).toContain("Additional Information:");
+    expect(consultDraft.note.generatedText).toContain("Other Instructions: See attachments within chart");
+    expect(consultDraft.note.generatedText).not.toContain("Treatment was delivered today per the approved prescription");
+    expect(consultDraft.note.generatedText).not.toContain("Consultation and Simulation for Radiotherapy");
     expect(consultDraft.note.generatedText).not.toContain("mm mm");
 
     consultDraft.note.structuredFields.projectedFractionsInput = 12;
@@ -1150,15 +1201,16 @@ describe("RadiationNoteService workflow", () => {
     consultDraft.note.editedText = "";
     const savedConsult = service.saveVisit(consultDraft.note);
 
-    expect(savedConsult.generatedText).toContain("Tx site name: Bridge of nose");
-    expect(savedConsult.generatedText).toContain("ICD10: C44.311");
+    expect(savedConsult.generatedText).not.toContain("Tx site name:");
+    expect(savedConsult.generatedText).not.toContain("ICD10:");
     expect(savedConsult.generatedText).toContain("Total Fractions: 12");
     expect(savedConsult.generatedText).toContain("Daily dose: 350 cGy");
-    expect(savedConsult.generatedText).toContain("Prescribed dose: 4200 cGy");
+    expect(savedConsult.generatedText).toContain("Total dose: 4200 cGy");
     expect(savedConsult.generatedText).not.toContain("Cumulative dose:");
     expect(savedConsult.generatedText).toContain("Tx depth: 3mm");
     expect(savedConsult.generatedText).toContain("Cone size: 30mm");
     expect(savedConsult.generatedText).toContain("Cutout flex shield size: 18mm");
+    expect(savedConsult.generatedText).not.toContain("Cutout flex shield size: 18mm, to be used with");
     expect(savedConsult.generatedText).toContain("Additional Tx devices: Special Set-up - Custom cutout");
     expect(savedConsult.generatedText).not.toContain("Applicator:");
     expect(savedConsult.generatedText).not.toContain("Flex Shield (Cutout Used):");
@@ -1171,7 +1223,23 @@ describe("RadiationNoteService workflow", () => {
     expect(firstDraft.note.generatedText).toContain("HPI:");
     expect(firstDraft.note.generatedText).toContain("Last seen on 03/30/2026 for Simulation and Consultation for XRT Treatment.");
     expect(firstDraft.note.generatedText).not.toContain("mm mm");
-    expect(firstDraft.note.generatedText).toContain("Radiation Therapy Prescription:");
+    expect(firstDraft.note.generatedText).toContain("Post Care: Aquaphor was applied to the treated area.");
+    expect(firstDraft.note.generatedText).toContain("Follow Up: As previously scheduled.");
+    expect(firstDraft.note.generatedText).not.toContain("Post Care:\nAquaphor was applied");
+    expect(firstDraft.note.generatedText).not.toContain("Follow Up:\nAs previously scheduled");
+    expect(firstDraft.note.generatedText).toContain(
+      "Plan: Therapeutic Radiation Simulation.\nNumber of Treatment Areas: 1\nNumber of Blocks: 1\nType of Blocks: Simple"
+    );
+    expect(firstDraft.note.generatedText).not.toContain("Plan:\nTherapeutic Radiation Simulation.");
+    expect(firstDraft.note.generatedText).toContain("Final Approved Prescription:");
+    expect(firstDraft.note.generatedText).toContain("Treatment Site: Bridge of nose");
+    expect(firstDraft.note.generatedText).toContain("Energy: 50kV");
+    expect(firstDraft.note.generatedText).toContain("Applicator Size: 30mm\nFlex Shield Cutout: 18mm");
+    expect(firstDraft.note.generatedText).not.toContain("Flex Shield Cutout: 18mm, to be used with");
+    expect(firstDraft.note.generatedText).toContain(
+      "Treatment was delivered today per the approved prescription, reflecting the final clinical decision. The patient was treated with hypofractionated external beam radiation therapy using the Xoft Elekta 1200SPX system utilizing a 50kV x-ray source, for a biopsy-proven nonmelanoma skin cancer."
+    );
+    expect(firstDraft.note.generatedText).not.toContain("Treatment was initiated today");
     expect(firstDraft.note.generatedText).toContain(
       'Comments: See document named "Radiation Therapy Dose Calcs" attached to patient chart'
     );
@@ -1179,6 +1247,9 @@ describe("RadiationNoteService workflow", () => {
 
     const secondDraft = service.buildVisitDraft(course.id, "next_treatment");
     expect(secondDraft.note.generatedText).toContain(`Patient was last seen on ${formatDisplayDate(firstDraft.note.visitDate)} for XRT treatment.`);
+    expect(secondDraft.note.generatedText).toContain("Treatment was delivered today per the approved prescription");
+    expect(secondDraft.note.generatedText).toContain("Post Care: Aquaphor was applied to the treated area.");
+    expect(secondDraft.note.generatedText).toContain("Follow Up: As previously scheduled.");
 
     for (let index = 0; index < 3; index += 1) {
       const draft = service.buildVisitDraft(course.id, "next_treatment");
@@ -1191,10 +1262,133 @@ describe("RadiationNoteService workflow", () => {
     expect(otvDraft.note.generatedText).toContain(
       "Patient evaluated today during the current course of radiation therapy for BCC of the Bridge of nose. Current dose reviewed 1400/4200 cGy in 5 of 15 fractions."
     );
+    expect(otvDraft.note.generatedText).toContain("Treatment was delivered today per the approved prescription");
+    expect(otvDraft.note.generatedText).toContain("Post Care: Aquaphor was applied to the treated area.");
+    expect(otvDraft.note.generatedText).toContain("Follow Up: As previously scheduled.");
     expect(otvDraft.note.generatedText).toContain(
       "In accordance with the standard of care for radiotherapy treatment"
     );
     expect(otvDraft.note.generatedText).toContain('See attached Documents within patient chart "Weekly Physics Check".');
+  });
+
+  it("migrates saved cutout placeholders to size-only for Sim/Consult and Fraction 1 templates", async () => {
+    const oneSiteTemplate = repository.getTemplate("one_site:consult_sim")!;
+    const twoSiteTemplate = repository.getTemplate("two_site:consult_sim")!;
+
+    repository.saveTemplate(
+      oneSiteTemplate.id,
+      oneSiteTemplate.templateText
+        .replace(
+          "Cutout flex shield size: {{site1.cutoutSizeDisplay}}",
+          "Cutout flex shield size: {{site1.flexShieldCutoutText}}"
+        )
+        .replace("Flex Shield Cutout: {{site1.cutoutSizeDisplay}}", "Flex Shield Cutout: {{site1.flexShieldCutoutText}}")
+    );
+    repository.saveTemplate(
+      twoSiteTemplate.id,
+      twoSiteTemplate.templateText
+        .replace(
+          "Cutout flex shield size: {{site1.cutoutSizeDisplay}}",
+          "Cutout flex shield size: {{site1.flexShieldCutoutText}}"
+        )
+        .replace(
+          "Cutout flex shield size: {{site2.cutoutSizeDisplay}}",
+          "Cutout flex shield size: {{site2.flexShieldCutoutText}}"
+        )
+        .replace("Flex Shield Cutout: {{site1.cutoutSizeDisplay}}", "Flex Shield Cutout: {{site1.flexShieldCutoutText}}")
+        .replace("Flex Shield Cutout: {{site2.cutoutSizeDisplay}}", "Flex Shield Cutout: {{site2.flexShieldCutoutText}}")
+    );
+    const oneSiteFirstFractionTemplate = repository.getTemplate("one_site:first_fraction")!;
+    const twoSiteFirstFractionTemplate = repository.getTemplate("two_site:first_fraction")!;
+    repository.saveTemplate(
+      oneSiteFirstFractionTemplate.id,
+      oneSiteFirstFractionTemplate.templateText.replace(
+        "Flex Shield Cutout: {{site1.cutoutSizeDisplay}}",
+        "Flex Shield Cutout: {{site1.flexShieldCutoutText}}"
+      )
+    );
+    repository.saveTemplate(
+      twoSiteFirstFractionTemplate.id,
+      twoSiteFirstFractionTemplate.templateText
+        .replace("Flex Shield Cutout: {{site1.cutoutSizeDisplay}}", "Flex Shield Cutout: {{site1.flexShieldCutoutText}}")
+        .replace("Flex Shield Cutout: {{site2.cutoutSizeDisplay}}", "Flex Shield Cutout: {{site2.flexShieldCutoutText}}")
+    );
+
+    const restartedAssetStore = new DesktopBinaryAssetStore(path.join(tempDir, "storage"));
+    const restartedRepository = new RadiationNoteRepository(tempDir, restartedAssetStore);
+    await restartedRepository.initialize();
+
+    const migratedOneSiteTemplate = restartedRepository.getTemplate("one_site:consult_sim")!;
+    const migratedTwoSiteTemplate = restartedRepository.getTemplate("two_site:consult_sim")!;
+
+    expect(migratedOneSiteTemplate.templateText).toContain("Cutout flex shield size: {{site1.cutoutSizeDisplay}}");
+    expect(migratedOneSiteTemplate.templateText).not.toContain("Cutout flex shield size: {{site1.flexShieldCutoutText}}");
+    expect(migratedTwoSiteTemplate.templateText).toContain("Cutout flex shield size: {{site1.cutoutSizeDisplay}}");
+    expect(migratedTwoSiteTemplate.templateText).toContain("Cutout flex shield size: {{site2.cutoutSizeDisplay}}");
+    expect(migratedTwoSiteTemplate.templateText).not.toContain("Cutout flex shield size: {{site1.flexShieldCutoutText}}");
+    expect(migratedTwoSiteTemplate.templateText).not.toContain("Cutout flex shield size: {{site2.flexShieldCutoutText}}");
+    const migratedOneSiteFirstFractionTemplate = restartedRepository.getTemplate("one_site:first_fraction")!;
+    const migratedTwoSiteFirstFractionTemplate = restartedRepository.getTemplate("two_site:first_fraction")!;
+    expect(migratedOneSiteFirstFractionTemplate.templateText).toContain("Flex Shield Cutout: {{site1.cutoutSizeDisplay}}");
+    expect(migratedOneSiteFirstFractionTemplate.templateText).not.toContain("Flex Shield Cutout: {{site1.flexShieldCutoutText}}");
+    expect(migratedTwoSiteFirstFractionTemplate.templateText).toContain("Flex Shield Cutout: {{site1.cutoutSizeDisplay}}");
+    expect(migratedTwoSiteFirstFractionTemplate.templateText).toContain("Flex Shield Cutout: {{site2.cutoutSizeDisplay}}");
+    expect(migratedTwoSiteFirstFractionTemplate.templateText).not.toContain("Flex Shield Cutout: {{site1.flexShieldCutoutText}}");
+    expect(migratedTwoSiteFirstFractionTemplate.templateText).not.toContain("Flex Shield Cutout: {{site2.flexShieldCutoutText}}");
+  });
+
+  it("migrates saved treatment Post Care and Follow Up labels plus old two-site HPI", async () => {
+    const treatmentTemplateKeys = [
+      "one_site:first_fraction",
+      "one_site:standard_treatment",
+      "one_site:otv",
+      "two_site:first_fraction",
+      "two_site:standard_treatment",
+      "two_site:otv"
+    ];
+    const oldTwoSiteHpiLine =
+      "1. is following up for {{site1.diagnosisText}} on the {{site1.bodyLocation}} and {{site2.diagnosisText}} on the {{site2.bodyLocation}}.";
+    const newTwoSiteHpiLines =
+      "1. is following up for {{site1.diagnosisText}} on the {{site1.bodyLocation}}.\n2. is following up for {{site2.diagnosisText}} on the {{site2.bodyLocation}}.";
+
+    for (const key of treatmentTemplateKeys) {
+      const template = repository.getTemplate(key)!;
+      const templateText = template.templateText
+        .replace("Post Care: {{structured.postCare}}", "Post Care:\n{{structured.postCare}}")
+        .replace("Follow Up: {{structured.followUp}}", "Follow Up:\n{{structured.followUp}}");
+      repository.saveTemplate(
+        template.id,
+        key.startsWith("two_site:") ? templateText.replace(newTwoSiteHpiLines, oldTwoSiteHpiLine) : templateText
+      );
+    }
+
+    const restartedAssetStore = new DesktopBinaryAssetStore(path.join(tempDir, "storage"));
+    const restartedRepository = new RadiationNoteRepository(tempDir, restartedAssetStore);
+    await restartedRepository.initialize();
+
+    for (const key of treatmentTemplateKeys) {
+      const migratedTemplate = restartedRepository.getTemplate(key)!;
+      expect(migratedTemplate.templateText).toContain("Post Care: {{structured.postCare}}");
+      expect(migratedTemplate.templateText).toContain("Follow Up: {{structured.followUp}}");
+      expect(migratedTemplate.templateText).not.toContain("Post Care:\n{{structured.postCare}}");
+      expect(migratedTemplate.templateText).not.toContain("Follow Up:\n{{structured.followUp}}");
+      if (key.startsWith("two_site:")) {
+        expect(migratedTemplate.templateText).toContain(newTwoSiteHpiLines);
+        expect(migratedTemplate.templateText).not.toContain(oldTwoSiteHpiLine);
+      }
+    }
+  });
+
+  it("defaults treatment delivery wording when older site data is missing machine or energy", () => {
+    const deliveryStatement = buildTreatmentDeliveryStatement("first_fraction", [
+      {
+        bodyLocation: "Nasal bridge",
+        treatmentLocationText: "Bridge of nose",
+        diagnosisText: "Basal cell carcinoma"
+      }
+    ]);
+
+    expect(deliveryStatement).toContain("Xoft Elekta 1200SPX system utilizing a 50kV x-ray source");
   });
 
   it("uses editable OTV notes for one-site and two-site visits", async () => {
@@ -1263,6 +1457,10 @@ describe("RadiationNoteService workflow", () => {
     expect(twoSiteOtvDraft.note.generatedText).toContain(
       "Patient evaluated today during the current course of radiation therapy for BCC of the Left cheek and SCC of the Right ear. Current dose reviewed 2000/4000 cGy in 5 of 10 fractions and 2000/4000 cGy in 5 of 10 fractions."
     );
+    expect(twoSiteOtvDraft.note.generatedText).toContain("Post Care: Aquaphor was applied to the treated area.");
+    expect(twoSiteOtvDraft.note.generatedText).toContain("Follow Up: As previously scheduled for both treatment sites.");
+    expect(twoSiteOtvDraft.note.generatedText).not.toContain("Post Care:\nAquaphor was applied");
+    expect(twoSiteOtvDraft.note.generatedText).not.toContain("Follow Up:\nAs previously scheduled for both treatment sites");
     twoSiteOtvDraft.note.structuredFields.examComment = "Custom two-site OTV wording for today.";
     const savedTwoSiteOtv = service.saveVisit(twoSiteOtvDraft.note);
     expect(savedTwoSiteOtv.generatedText).toContain("Custom two-site OTV wording for today.");
@@ -1282,6 +1480,140 @@ describe("RadiationNoteService workflow", () => {
     expect(saved.generatedText).not.toContain("Current dose reviewed 280/4200 cGy in 1 of 15 fractions.");
   });
 
+  it("splits two-lesion treatment HPI numbered lines for treatment and OTV notes", async () => {
+    const { course } = await createTwoSitePatientAndCourse();
+    const expectedSplitHpi =
+      "1. is following up for Basal cell carcinoma on the Left cheek.\n2. is following up for Squamous cell carcinoma on the Right ear.";
+    const oldCombinedHpi =
+      "1. is following up for Basal cell carcinoma on the Left cheek and Squamous cell carcinoma on the Right ear.";
+
+    for (const treatmentNumber of [1, 2, 5]) {
+      const draft = service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber });
+      expect(draft.note.generatedText).toContain(expectedSplitHpi);
+      expect(draft.note.generatedText).not.toContain(oldCombinedHpi);
+      if (treatmentNumber === 1) {
+        expect(draft.note.generatedText).toContain("Applicator Size: 20mm\nFlex Shield Cutout: 10mm");
+        expect(draft.note.generatedText).toContain("Applicator Size: 20mm\nFlex Shield Cutout: 12mm");
+        expect(draft.note.generatedText).not.toContain("Flex Shield Cutout: 10mm, to be used with");
+        expect(draft.note.generatedText).not.toContain("Flex Shield Cutout: 12mm, to be used with");
+      }
+      service.saveVisit(draft.note);
+    }
+  });
+
+  it("places checked MIPS immediately before the signature section on visit notes", async () => {
+    const saveWithMips = (draft: ReturnType<RadiationNoteService["buildVisitDraft"]>) => {
+      draft.note.structuredFields.addMips = true;
+      draft.note.generatedText = "";
+      draft.note.editedText = "";
+      return service.saveVisit(draft.note);
+    };
+
+    const { course } = await createPatientAndCourse();
+
+    const savedConsult = saveWithMips(service.buildVisitDraft(course.id, "consult_sim"));
+    expectMipsImmediatelyBeforeSignature(savedConsult.generatedText, "Supervised by:");
+
+    const savedFirst = saveWithMips(service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 1 }));
+    expectMipsImmediatelyBeforeSignature(savedFirst.generatedText, "Treatment Supervised by:");
+    expect(savedFirst.generatedText.indexOf("Follow Up:")).toBeLessThan(savedFirst.generatedText.indexOf("Plan: MIPS"));
+
+    const standardTemplate = repository.getTemplate("one_site:standard_treatment")!;
+    const oldPlacedStandardTemplate = standardTemplate.templateText.replace(
+      "Follow Up: {{structured.followUp}}\n\n{{structured.mipsSection}}\n\nTreatment Supervised by:",
+      "{{structured.mipsSection}}\n\nFollow Up: {{structured.followUp}}\n\nTreatment Supervised by:"
+    );
+    expect(oldPlacedStandardTemplate).not.toBe(standardTemplate.templateText);
+    repository.saveTemplate(standardTemplate.id, oldPlacedStandardTemplate);
+
+    const savedStandard = saveWithMips(service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 2 }));
+    expectMipsImmediatelyBeforeSignature(savedStandard.generatedText, "Treatment Supervised by:");
+    expect(savedStandard.generatedText.indexOf("Follow Up:")).toBeLessThan(
+      savedStandard.generatedText.indexOf("Plan: MIPS")
+    );
+
+    const savedOtv = saveWithMips(service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 5 }));
+    expectMipsImmediatelyBeforeSignature(savedOtv.generatedText, "Treatment Supervised by:");
+    expect(savedOtv.generatedText.indexOf("Follow Up:")).toBeLessThan(savedOtv.generatedText.indexOf("Plan: MIPS"));
+
+    const savedFinal = saveWithMips(service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 15 }));
+    expectMipsImmediatelyBeforeSignature(savedFinal.generatedText, "Treatment Supervised by:");
+    expect(savedFinal.generatedText.indexOf("Patient successfully completed the prescribed course")).toBeLessThan(
+      savedFinal.generatedText.indexOf("Follow Up:")
+    );
+    expect(savedFinal.generatedText.indexOf("Follow Up:")).toBeLessThan(savedFinal.generatedText.indexOf("Plan: MIPS"));
+
+    const { course: twoSiteCourse } = await createTwoSitePatientAndCourse();
+    for (const treatmentNumber of [1, 2, 5]) {
+      const savedTwoSiteTreatment = saveWithMips(
+        service.buildVisitDraft(twoSiteCourse.id, "next_treatment", undefined, { treatmentNumber })
+      );
+      expectMipsImmediatelyBeforeSignature(savedTwoSiteTreatment.generatedText, "Treatment Supervised by:");
+      expect(savedTwoSiteTreatment.generatedText.indexOf("Follow Up:")).toBeLessThan(
+        savedTwoSiteTreatment.generatedText.indexOf("Plan: MIPS")
+      );
+    }
+
+    const twoSiteFinalDraft = service.buildVisitDraft(twoSiteCourse.id, "next_treatment", undefined, { treatmentNumber: 10 });
+    twoSiteFinalDraft.note.structuredFields.finalTreatment = true;
+    const savedTwoSiteFinal = saveWithMips(twoSiteFinalDraft);
+    expectMipsImmediatelyBeforeSignature(savedTwoSiteFinal.generatedText, "Treatment Supervised by:");
+    expect(savedTwoSiteFinal.generatedText.indexOf("Patient successfully completed the prescribed course")).toBeLessThan(
+      savedTwoSiteFinal.generatedText.indexOf("Follow Up:")
+    );
+    expect(savedTwoSiteFinal.generatedText.indexOf("Follow Up:")).toBeLessThan(
+      savedTwoSiteFinal.generatedText.indexOf("Plan: MIPS")
+    );
+  });
+
+  it("carries the last saved course MIPS choice into new visit drafts until changed", async () => {
+    const { course } = await createPatientAndCourse();
+
+    const consultDraft = service.buildVisitDraft(course.id, "consult_sim");
+    consultDraft.note.structuredFields.addMips = true;
+    consultDraft.note.structuredFields.mipsNote = "Custom sticky MIPS wording.";
+    const savedConsult = service.saveVisit(consultDraft.note);
+    expect(savedConsult.structuredFields.addMips).toBe(true);
+
+    const firstDraft = service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 1 });
+    expect(firstDraft.note.structuredFields.addMips).toBe(true);
+    expect(firstDraft.note.structuredFields.mipsNote).toBe("Custom sticky MIPS wording.");
+    const savedFirst = service.saveVisit(firstDraft.note);
+
+    const secondDraft = service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 2 });
+    expect(secondDraft.note.structuredFields.addMips).toBe(true);
+    expect(secondDraft.note.structuredFields.mipsNote).toBe("Custom sticky MIPS wording.");
+    secondDraft.note.structuredFields.addMips = false;
+    const savedSecond = service.saveVisit(secondDraft.note);
+    expect(savedSecond.structuredFields.addMips).toBe(false);
+
+    const reopenedFirst = service.buildVisitDraft(course.id, "next_treatment", savedFirst.id);
+    expect(reopenedFirst.note.structuredFields.addMips).toBe(true);
+    reopenedFirst.note.structuredFields.additionalNotes = "Older visit edited after MIPS was unchecked later.";
+    service.saveVisit(reopenedFirst.note);
+
+    const thirdDraft = service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 3 });
+    expect(thirdDraft.note.structuredFields.addMips).toBe(false);
+    expect(thirdDraft.note.structuredFields.mipsNote).toBe("Custom sticky MIPS wording.");
+    expect(thirdDraft.note.generatedText).not.toContain("Plan: MIPS");
+  });
+
+  it("carries checked MIPS forward on two-site treatment notes", async () => {
+    const { course } = await createTwoSitePatientAndCourse();
+
+    const firstDraft = service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 1 });
+    firstDraft.note.structuredFields.addMips = true;
+    service.saveVisit(firstDraft.note);
+
+    const standardDraft = service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 2 });
+    expect(standardDraft.note.structuredFields.addMips).toBe(true);
+    expect(standardDraft.note.generatedText).toContain("Plan: MIPS");
+
+    const otvDraft = service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 5 });
+    expect(otvDraft.note.structuredFields.addMips).toBe(true);
+    expect(otvDraft.note.generatedText).toContain("Plan: MIPS");
+  });
+
   it("only renders final treatment wording on the prescribed final treatment", async () => {
     const { course } = await createPatientAndCourse();
     const earlyDraft = service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 14 });
@@ -1296,9 +1628,40 @@ describe("RadiationNoteService workflow", () => {
     finalDraft.note.structuredFields.mipsNote = "Custom MIPS wording for this encounter.";
     const savedFinal = service.saveVisit(finalDraft.note);
     expect(savedFinal.generatedText).toContain("Custom final treatment instructions for this course.");
+    expect(savedFinal.generatedText).toContain("Treatment was delivered today per the approved prescription");
     expect(savedFinal.generatedText).not.toContain("Patient successfully completed the prescribed course");
-    expect(savedFinal.generatedText).toContain("MIPS:\nCustom MIPS wording for this encounter.");
+    expectMipsImmediatelyBeforeSignature(
+      savedFinal.generatedText,
+      "Treatment Supervised by:",
+      "Custom MIPS wording for this encounter."
+    );
+    expect(savedFinal.generatedText.indexOf("Custom final treatment instructions for this course.")).toBeLessThan(
+      savedFinal.generatedText.indexOf("Follow Up:")
+    );
+    expect(savedFinal.generatedText.indexOf("Follow Up:")).toBeLessThan(
+      savedFinal.generatedText.indexOf("Plan: MIPS")
+    );
     expect(savedFinal.generatedText).not.toContain("Quality measures have been documented for this encounter");
+  });
+
+  it("renders separate post-care ointment choices including CeraVe and Petrolatum", async () => {
+    const { course } = await createPatientAndCourse();
+
+    const firstDraft = service.buildVisitDraft(course.id, "next_treatment");
+    firstDraft.note.structuredFields.postCare = "CeraVe was applied to the treated area.";
+    const savedCeraVe = service.saveVisit(firstDraft.note);
+    expect(savedCeraVe.generatedText).toContain("CeraVe was applied to the treated area.");
+
+    const secondDraft = service.buildVisitDraft(course.id, "next_treatment");
+    secondDraft.note.structuredFields.postCare = "Petrolatum was applied to the treated area.";
+    const savedPetrolatum = service.saveVisit(secondDraft.note);
+    expect(savedPetrolatum.generatedText).toContain("Petrolatum was applied to the treated area.");
+
+    const thirdDraft = service.buildVisitDraft(course.id, "next_treatment");
+    thirdDraft.note.structuredFields.postCare = "Vaseline was applied to the treated area.";
+    const savedLegacyVaseline = service.saveVisit(thirdDraft.note);
+    expect(savedLegacyVaseline.generatedText).toContain("Petrolatum was applied to the treated area.");
+    expect(savedLegacyVaseline.generatedText).not.toContain("Vaseline was applied to the treated area.");
   });
 
   it("auto-checks final treatment when prescribed fractions live on the site snapshot", async () => {
@@ -1394,20 +1757,42 @@ describe("RadiationNoteService workflow", () => {
     expect(savedConsult.generatedText).toContain(
       "2. is following up for Squamous cell carcinoma on the Right ear. Biopsy date: 04/05/2026."
     );
-    expect(savedConsult.generatedText).toContain("Tx site name: Left medial malar cheek");
-    expect(savedConsult.generatedText).toContain("ICD10: C44.319");
+    expect(savedConsult.generatedText).not.toContain("Tx site name:");
+    expect(savedConsult.generatedText).not.toContain("ICD10:");
+    expect(savedConsult.generatedText).toContain(
+      "Plan: Therapeutic Radiation Simulation.\nNumber of Treatment Areas: 1\nNumber of Blocks: 1\nType of Blocks: Complex"
+    );
+    expect(savedConsult.generatedText).toContain("Plan: Consultation for Radiotherapy.\nLocation: Left cheek");
+    expect(savedConsult.generatedText).toContain("XRT Simulation Details Site 1:");
     expect(savedConsult.generatedText).toContain("Total Fractions: 10");
     expect(savedConsult.generatedText).toContain("Daily dose: 400 cGy");
-    expect(savedConsult.generatedText).toContain("Prescribed dose: 4000 cGy");
+    expect(savedConsult.generatedText).toContain("Total dose: 4000 cGy");
     expect(savedConsult.generatedText).toContain("Tx depth: 3mm");
     expect(savedConsult.generatedText).toContain("Cone size: 20mm");
     expect(savedConsult.generatedText).toContain("Cutout flex shield size: 10mm");
-    expect(savedConsult.generatedText).toContain("Tx site name: Right post auricular skin");
-    expect(savedConsult.generatedText).toContain("ICD10: C44.222");
+    expect(savedConsult.generatedText).not.toContain("Cutout flex shield size: 10mm, to be used with");
+    expect(savedConsult.generatedText).toContain("Additional Tx devices:");
+    expect(savedConsult.generatedText).toContain(
+      "Plan: Consultation for Radiotherapy.\nLocation: Right ear"
+    );
+    expect(savedConsult.generatedText).toContain("Follow Up: The patient is scheduled to start Radiation Therapy on");
+    expect(savedConsult.generatedText).not.toContain("Treatment Start Date:");
+    expect(savedConsult.generatedText).not.toContain("Consultation and Simulation for Radiotherapy");
+    expect(savedConsult.generatedText).not.toContain("Diagnosis:");
+    expect(savedConsult.generatedText).not.toContain("Treatment Site:");
+    expect(savedConsult.generatedText).not.toContain("Frequency:");
+    expect(savedConsult.generatedText).not.toContain("Energy:");
+    expect(savedConsult.generatedText).not.toContain("Lesion Size:");
+    expect(savedConsult.generatedText).not.toContain("Notes:");
+    expect(savedConsult.generatedText).toContain("XRT Simulation Details Site 2:");
     expect(savedConsult.generatedText).toContain("Total Fractions: 12");
     expect(savedConsult.generatedText).toContain("Daily dose: 350 cGy");
-    expect(savedConsult.generatedText).toContain("Prescribed dose: 4200 cGy");
+    expect(savedConsult.generatedText).toContain("Total dose: 4200 cGy");
     expect(savedConsult.generatedText).toContain("Cutout flex shield size: 12mm");
+    expect(savedConsult.generatedText).not.toContain("Cutout flex shield size: 12mm, to be used with");
+    expect(savedConsult.generatedText).toContain(
+      "Clinical Setup Photographs Obtained: Yes\n\nNote: This plan will be the initial intent for treatment."
+    );
   });
 
   it("only includes additional notes when provided and places them above follow up", async () => {
@@ -1421,7 +1806,7 @@ describe("RadiationNoteService workflow", () => {
     consultDraft.note.editedText = "";
     const savedConsult = service.saveVisit(consultDraft.note);
 
-    expect(savedConsult.generatedText).toContain("Additional Notes:\nPatient prefers afternoon appointments.");
+    expect(savedConsult.generatedText).toContain("Additional Notes: Patient prefers afternoon appointments.");
     expect(savedConsult.generatedText.indexOf("Additional Notes:")).toBeLessThan(
       savedConsult.generatedText.indexOf("Follow Up:")
     );
@@ -1436,6 +1821,8 @@ describe("RadiationNoteService workflow", () => {
     const savedConsult = service.saveVisit(consultDraft.note);
 
     expect(savedConsult.generatedText).toContain("Custom ultrasound wording for this simulation.");
+    expect(savedConsult.generatedText).toContain("Ultrasound Performed: Custom ultrasound wording for this simulation.");
+    expect(savedConsult.generatedText).not.toContain("Ultrasound Performed:\nCustom ultrasound wording");
     expect(savedConsult.generatedText).not.toContain(
       "An ultrasound of the lesion was completed to determine tumor extent"
     );
@@ -1606,12 +1993,14 @@ describe("RadiationNoteService workflow", () => {
     const treatmentDraft = service.buildVisitDraft(course.id, "next_treatment");
     expect(treatmentDraft.note.structuredFields.siteSnapshots[0].numberOfBlocks).toBe(0);
     expect(treatmentDraft.note.generatedText).toContain("Number of Blocks: 0");
-    expect(treatmentDraft.note.generatedText).toContain("Open 30mm Cone");
+    expect(treatmentDraft.note.generatedText).toContain("Flex Shield Cutout: Open Cone");
+    expect(treatmentDraft.note.generatedText).not.toContain("Open 30mm Cone");
 
     const consultDraft = service.buildVisitDraft(course.id, "consult_sim");
     expect(consultDraft.note.structuredFields.siteSnapshots[0].numberOfBlocks).toBe(1);
     expect(consultDraft.note.generatedText).toContain("Number of Blocks: 1");
-    expect(consultDraft.note.generatedText).toContain("Open Cone");
+    expect(consultDraft.note.generatedText).toContain("Cone size: 30mm");
+    expect(consultDraft.note.generatedText).toContain("Cutout flex shield size: Open Cone");
 
     service.saveCourse({
       id: course.id,
@@ -1651,7 +2040,7 @@ describe("RadiationNoteService workflow", () => {
     expect(customCutoutDraft.note.generatedText).toContain("Number of Blocks: 1");
   });
 
-  it("uses open cone wording in first-fraction prescription text", async () => {
+  it("uses size-only open cone wording in first-fraction prescription text", async () => {
     const { patient, course } = await createPatientAndCourse();
     const originalSite = repository.fetchSites([course.id])[0];
 
@@ -1689,7 +2078,8 @@ describe("RadiationNoteService workflow", () => {
     });
 
     const firstDraft = service.buildVisitDraft(course.id, "next_treatment");
-    expect(firstDraft.note.generatedText).toContain("Flex Shield Cutout Size: Open 30mm Cone");
+    expect(firstDraft.note.generatedText).toContain("Flex Shield Cutout: Open Cone");
+    expect(firstDraft.note.generatedText).not.toContain("Open 30mm Cone");
 
     const preview = buildVisitPreviewText(
       service.getTemplates(),
@@ -1698,7 +2088,8 @@ describe("RadiationNoteService workflow", () => {
       firstDraft.note,
       service.getSettingsPayload().settings
     );
-    expect(preview).toContain("Flex Shield Cutout Size: Open 30mm Cone");
+    expect(preview).toContain("Flex Shield Cutout: Open Cone");
+    expect(preview).not.toContain("Open 30mm Cone");
   });
 
   it("normalizes legacy none cutout wording to open cone in edit forms and notes", async () => {
@@ -1743,7 +2134,8 @@ describe("RadiationNoteService workflow", () => {
     expect(form.sites[0].cutoutSize).toBe("Open Cone");
 
     const draft = service.buildVisitDraft(course.id, "next_treatment");
-    expect(draft.note.generatedText).toContain("Open 30mm Cone");
+    expect(draft.note.generatedText).toContain("Flex Shield Cutout: Open Cone");
+    expect(draft.note.generatedText).not.toContain("Open 30mm Cone");
     expect(draft.note.generatedText).not.toContain("None");
   });
 

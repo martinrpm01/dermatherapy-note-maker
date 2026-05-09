@@ -4,6 +4,7 @@ import {
   buildShieldSummary,
   buildSimulationComplicationLine,
   buildSimulationComplicationText,
+  buildTreatmentDeliveryStatement,
   calculateAgeAtDate,
   formatAdditionalDevicesForSite,
   formatDisplayDate,
@@ -17,6 +18,9 @@ import {
   normalizeWorksheetDeviceDetailsForSite,
   normalizeVacLokPlacement,
   normalizeCutoutSizeLabel,
+  normalizeInlineSectionText,
+  normalizePostCareText,
+  normalizeTreatmentComment,
   stripExamVitalsSection
 } from "../../shared/note-rules";
 import { renderTemplate } from "../../shared/template-engine";
@@ -80,7 +84,7 @@ function buildMipsSection(enabled: boolean, value?: string) {
     return "";
   }
 
-  return `MIPS:\n${value?.trim() || getDefaultMipsNote()}\n`;
+  return `Plan: MIPS\n${value?.trim() || getDefaultMipsNote()}\n`;
 }
 
 function injectFinalTreatmentSection(renderedText: string, finalTreatmentSection: string) {
@@ -106,17 +110,20 @@ function injectMipsSection(renderedText: string, mipsSection: string) {
     return renderedText;
   }
 
-  if (renderedText.includes(trimmedSection)) {
-    return renderedText;
-  }
+  const legacySection = trimmedSection.replace(/^Plan: MIPS\r?\n/, "MIPS:\n");
+  const cleanedText = renderedText
+    .replaceAll(trimmedSection, "")
+    .replaceAll(legacySection, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trimEnd();
 
-  for (const marker of ["Additional Notes:", "Patient successfully completed the prescribed course of radiation therapy.", "Follow Up:", "Treatment Supervised by:"]) {
-    if (renderedText.includes(marker)) {
-      return renderedText.replace(marker, `${trimmedSection}\n\n${marker}`);
+  for (const marker of ["Treatment Supervised by:", "Supervised by:"]) {
+    if (cleanedText.includes(marker)) {
+      return cleanedText.replace(marker, `${trimmedSection}\n\n${marker}`);
     }
   }
 
-  return `${renderedText}\n\n${trimmedSection}`;
+  return `${cleanedText}\n\n${trimmedSection}`;
 }
 
 function formatPhysicsFractionRange(treatmentNumber: number | null) {
@@ -329,6 +336,7 @@ export function buildVisitPreviewText(
     note.structuredFields.finalTreatmentNote
   );
   const mipsSection = buildMipsSection(!!note.structuredFields.addMips, note.structuredFields.mipsNote);
+  const treatmentDeliveryStatement = buildTreatmentDeliveryStatement(note.noteType, normalizedSites);
 
   const renderedText = renderTemplate(template.templateText, {
     patient: {
@@ -358,10 +366,14 @@ export function buildVisitPreviewText(
     structured: {
       ...note.structuredFields,
       additionalNotesSection: note.structuredFields.additionalNotes.trim()
-        ? `Additional Notes:\n${note.structuredFields.additionalNotes.trim()}\n`
+        ? `Additional Notes: ${note.structuredFields.additionalNotes.trim()}\n`
         : "",
       finalTreatmentSection,
       mipsSection,
+      postCare: normalizePostCareText(note.structuredFields.postCare),
+      treatmentComment: normalizeTreatmentComment(note.structuredFields.treatmentComment),
+      treatmentDeliveryStatement,
+      ultrasoundPerformed: normalizeInlineSectionText(note.structuredFields.ultrasoundPerformed),
       startRadiationDate: formatDisplayDate(note.structuredFields.startRadiationDate),
       biopsyDate: formatDisplayDate(note.structuredFields.biopsyDate),
       lastTreatmentDate: formatDisplayDate(note.structuredFields.lastTreatmentDate),
@@ -369,15 +381,15 @@ export function buildVisitPreviewText(
   });
 
   return stripExamVitalsSection(
-    injectFinalTreatmentSection(
-      injectMipsSection(
+    injectMipsSection(
+      injectFinalTreatmentSection(
         injectPhysicsConsultationDetails(renderedText, note.structuredFields.physicsComment?.trim() || getDefaultPhysicsComment(note.noteType), [
           site1.bodyLocation,
           site2.bodyLocation
         ], note.treatmentNumber),
-        mipsSection
+        finalTreatmentSection
       ),
-      finalTreatmentSection
+      mipsSection
     ),
     note.noteType,
     note.structuredFields.includeExamVitals

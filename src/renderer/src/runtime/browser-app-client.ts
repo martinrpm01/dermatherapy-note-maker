@@ -33,6 +33,7 @@ import {
   getMaxSitePrescribedFractions,
   getNextTreatmentNumber,
   getSuggestedNoteType,
+  getStickyMipsDefaults,
   getTemplateKey,
   isLegacyDefaultOtvNote,
   isFinalTreatmentEligible,
@@ -1317,6 +1318,11 @@ export class BrowserAppClient implements AppClient {
       biopsyDate: course.startDate,
       lastTreatmentDate: mostRecentVisitDate
     });
+    const stickyMipsDefaults = getStickyMipsDefaults(visits, treatmentNumber);
+    if (stickyMipsDefaults) {
+      structuredFields.addMips = stickyMipsDefaults.addMips;
+      structuredFields.mipsNote = stickyMipsDefaults.mipsNote;
+    }
     structuredFields.siteSnapshots = structuredFields.siteSnapshots.map((site) => ({
       ...site,
       biopsyDate: site.biopsyDate || course.startDate || "",

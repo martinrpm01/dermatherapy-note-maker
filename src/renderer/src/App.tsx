@@ -1628,6 +1628,9 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
       if (revealTarget) {
         await appClient.revealAsset(revealTarget);
       }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error.";
+      showToast(generatePdf ? `Could not finalize visit: ${message}` : `Could not save visit: ${message}`);
     } finally {
       setBusy(false);
     }

@@ -181,13 +181,15 @@ The app creates its local database automatically on first launch:
 
 ### One-Click Launch
 
-Double-click [Launch ClearSkin Hub.bat](<Launch ClearSkin Hub.bat>).
+Double-click [Launch ClearSkin Hub.vbs](<Launch ClearSkin Hub.vbs>) for the normal windowless launcher.
 
 It will:
 
 - open the packaged portable app if it already exists
 - fall back to the unpacked app if present
 - build/package the app first if needed, then launch it
+
+[Launch ClearSkin Hub.bat](<Launch ClearSkin Hub.bat>) remains available as a visible troubleshooting launcher if startup errors need to be inspected.
 
 Desktop shortcut for daily use:
 

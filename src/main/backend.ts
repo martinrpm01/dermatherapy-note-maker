@@ -25,6 +25,7 @@ import {
   buildSimulationComplicationLine,
   buildSimulationComplicationText,
   calculateAgeAtDate,
+  buildTreatmentDeliveryStatement,
   buildSiteSnapshots,
   createEmptyVitals,
   fillMissingSitePrescribedFractions,
@@ -40,6 +41,7 @@ import {
   getMaxSitePrescribedFractions,
   getNextTreatmentNumber,
   getSuggestedNoteType,
+  getStickyMipsDefaults,
   getTemplateKey,
   isLegacyDefaultOtvNote,
   isFinalTreatmentEligible,
@@ -49,6 +51,9 @@ import {
   normalizeVacLokPlacement,
   normalizeCutoutSizeLabel,
   normalizeOptionValue,
+  normalizeInlineSectionText,
+  normalizePostCareText,
+  normalizeTreatmentComment,
   stripExamVitalsSection
 } from "../shared/note-rules";
 import {
@@ -196,7 +201,7 @@ function getDefaultTreatmentDepth(value: string) {
 
 function buildAdditionalNotesSection(value: string) {
   const trimmed = value.trim();
-  return trimmed ? `Additional Notes:\n${trimmed}\n` : "";
+  return trimmed ? `Additional Notes: ${trimmed}\n` : "";
 }
 
 function isLockedFileError(error: unknown) {
@@ -222,7 +227,7 @@ function buildMipsSection(enabled: boolean, value?: string) {
     return "";
   }
 
-  return `MIPS:\n${value?.trim() || getDefaultMipsNote()}\n`;
+  return `Plan: MIPS\n${value?.trim() || getDefaultMipsNote()}\n`;
 }
 
 function injectFinalTreatmentSection(renderedText: string, finalTreatmentSection: string) {
@@ -248,17 +253,20 @@ function injectMipsSection(renderedText: string, mipsSection: string) {
     return renderedText;
   }
 
-  if (renderedText.includes(trimmedSection)) {
-    return renderedText;
-  }
+  const legacySection = trimmedSection.replace(/^Plan: MIPS\r?\n/, "MIPS:\n");
+  const cleanedText = renderedText
+    .replaceAll(trimmedSection, "")
+    .replaceAll(legacySection, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trimEnd();
 
-  for (const marker of ["Additional Notes:", "Patient successfully completed the prescribed course of radiation therapy.", "Follow Up:", "Treatment Supervised by:"]) {
-    if (renderedText.includes(marker)) {
-      return renderedText.replace(marker, `${trimmedSection}\n\n${marker}`);
+  for (const marker of ["Treatment Supervised by:", "Supervised by:"]) {
+    if (cleanedText.includes(marker)) {
+      return cleanedText.replace(marker, `${trimmedSection}\n\n${marker}`);
     }
   }
 
-  return `${renderedText}\n\n${trimmedSection}`;
+  return `${cleanedText}\n\n${trimmedSection}`;
 }
 
 function formatPhysicsFractionRange(treatmentNumber: number | null) {
@@ -1028,6 +1036,11 @@ export class RadiationNoteService {
       biopsyDate: course.startDate,
       lastTreatmentDate: mostRecentVisitDate
     });
+    const stickyMipsDefaults = getStickyMipsDefaults(visits, treatmentNumber);
+    if (stickyMipsDefaults) {
+      structuredFields.addMips = stickyMipsDefaults.addMips;
+      structuredFields.mipsNote = stickyMipsDefaults.mipsNote;
+    }
     structuredFields.siteSnapshots = structuredFields.siteSnapshots.map((site) => ({
       ...site,
       biopsyDate: site.biopsyDate || course.startDate || "",
@@ -2259,6 +2272,7 @@ export class RadiationNoteService {
       note.structuredFields.finalTreatmentNote
     );
     const mipsSection = buildMipsSection(note.structuredFields.addMips, note.structuredFields.mipsNote);
+    const treatmentDeliveryStatement = buildTreatmentDeliveryStatement(note.noteType, normalizedSites);
 
     const renderedText = renderTemplate(template.templateText, {
       patient: {
@@ -2290,6 +2304,10 @@ export class RadiationNoteService {
         additionalNotesSection: buildAdditionalNotesSection(note.structuredFields.additionalNotes),
         finalTreatmentSection,
         mipsSection,
+        postCare: normalizePostCareText(note.structuredFields.postCare),
+        treatmentComment: normalizeTreatmentComment(note.structuredFields.treatmentComment),
+        treatmentDeliveryStatement,
+        ultrasoundPerformed: normalizeInlineSectionText(note.structuredFields.ultrasoundPerformed),
         startRadiationDate: formatDisplayDate(note.structuredFields.startRadiationDate),
         biopsyDate: formatDisplayDate(note.structuredFields.biopsyDate),
         lastTreatmentDate: formatDisplayDate(note.structuredFields.lastTreatmentDate)
@@ -2297,15 +2315,15 @@ export class RadiationNoteService {
     });
 
     return stripExamVitalsSection(
-      injectFinalTreatmentSection(
-        injectMipsSection(
+      injectMipsSection(
+        injectFinalTreatmentSection(
           injectPhysicsConsultationDetails(renderedText, note.structuredFields.physicsComment, [
             site1Render.bodyLocation,
             site2Render.bodyLocation
           ], note.treatmentNumber),
-          mipsSection
+          finalTreatmentSection
         ),
-        finalTreatmentSection
+        mipsSection
       ),
       note.noteType,
       note.structuredFields.includeExamVitals

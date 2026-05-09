@@ -2914,6 +2914,111 @@ export class RadiationNoteRepository implements StructuredDataStore {
       // so the checkbox token carries the label when checked, nothing when unchecked.
       const oldLabel = "Ultrasound Performed:\n{{structured.ultrasoundPerformed}}";
       const newLabel = "{{structured.ultrasoundPerformed}}";
+      const oldPostCareBlock = "Post Care:\n{{structured.postCare}}";
+      const oldPostCareBlockCrLf = "Post Care:\r\n{{structured.postCare}}";
+      const newPostCareBlock = "Post Care: {{structured.postCare}}";
+      const oldFollowUpBlock = "Follow Up:\n{{structured.followUp}}";
+      const oldFollowUpBlockCrLf = "Follow Up:\r\n{{structured.followUp}}";
+      const newFollowUpBlock = "Follow Up: {{structured.followUp}}";
+      const oldTwoSiteTreatmentHpiLine =
+        "1. is following up for {{site1.diagnosisText}} on the {{site1.bodyLocation}} and {{site2.diagnosisText}} on the {{site2.bodyLocation}}.";
+      const newTwoSiteTreatmentHpiLines =
+        "1. is following up for {{site1.diagnosisText}} on the {{site1.bodyLocation}}.\n2. is following up for {{site2.diagnosisText}} on the {{site2.bodyLocation}}.";
+      this.run(
+        `UPDATE template_definitions
+         SET template_text = REPLACE(
+               REPLACE(
+                 REPLACE(
+                   REPLACE(template_text, 'Cutout flex shield size: {{site1.flexShieldCutoutText}}', 'Cutout flex shield size: {{site1.cutoutSizeDisplay}}'),
+                   'Cutout flex shield size: {{site2.flexShieldCutoutText}}',
+                   'Cutout flex shield size: {{site2.cutoutSizeDisplay}}'
+                 ),
+                 'Flex Shield Cutout: {{site1.flexShieldCutoutText}}',
+                 'Flex Shield Cutout: {{site1.cutoutSizeDisplay}}'
+               ),
+               'Flex Shield Cutout: {{site2.flexShieldCutoutText}}',
+               'Flex Shield Cutout: {{site2.cutoutSizeDisplay}}'
+             ),
+             default_template_text = REPLACE(
+               REPLACE(
+                 REPLACE(
+                   REPLACE(default_template_text, 'Cutout flex shield size: {{site1.flexShieldCutoutText}}', 'Cutout flex shield size: {{site1.cutoutSizeDisplay}}'),
+                   'Cutout flex shield size: {{site2.flexShieldCutoutText}}',
+                   'Cutout flex shield size: {{site2.cutoutSizeDisplay}}'
+                 ),
+                 'Flex Shield Cutout: {{site1.flexShieldCutoutText}}',
+                 'Flex Shield Cutout: {{site1.cutoutSizeDisplay}}'
+               ),
+               'Flex Shield Cutout: {{site2.flexShieldCutoutText}}',
+               'Flex Shield Cutout: {{site2.cutoutSizeDisplay}}'
+             ),
+             updated_at = ?
+         WHERE note_type IN ('consult_sim', 'first_fraction')
+           AND (
+             template_text LIKE '%Cutout flex shield size: {{site1.flexShieldCutoutText}}%'
+             OR template_text LIKE '%Cutout flex shield size: {{site2.flexShieldCutoutText}}%'
+             OR default_template_text LIKE '%Cutout flex shield size: {{site1.flexShieldCutoutText}}%'
+             OR default_template_text LIKE '%Cutout flex shield size: {{site2.flexShieldCutoutText}}%'
+             OR template_text LIKE '%Flex Shield Cutout: {{site1.flexShieldCutoutText}}%'
+             OR template_text LIKE '%Flex Shield Cutout: {{site2.flexShieldCutoutText}}%'
+             OR default_template_text LIKE '%Flex Shield Cutout: {{site1.flexShieldCutoutText}}%'
+             OR default_template_text LIKE '%Flex Shield Cutout: {{site2.flexShieldCutoutText}}%'
+           )`,
+        [nowIso()]
+      );
+      this.run(
+        `UPDATE template_definitions
+         SET template_text = REPLACE(REPLACE(REPLACE(REPLACE(template_text, ?, ?), ?, ?), ?, ?), ?, ?),
+             default_template_text = REPLACE(REPLACE(REPLACE(REPLACE(default_template_text, ?, ?), ?, ?), ?, ?), ?, ?),
+             updated_at = ?
+         WHERE note_type != 'consult_sim'
+           AND (
+             template_text LIKE '%Post Care:%{{structured.postCare}}%'
+             OR template_text LIKE '%Follow Up:%{{structured.followUp}}%'
+             OR default_template_text LIKE '%Post Care:%{{structured.postCare}}%'
+             OR default_template_text LIKE '%Follow Up:%{{structured.followUp}}%'
+           )`,
+        [
+          oldPostCareBlockCrLf,
+          newPostCareBlock,
+          oldPostCareBlock,
+          newPostCareBlock,
+          oldFollowUpBlockCrLf,
+          newFollowUpBlock,
+          oldFollowUpBlock,
+          newFollowUpBlock,
+          oldPostCareBlockCrLf,
+          newPostCareBlock,
+          oldPostCareBlock,
+          newPostCareBlock,
+          oldFollowUpBlockCrLf,
+          newFollowUpBlock,
+          oldFollowUpBlock,
+          newFollowUpBlock,
+          nowIso()
+        ]
+      );
+      this.run(
+        `UPDATE template_definitions
+         SET template_text = REPLACE(template_text, ?, ?),
+             default_template_text = REPLACE(default_template_text, ?, ?),
+             updated_at = ?
+         WHERE course_type = 'two_site'
+           AND note_type != 'consult_sim'
+           AND (
+             template_text LIKE ?
+             OR default_template_text LIKE ?
+           )`,
+        [
+          oldTwoSiteTreatmentHpiLine,
+          newTwoSiteTreatmentHpiLines,
+          oldTwoSiteTreatmentHpiLine,
+          newTwoSiteTreatmentHpiLines,
+          nowIso(),
+          `%${oldTwoSiteTreatmentHpiLine}%`,
+          `%${oldTwoSiteTreatmentHpiLine}%`
+        ]
+      );
       this.run(
         `UPDATE template_definitions
          SET template_text = REPLACE(template_text, ?, ?),

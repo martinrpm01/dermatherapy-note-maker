@@ -60,6 +60,54 @@ type SqlValue = string | number | null;
 const DATABASE_NAME = "dermatherapy-note-maker-browser";
 const DATABASE_VERSION = 4;
 
+function normalizeTemplateText(text: string) {
+  return text
+    .replaceAll(
+      "Cutout flex shield size: {{site1.flexShieldCutoutText}}",
+      "Cutout flex shield size: {{site1.cutoutSizeDisplay}}"
+    )
+    .replaceAll(
+      "Cutout flex shield size: {{site2.flexShieldCutoutText}}",
+      "Cutout flex shield size: {{site2.cutoutSizeDisplay}}"
+    )
+    .replaceAll(
+      "Flex Shield Cutout: {{site1.flexShieldCutoutText}}",
+      "Flex Shield Cutout: {{site1.cutoutSizeDisplay}}"
+    )
+    .replaceAll(
+      "Flex Shield Cutout: {{site2.flexShieldCutoutText}}",
+      "Flex Shield Cutout: {{site2.cutoutSizeDisplay}}"
+    )
+    .replaceAll(
+      "Post Care:\r\n{{structured.postCare}}",
+      "Post Care: {{structured.postCare}}"
+    )
+    .replaceAll(
+      "Post Care:\n{{structured.postCare}}",
+      "Post Care: {{structured.postCare}}"
+    )
+    .replaceAll(
+      "Follow Up:\r\n{{structured.followUp}}",
+      "Follow Up: {{structured.followUp}}"
+    )
+    .replaceAll(
+      "Follow Up:\n{{structured.followUp}}",
+      "Follow Up: {{structured.followUp}}"
+    )
+    .replaceAll(
+      "1. is following up for {{site1.diagnosisText}} on the {{site1.bodyLocation}} and {{site2.diagnosisText}} on the {{site2.bodyLocation}}.",
+      "1. is following up for {{site1.diagnosisText}} on the {{site1.bodyLocation}}.\n2. is following up for {{site2.diagnosisText}} on the {{site2.bodyLocation}}."
+    );
+}
+
+function normalizeStoredTemplate(template: TemplateDefinitionRecord): TemplateDefinitionRecord {
+  return {
+    ...template,
+    templateText: normalizeTemplateText(template.templateText),
+    defaultTemplateText: normalizeTemplateText(template.defaultTemplateText)
+  };
+}
+
 const DEFAULT_SETTINGS_RECORD: AppSettingsRecord = {
   id: 1,
   appName: "ClearSkin Hub",
@@ -1470,7 +1518,7 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
         existingTemplate.templateText === existingTemplate.defaultTemplateText
           ? defaultTemplate.templateText
           : existingTemplate.templateText;
-      const updatedTemplate: TemplateDefinitionRecord = {
+      const updatedTemplate = normalizeStoredTemplate({
         ...existingTemplate,
         key: defaultTemplate.key,
         courseType: defaultTemplate.courseType,
@@ -1483,7 +1531,7 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
           defaultTemplate.defaultTemplateText !== existingTemplate.defaultTemplateText
             ? timestamp
             : existingTemplate.updatedAt
-      };
+      });
 
       if (JSON.stringify(updatedTemplate) !== JSON.stringify(existingTemplate)) {
         this.templates.set(updatedTemplate.id, updatedTemplate);

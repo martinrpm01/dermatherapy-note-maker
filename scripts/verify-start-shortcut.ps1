@@ -19,6 +19,11 @@ if (-not (Test-Path -LiteralPath $ShortcutPath)) {
 
 $shell = New-Object -ComObject WScript.Shell
 $shortcut = $shell.CreateShortcut($ShortcutPath)
+$targetExtension = [System.IO.Path]::GetExtension($shortcut.TargetPath).ToLowerInvariant()
+if ($targetExtension -in @(".bat", ".cmd") -or $shortcut.Arguments -match "\.(bat|cmd)(`"|$|\s)") {
+  throw "Start shortcut still targets a console launcher. Point it at Launch ClearSkin Hub.vbs through wscript.exe or the packaged EXE."
+}
+
 $iconLocation = $shortcut.IconLocation
 if (-not [string]::IsNullOrWhiteSpace($iconLocation)) {
   $iconPath = ($iconLocation -split ",")[0].Trim()

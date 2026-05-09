@@ -14,6 +14,7 @@ import {
   isLegacyDefaultOtvNote,
   isFinalTreatmentEligible,
   isOtvTreatmentNumber,
+  normalizePostCareText,
   shouldIncludeExamVitals
 } from "../../shared/note-rules";
 import { useResolvedAssetUrl } from "./asset-url";
@@ -581,16 +582,18 @@ const showProjectedFractionsInput = false;
             {editor.note.noteType !== "consult_sim" && (() => {
               const POST_CARE_OPTIONS = [
                 { label: "Aquaphor", value: "Aquaphor was applied to the treated area." },
-                { label: "Vaseline", value: "Vaseline was applied to the treated area." },
-                { label: "No ointment applied", value: "No ointment was applied to the treated area." }
+                { label: "CeraVe", value: "CeraVe was applied to the treated area." },
+                { label: "Vaseline/Petrolatum", value: "Petrolatum was applied to the treated area." },
+                { label: "No ointment", value: "No ointment was applied to the treated area." }
               ];
               const current = editor.note.structuredFields.postCare ?? "";
-              const isPreset = POST_CARE_OPTIONS.some((o) => o.value === current);
+              const selectedPostCare = normalizePostCareText(current);
+              const isPreset = POST_CARE_OPTIONS.some((o) => o.value === selectedPostCare);
               return (
                 <label>
                   Post-Care Ointment
                   <select
-                    value={isPreset ? current : "custom"}
+                    value={isPreset ? selectedPostCare : "custom"}
                     onChange={(event) => {
                       if (event.target.value === "custom") return;
                       props.onUpdate((s) => ({
