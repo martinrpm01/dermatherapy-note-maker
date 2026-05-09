@@ -156,22 +156,45 @@ function formatDigitsAsDate(digits: string): string {
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
 }
 
+export type TouchOptimizedInputEnvironment = {
+  userAgent?: string;
+  platform?: string;
+  maxTouchPoints?: number;
+  isElectronDesktop?: boolean;
+};
+
+export function shouldUseTouchOptimizedInputsForEnvironment(environment: TouchOptimizedInputEnvironment): boolean {
+  if (environment.isElectronDesktop) {
+    return false;
+  }
+
+  const userAgent = environment.userAgent ?? "";
+  const platform = environment.platform ?? "";
+  const touchPoints = environment.maxTouchPoints ?? 0;
+
+  return /iPad|iPhone|iPod/i.test(userAgent) || (platform === "MacIntel" && touchPoints > 1);
+}
+
 function shouldUseTouchOptimizedInputs(): boolean {
   if (typeof window === "undefined") {
     return false;
   }
 
-  if (window.rtNoteApi) {
-    return false;
-  }
+  return shouldUseTouchOptimizedInputsForEnvironment({
+    userAgent: window.navigator.userAgent,
+    platform: window.navigator.platform,
+    maxTouchPoints: window.navigator.maxTouchPoints ?? 0,
+    isElectronDesktop: Boolean(window.rtNoteApi)
+  });
+}
 
-  const userAgent = window.navigator.userAgent ?? "";
-  const platform = window.navigator.platform ?? "";
-  const touchPoints = window.navigator.maxTouchPoints ?? 0;
-  const isAppleTouchDevice = /iPad|iPhone|iPod/i.test(userAgent) || (platform === "MacIntel" && touchPoints > 1);
-  const hasCoarsePointer = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
-
-  return isAppleTouchDevice || hasCoarsePointer;
+function refocusEditableInput(event: ReactPointerEvent<HTMLInputElement>) {
+  const input = event.currentTarget;
+  requestAnimationFrame(() => {
+    if (document.activeElement !== input) {
+      input.focus();
+    }
+  });
 }
 
 function normalizeBloodPressureEditableValue(value: string) {
@@ -839,6 +862,7 @@ function DesktopDateInput(props: { value: string; onChange: (value: string) => v
       autoComplete="off"
       placeholder="MM/DD/YYYY"
       value={displayValue}
+      onPointerDown={refocusEditableInput}
       onChange={(event) => handleChange(event.target.value)}
       onBlur={handleBlur}
     />
@@ -918,6 +942,7 @@ export function CalendarDateInput(props: { value: string; onChange: (value: stri
     <input
       type="date"
       value={props.value || ""}
+      onPointerDown={refocusEditableInput}
       onChange={(event) => props.onChange(event.target.value)}
       onClick={(event) => {
         const input = event.currentTarget as HTMLInputElement & { showPicker?: () => void };
@@ -952,6 +977,7 @@ function DesktopBloodPressureInput(props: { value: string; onChange: (value: str
       inputMode="numeric"
       placeholder="e.g. 120/80"
       value={displayValue}
+      onPointerDown={refocusEditableInput}
       onChange={(event) => handleChange(event.target.value)}
       onBlur={handleBlur}
     />
@@ -1052,6 +1078,7 @@ function DesktopNumericInput(props: { value: string | number; onChange: (value: 
       inputMode="numeric"
       placeholder={props.placeholder}
       value={display}
+      onPointerDown={refocusEditableInput}
       onChange={(event) => props.onChange(digitsOnly(event.target.value))}
     />
   );
@@ -1152,6 +1179,7 @@ function DesktopFormattedNumericInput(props: {
       inputMode="numeric"
       placeholder={props.placeholder}
       value={displayValue}
+      onPointerDown={refocusEditableInput}
       onChange={(event) => handleChange(event.target.value)}
       onBlur={handleBlur}
     />
@@ -1282,6 +1310,7 @@ function DesktopPinInput(props: { value: string; onChange: (value: string) => vo
       autoComplete="off"
       placeholder={props.placeholder ?? "PIN"}
       value={props.value}
+      onPointerDown={refocusEditableInput}
       onChange={(event) => props.onChange(digitsOnly(event.target.value).slice(0, 8))}
       onKeyDown={(event) => {
         if (event.key === "Enter") {
