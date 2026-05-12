@@ -525,6 +525,37 @@ function getAppointmentSortKey(appointment: Pick<ScheduleAppointmentRecord, "app
   return `${appointment.appointmentDate}|${appointment.startTime}|${appointment.id}`;
 }
 
+function appointmentMatchesScheduleSource(source: ScheduleAppointmentRecord, appointment: ScheduleAppointmentRecord) {
+  if (source.courseId) {
+    return appointment.courseId === source.courseId;
+  }
+  if (source.patientId) {
+    return appointment.patientId === source.patientId;
+  }
+
+  const sourceName = normalizeMatchValue(source.patientName);
+  const appointmentName = normalizeMatchValue(appointment.patientName);
+  if (!sourceName || sourceName !== appointmentName) {
+    return false;
+  }
+
+  const sourceMrn = normalizeMatchValue(source.patientMrn);
+  const sourceDob = normalizeMatchValue(source.patientDob);
+  return (
+    (sourceMrn && sourceMrn === normalizeMatchValue(appointment.patientMrn)) ||
+    (sourceDob && sourceDob === normalizeMatchValue(appointment.patientDob)) ||
+    (!sourceMrn && !sourceDob)
+  );
+}
+
+export function getPrintableScheduleAppointments(source: ScheduleAppointmentRecord, appointments: ScheduleAppointmentRecord[]) {
+  return appointments
+    .filter((appointment) => appointment.appointmentType === "treatment")
+    .filter((appointment) => appointment.status !== "cancelled")
+    .filter((appointment) => appointmentMatchesScheduleSource(source, appointment))
+    .sort((left, right) => getAppointmentSortKey(left).localeCompare(getAppointmentSortKey(right)));
+}
+
 function buildDefaultAppointmentForm(dateIso: string, startTime: string): AppointmentFormState {
   return {
     source: "manual",
@@ -785,18 +816,23 @@ export function printPatientSchedule(patientName: string, appointments: Schedule
           th { border: 1px solid #222; background: #e8e8e8; padding: 5px; font-size: 12px; }
           td { border: 1px solid #222; height: 92px; vertical-align: top; padding: 5px; font-size: 12px; }
           td div { margin-top: 6px; font-weight: 700; }
-          .schedule-close {
+          .schedule-actions {
             position: fixed;
             top: 12px;
             right: 12px;
             z-index: 10;
-            width: 44px;
-            height: 44px;
+            display: flex;
+            gap: 8px;
+          }
+          .schedule-actions button {
+            min-width: 44px;
+            height: 40px;
+            padding: 0 14px;
             border: 1px solid #9fb8c9;
-            border-radius: 999px;
+            border-radius: 6px;
             background: #fff;
             color: #123a58;
-            font: 700 22px Arial, sans-serif;
+            font: 700 14px Arial, sans-serif;
             cursor: pointer;
             box-shadow: 0 4px 12px rgba(18, 58, 88, 0.16);
           }
@@ -804,21 +840,25 @@ export function printPatientSchedule(patientName: string, appointments: Schedule
           .month { break-after: page; page-break-after: always; }
           .month:last-child { break-after: auto; page-break-after: auto; }
           @media print {
-            .schedule-close { display: none; }
+            .schedule-actions { display: none; }
           }
         </style>
       </head>
       <body>
-        <button class="schedule-close" type="button" aria-label="Close schedule">X</button>
+        <div class="schedule-actions">
+          <button class="schedule-print" type="button">Print</button>
+          <button class="schedule-close" type="button" aria-label="Close schedule">X</button>
+        </div>
         <h1>${escapeHtml(patientName)} Treatment Schedule</h1>
         ${monthHtml}
       </body>
     </html>
   `);
   win.document.close();
+  win.document.querySelector<HTMLButtonElement>(".schedule-print")?.addEventListener("click", () => win.print());
   win.document.querySelector<HTMLButtonElement>(".schedule-close")?.addEventListener("click", () => win.close());
   win.focus();
-  window.setTimeout(() => win.print(), 250);
+  window.setTimeout(() => win.print(), 500);
 }
 
 export function ScheduleScreen(props: {
@@ -1487,6 +1527,23 @@ export function ScheduleScreen(props: {
     props.onStartAppointmentNote(appointment);
   }
 
+  async function printScheduleFromMenu(appointment: ScheduleAppointmentRecord) {
+    setAppointmentMenu(null);
+    if (!props.appClient) {
+      return;
+    }
+
+    const currentYear = new Date().getFullYear();
+    const scheduleSnapshot = await props.appClient.getScheduleSnapshot(`${currentYear - 1}-01-01`, `${currentYear + 2}-12-31`);
+    const appointments = getPrintableScheduleAppointments(appointment, scheduleSnapshot.appointments);
+    if (!appointments.length) {
+      window.alert("No treatment schedule has been created for this patient yet.");
+      return;
+    }
+
+    printPatientSchedule(appointments[0].patientName, appointments);
+  }
+
   async function saveSettings(nextSettings: ScheduleSettingsView) {
     if (!props.appClient) return;
     const saved = await props.appClient.saveScheduleSettings(nextSettings);
@@ -1717,6 +1774,9 @@ export function ScheduleScreen(props: {
           >
             <button type="button" onClick={() => void startAppointmentFromMenu(appointmentMenu.appointment)}>
               Start Today's Note
+            </button>
+            <button type="button" onClick={() => void printScheduleFromMenu(appointmentMenu.appointment)}>
+              Print Schedule
             </button>
             <div className="appointment-status-menu-wrap">
               <button
