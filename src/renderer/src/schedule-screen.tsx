@@ -41,7 +41,7 @@ const DIAGNOSIS_OPTIONS = [
   "Squamous Cell Carcinoma in-situ"
 ] as const;
 
-type AppointmentFormState = {
+export type AppointmentFormState = {
   id?: string;
   source: "linked" | "manual";
   courseId: string;
@@ -555,11 +555,18 @@ function buildDefaultAppointmentForm(dateIso: string, startTime: string): Appoin
   };
 }
 
-function buildLinkedForm(course: DashboardCourseRow, dateIso: string, startTime: string, forceTreatment = false): AppointmentFormState {
+function getLinkedTreatmentRemainingCount(course: DashboardCourseRow) {
+  if (course.prescribedFractions <= 0) {
+    return "";
+  }
+  return `${Math.max(1, course.prescribedFractions - (course.suggestedTreatmentNumber ?? 1) + 1)}`;
+}
+
+export function buildLinkedForm(course: DashboardCourseRow, dateIso: string, startTime: string, forceTreatment = false): AppointmentFormState {
   const duration = getCourseDuration(course);
   const isSimConsult = !forceTreatment && course.suggestedNoteType === "consult_sim";
   const startNumber = isSimConsult ? 0 : course.suggestedTreatmentNumber ?? 1;
-  const remaining = isSimConsult ? 1 : Math.max(1, course.prescribedFractions - startNumber + 1);
+  const remaining = isSimConsult ? "1" : getLinkedTreatmentRemainingCount(course);
   const patientName = splitStoredPatientName(course.patientName);
   return {
     source: "linked",
@@ -580,7 +587,7 @@ function buildLinkedForm(course: DashboardCourseRow, dateIso: string, startTime:
     status: "scheduled",
     notes: "",
     recurring: !isSimConsult,
-    recurringCount: `${remaining}`,
+    recurringCount: remaining,
     recurringWeekdays: [],
     seriesId: null,
     moveFollowing: false,
@@ -590,7 +597,11 @@ function buildLinkedForm(course: DashboardCourseRow, dateIso: string, startTime:
   };
 }
 
-function getTreatmentAppointmentCount(form: AppointmentFormState, linkedCourse: DashboardCourseRow | null) {
+export function shouldUseRecurringFractionInput(linkedCourse: DashboardCourseRow | null) {
+  return !linkedCourse || linkedCourse.prescribedFractions <= 0;
+}
+
+export function getTreatmentAppointmentCount(form: AppointmentFormState, linkedCourse: DashboardCourseRow | null) {
   if (form.appointmentType !== "treatment") {
     return 1;
   }
@@ -598,7 +609,7 @@ function getTreatmentAppointmentCount(form: AppointmentFormState, linkedCourse: 
     ? linkedCourse.prescribedFractions
     : null;
   const startNumber = Number(form.appointmentNumber) || linkedCourse?.suggestedTreatmentNumber || 1;
-  if (linkedFractions) {
+  if (linkedFractions && !shouldUseRecurringFractionInput(linkedCourse)) {
     return Math.max(1, linkedFractions - startNumber + 1);
   }
   return Math.max(0, Number(form.recurringCount) || 0);
@@ -986,7 +997,12 @@ export function ScheduleScreen(props: {
       const totalAppointments =
         appointmentForm.appointmentType === "treatment"
           ? appointmentForm.source === "linked"
-            ? linkedFractions
+            ? linkedFractions ??
+              (isRecurringTreatment
+                ? startNumber
+                  ? startNumber + total - 1
+                  : total
+                : existingTotal)
             : existingTotal && !shouldBuildRecurringSeries
               ? existingTotal
               : isRecurringTreatment
@@ -1486,6 +1502,8 @@ export function ScheduleScreen(props: {
     setAppointmentForm((current) => {
       const appointmentType = current?.appointmentType ?? (course.suggestedNoteType === "consult_sim" ? "sim_consult" : "treatment");
       const isTreatment = appointmentType === "treatment";
+      const manualLinkedRecurringCount =
+        current?.source === "linked" && current.courseId === course.courseId ? current.recurringCount : "";
       const patientName = splitStoredPatientName(course.patientName);
       return {
         ...(current ?? buildLinkedForm(course, anchorDate, firstOpenTime)),
@@ -1504,8 +1522,9 @@ export function ScheduleScreen(props: {
         recurring: isTreatment ? current?.recurring ?? course.suggestedNoteType !== "consult_sim" : false,
         recurringCount:
           isTreatment
-            ? current?.recurringCount ||
-              `${Math.max(1, course.prescribedFractions - (course.suggestedTreatmentNumber ?? 1) + 1)}`
+            ? shouldUseRecurringFractionInput(course)
+              ? manualLinkedRecurringCount
+              : getLinkedTreatmentRemainingCount(course)
             : "1"
       };
     });
@@ -1852,7 +1871,7 @@ export function ScheduleScreen(props: {
                         : false;
                     const nextRecurringCount =
                       appointmentType === "treatment" && linkedCourse
-                        ? `${Math.max(1, linkedCourse.prescribedFractions - (linkedCourse.suggestedTreatmentNumber ?? 1) + 1)}`
+                        ? getLinkedTreatmentRemainingCount(linkedCourse)
                         : appointmentType === "treatment"
                           ? ""
                           : "1";
@@ -2063,7 +2082,7 @@ export function ScheduleScreen(props: {
                 </label>
                 {appointmentForm.recurring ? (
                   <>
-                    {!appointmentLinkedCourse ? (
+                    {shouldUseRecurringFractionInput(appointmentLinkedCourse) ? (
                       <div className="form-grid recurring-fractions-grid">
                         <label className="field">
                           Recurring Fractions
@@ -2104,7 +2123,7 @@ export function ScheduleScreen(props: {
                     <p className="muted" style={{ margin: 0 }}>
                       {getTreatmentAppointmentCount(appointmentForm, appointmentLinkedCourse) > 0
                         ? `${getTreatmentAppointmentCount(appointmentForm, appointmentLinkedCourse)} treatment appointments will be created from the ${
-                            appointmentLinkedCourse ? "course prescription" : "recurring fractions"
+                            shouldUseRecurringFractionInput(appointmentLinkedCourse) ? "recurring fractions" : "course prescription"
                           }.`
                         : "Choose recurring fractions and weekdays to create the treatment series."}
                     </p>

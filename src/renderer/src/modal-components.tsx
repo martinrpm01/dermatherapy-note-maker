@@ -33,7 +33,7 @@ import { CalendarDateInput, DobInput, LesionSizeInput, NumericInput } from "./sc
 const FRACTION_PRESETS = [8, 10, 12];
 const DEPTH_OPTIONS = ["3", "4", "5"];
 const CONE_SIZE_OPTIONS = ["10mm", "20mm", "35mm", "50mm"] as const;
-const CUTOUT_SIZE_OPTIONS = [
+export const CUTOUT_SIZE_OPTIONS = [
   "13mm",
   "15mm",
   "18mm",
@@ -43,6 +43,7 @@ const CUTOUT_SIZE_OPTIONS = [
   "30mm",
   "33mm",
   "37mm",
+  "40mm",
   "45mm",
   "Custom Cutout",
   "Open Cone"
