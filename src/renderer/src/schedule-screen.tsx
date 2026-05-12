@@ -846,19 +846,24 @@ export function printPatientSchedule(patientName: string, appointments: Schedule
       </head>
       <body>
         <div class="schedule-actions">
-          <button class="schedule-print" type="button">Print</button>
-          <button class="schedule-close" type="button" aria-label="Close schedule">X</button>
+          <button class="schedule-print" type="button" onclick="window.focus(); window.print();">Print</button>
+          <button class="schedule-close" type="button" aria-label="Close schedule" onclick="window.close();">X</button>
         </div>
         <h1>${escapeHtml(patientName)} Treatment Schedule</h1>
         ${monthHtml}
+        <script>
+          window.addEventListener("load", function () {
+            window.focus();
+            window.setTimeout(function () {
+              window.print();
+            }, 500);
+          });
+        </script>
       </body>
     </html>
   `);
   win.document.close();
-  win.document.querySelector<HTMLButtonElement>(".schedule-print")?.addEventListener("click", () => win.print());
-  win.document.querySelector<HTMLButtonElement>(".schedule-close")?.addEventListener("click", () => win.close());
   win.focus();
-  window.setTimeout(() => win.print(), 500);
 }
 
 export function ScheduleScreen(props: {
