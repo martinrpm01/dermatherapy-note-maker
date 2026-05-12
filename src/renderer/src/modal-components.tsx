@@ -856,13 +856,6 @@ export function PendingCourseIntakeModal(props: {
               <h4>{isTwoSite ? `Lesion ${site.siteNumber}` : "Lesion"}</h4>
           <div className="form-grid course-top-grid">
                 <label>
-                  {isTwoSite ? `Biopsy Date Lesion ${site.siteNumber}` : "Biopsy Date"}
-                  <CalendarDateInput
-                    value={site.biopsyDate || (index === 0 ? courseForm.startDate : "")}
-                    onChange={(next) => updateSite(index, { biopsyDate: next })}
-                  />
-                </label>
-                <label>
                   Treatment Lesion
                   <input
                     placeholder="Treatment location"
@@ -928,6 +921,13 @@ export function PendingCourseIntakeModal(props: {
                     />
                   </label>
                 ) : null}
+                <label>
+                  {isTwoSite ? `Biopsy Date Lesion ${site.siteNumber}` : "Biopsy Date"}
+                  <CalendarDateInput
+                    value={site.biopsyDate || (index === 0 ? courseForm.startDate : "")}
+                    onChange={(next) => updateSite(index, { biopsyDate: next })}
+                  />
+                </label>
               </div>
             </div>
           ))}

@@ -2076,13 +2076,6 @@ export function ScheduleScreen(props: {
                         <h4>{appointmentForm.intakeCourseType === "two_site" ? `Lesion ${site.siteNumber}` : "Lesion"}</h4>
                         <div className="form-grid course-top-grid">
                           <label>
-                            {appointmentForm.intakeCourseType === "two_site" ? `Biopsy Date Lesion ${site.siteNumber}` : "Biopsy Date"}
-                            <CalendarDateInput
-                              value={site.biopsyDate || (index === 0 ? appointmentForm.intakeBiopsyDate : "")}
-                              onChange={(value) => updateIntakeSite(index, { biopsyDate: value })}
-                            />
-                          </label>
-                          <label>
                             Treatment Lesion
                             <input
                               placeholder="Treatment location"
@@ -2145,6 +2138,13 @@ export function ScheduleScreen(props: {
                               />
                             </label>
                           ) : null}
+                          <label>
+                            {appointmentForm.intakeCourseType === "two_site" ? `Biopsy Date Lesion ${site.siteNumber}` : "Biopsy Date"}
+                            <CalendarDateInput
+                              value={site.biopsyDate || (index === 0 ? appointmentForm.intakeBiopsyDate : "")}
+                              onChange={(value) => updateIntakeSite(index, { biopsyDate: value })}
+                            />
+                          </label>
                         </div>
                       </div>
                     );
