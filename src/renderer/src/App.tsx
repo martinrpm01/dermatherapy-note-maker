@@ -264,23 +264,27 @@ function hasPatientDraftContent(form: PatientInput) {
   );
 }
 
+function draftText(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 function hasCourseDraftContent(form: CourseInput) {
   return Boolean(
     form.id ||
-    form.courseName.trim() ||
+    draftText(form.courseName) ||
     form.prescribedFractions > 0 ||
     form.sites.some((site) =>
       Boolean(
-        site.treatmentLocationText.trim() ||
-        site.bodyLocation.trim() ||
-        site.diagnosisText.trim() ||
-        site.icd10.trim() ||
-        site.lesionSize.trim() ||
-        site.coneSize.trim() ||
-        site.cutoutSize.trim() ||
-        site.worksheetSide.trim() ||
-        site.worksheetPositioning.trim() ||
-        site.additionalDevices.trim() && site.additionalDevices.trim().toLowerCase() !== "none" ||
+        draftText(site.treatmentLocationText) ||
+        draftText(site.bodyLocation) ||
+        draftText(site.diagnosisText) ||
+        draftText(site.icd10) ||
+        draftText(site.lesionSize) ||
+        draftText(site.coneSize) ||
+        draftText(site.cutoutSize) ||
+        draftText(site.worksheetSide) ||
+        draftText(site.worksheetPositioning) ||
+        draftText(site.additionalDevices) && draftText(site.additionalDevices).toLowerCase() !== "none" ||
         (site.prescribedFractions ?? 0) > 0
       )
     )
@@ -297,16 +301,16 @@ function hasDocumentOnlyDraftContent(form: DocumentOnlyInput) {
     form.sex.trim() ||
     form.sites.some((site) =>
       Boolean(
-        site.treatmentLocationText.trim() ||
-        site.bodyLocation.trim() ||
-        site.diagnosisText.trim() ||
-        site.icd10.trim() ||
-        site.lesionSize.trim() ||
-        site.coneSize.trim() ||
-        site.cutoutSize.trim() ||
-        site.worksheetSide.trim() ||
-        site.worksheetPositioning.trim() ||
-        site.additionalDevices.trim() && site.additionalDevices.trim().toLowerCase() !== "none" ||
+        draftText(site.treatmentLocationText) ||
+        draftText(site.bodyLocation) ||
+        draftText(site.diagnosisText) ||
+        draftText(site.icd10) ||
+        draftText(site.lesionSize) ||
+        draftText(site.coneSize) ||
+        draftText(site.cutoutSize) ||
+        draftText(site.worksheetSide) ||
+        draftText(site.worksheetPositioning) ||
+        draftText(site.additionalDevices) && draftText(site.additionalDevices).toLowerCase() !== "none" ||
         (site.projectedFractions ?? 0) > 0
       )
     )

@@ -659,78 +659,89 @@ function buildIntakeCourseName(sites: CourseInput["sites"]) {
   return sites.map((site) => site.treatmentLocationText.trim()).filter(Boolean).join(" + ");
 }
 
-function createIntakeSite(siteNumber: 1 | 2, source?: CourseInput["sites"][number]): CourseInput["sites"][number] {
-  return {
-    ...(source ?? {
-      bodyLocation: "",
-      treatmentLocationText: "",
-      diagnosisText: "",
-      biopsyDate: "",
-      icd10: "",
-      numberOfBlocks: 0,
-      lesionSize: "",
-      treatmentDepth: "3",
-      coneSize: "",
-      cutoutSize: "",
-      shields: "",
-      machine: "Xoft Elekta 1200 SPX",
-      energyKv: "50kV",
-      treatmentInterval: "bi-weekly",
-      additionalDevices: "None",
-      worksheetSide: "",
-      worksheetPositioning: "",
-      worksheetVacLokArea: "",
-      worksheetEyeShieldType: "",
-      worksheetGumShieldPosition: "",
-      worksheetLipShieldPosition: "",
-      dailyDose: 0,
-      totalDose: 0
-    }),
+function createIntakeSite(siteNumber: 1 | 2, source?: Partial<CourseInput["sites"][number]>): CourseInput["sites"][number] {
+  const base: CourseInput["sites"][number] = {
     id: source?.id,
     siteNumber,
-    bodyLocation: source?.bodyLocation ?? "",
-    treatmentLocationText: source?.treatmentLocationText ?? "",
-    diagnosisText: source?.diagnosisText ?? "",
-    biopsyDate: source?.biopsyDate ?? "",
-    icd10: source?.icd10 ?? ""
+    bodyLocation: "",
+    treatmentLocationText: "",
+    diagnosisText: "",
+    biopsyDate: "",
+    icd10: "",
+    numberOfBlocks: 0,
+    lesionSize: "",
+    treatmentDepth: "3",
+    coneSize: "",
+    cutoutSize: "",
+    shields: "",
+    machine: "Xoft Elekta 1200 SPX",
+    energyKv: "50kV",
+    treatmentInterval: "bi-weekly",
+    additionalDevices: "None",
+    worksheetSide: "",
+    worksheetPositioning: "",
+    worksheetVacLokArea: "",
+    worksheetEyeShieldType: "",
+    worksheetGumShieldPosition: "",
+    worksheetLipShieldPosition: "",
+    dailyDose: 0,
+    totalDose: 0,
+    prescribedFractions: undefined
+  };
+  const merged = { ...base, ...source };
+
+  return {
+    ...merged,
+    id: source?.id,
+    siteNumber,
+    bodyLocation: merged.bodyLocation ?? "",
+    treatmentLocationText: merged.treatmentLocationText ?? "",
+    diagnosisText: merged.diagnosisText ?? "",
+    biopsyDate: merged.biopsyDate ?? "",
+    icd10: merged.icd10 ?? ""
   };
 }
 
-function createDocumentOnlySite(siteNumber: 1 | 2, source?: DocumentOnlyInput["sites"][number]): DocumentOnlyInput["sites"][number] {
-  return {
-    ...(source ?? {
-      bodyLocation: "",
-      treatmentLocationText: "",
-      diagnosisText: "",
-      biopsyDate: "",
-      icd10: "",
-      numberOfBlocks: 1,
-      lesionSize: "",
-      treatmentDepth: "3",
-      coneSize: "",
-      cutoutSize: "",
-      shields: "",
-      machine: "Xoft Elekta 1200 SPX",
-      energyKv: "50kV",
-      treatmentInterval: "bi-weekly",
-      additionalDevices: "None",
-      worksheetSide: "",
-      worksheetPositioning: "",
-      worksheetVacLokArea: "",
-      worksheetEyeShieldType: "",
-      worksheetGumShieldPosition: "",
-      worksheetLipShieldPosition: "",
-      dailyDose: 0,
-      totalDose: 0,
-      projectedFractions: null
-    }),
+function createDocumentOnlySite(siteNumber: 1 | 2, source?: Partial<DocumentOnlyInput["sites"][number]>): DocumentOnlyInput["sites"][number] {
+  const base: DocumentOnlyInput["sites"][number] = {
     id: source?.id,
     siteNumber,
-    bodyLocation: source?.bodyLocation ?? "",
-    treatmentLocationText: source?.treatmentLocationText ?? "",
-    diagnosisText: source?.diagnosisText ?? "",
-    biopsyDate: source?.biopsyDate ?? "",
-    icd10: source?.icd10 ?? ""
+    bodyLocation: "",
+    treatmentLocationText: "",
+    diagnosisText: "",
+    biopsyDate: "",
+    icd10: "",
+    numberOfBlocks: 1,
+    lesionSize: "",
+    treatmentDepth: "3",
+    coneSize: "",
+    cutoutSize: "",
+    shields: "",
+    machine: "Xoft Elekta 1200 SPX",
+    energyKv: "50kV",
+    treatmentInterval: "bi-weekly",
+    additionalDevices: "None",
+    worksheetSide: "",
+    worksheetPositioning: "",
+    worksheetVacLokArea: "",
+    worksheetEyeShieldType: "",
+    worksheetGumShieldPosition: "",
+    worksheetLipShieldPosition: "",
+    dailyDose: 0,
+    totalDose: 0,
+    projectedFractions: null
+  };
+  const merged = { ...base, ...source };
+
+  return {
+    ...merged,
+    id: source?.id,
+    siteNumber,
+    bodyLocation: merged.bodyLocation ?? "",
+    treatmentLocationText: merged.treatmentLocationText ?? "",
+    diagnosisText: merged.diagnosisText ?? "",
+    biopsyDate: merged.biopsyDate ?? "",
+    icd10: merged.icd10 ?? ""
   };
 }
 
