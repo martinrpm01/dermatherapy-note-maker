@@ -32,6 +32,7 @@ export function createEmptyDocumentOnlySiteInput(siteNumber: 1 | 2): DocumentOnl
     bodyLocation: "",
     treatmentLocationText: "",
     diagnosisText: "",
+    biopsyDate: todayIso(),
     icd10: "",
     numberOfBlocks: 1,
     lesionSize: "",
@@ -91,6 +92,7 @@ export function createDocumentOnlyInputFromDetail(detail: DocumentOnlyDetail): D
         bodyLocation: site.bodyLocation,
         treatmentLocationText: site.treatmentLocationText,
         diagnosisText: site.diagnosisText,
+        biopsyDate: site.biopsyDate || detail.record.biopsyDate,
         icd10: site.icd10,
         numberOfBlocks: site.numberOfBlocks,
         lesionSize: site.lesionSize,
@@ -162,6 +164,7 @@ function buildSyntheticCourse(record: DocumentOnlyRecord, sites: DocumentOnlySit
     0,
     ...sites.map((site) => site.projectedFractions ?? 0)
   );
+  const firstBiopsyDate = sites[0]?.biopsyDate || record.biopsyDate;
 
   return {
     id: `doc_course_${record.id}`,
@@ -170,7 +173,7 @@ function buildSyntheticCourse(record: DocumentOnlyRecord, sites: DocumentOnlySit
     courseType: record.courseType,
     prescribedFractions: maxProjectedFractions,
     status: "active",
-    startDate: record.simConsultDate || todayIso(),
+    startDate: firstBiopsyDate || record.simConsultDate || todayIso(),
     simConsultDate: record.simConsultDate || null,
     endDate: null,
     createdAt: record.createdAt,
@@ -195,6 +198,7 @@ function buildSyntheticSite(recordId: string, site: DocumentOnlySiteRecord): Tre
     bodyLocation: site.bodyLocation,
     treatmentLocationText: site.treatmentLocationText,
     diagnosisText: site.diagnosisText,
+    biopsyDate: site.biopsyDate || "",
     icd10: site.icd10,
     numberOfBlocks: getAutoNumberOfBlocks("consult_sim", site.cutoutSize),
     lesionSize: site.lesionSize,
@@ -226,7 +230,7 @@ function buildStructuredFields(detail: DocumentOnlyDetail, syntheticSites: Treat
     bodyLocation: site.bodyLocation,
     treatmentLocationText: site.treatmentLocationText,
     diagnosisText: site.diagnosisText,
-    biopsyDate: detail.record.biopsyDate,
+    biopsyDate: site.biopsyDate || detail.record.biopsyDate,
     icd10: site.icd10,
     numberOfBlocks: site.numberOfBlocks,
     lesionSize: site.lesionSize,
@@ -258,7 +262,7 @@ function buildStructuredFields(detail: DocumentOnlyDetail, syntheticSites: Treat
     finalTreatmentNote: "",
     prescribedFractionsInput: null,
     projectedFractionsInput: Math.max(0, ...siteSnapshots.map((site) => site.prescribedFractions ?? 0)) || null,
-    biopsyDate: detail.record.biopsyDate,
+    biopsyDate: siteSnapshots[0]?.biopsyDate || detail.record.biopsyDate,
     lastTreatmentDate: "",
     focusedExam: "",
     healingDescription: "",

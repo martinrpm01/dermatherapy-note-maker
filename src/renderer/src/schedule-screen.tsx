@@ -107,11 +107,12 @@ type AppointmentMenuState = {
   showStatusMenu: boolean;
 };
 
-function createEmptyIntakeSite(siteNumber: 1 | 2, source?: ScheduleIntakeSiteInput): ScheduleIntakeSiteInput {
+function createEmptyIntakeSite(siteNumber: 1 | 2, source?: Partial<ScheduleIntakeSiteInput>): ScheduleIntakeSiteInput {
   return {
     siteNumber,
     treatmentLocationText: source?.treatmentLocationText ?? "",
     diagnosisText: source?.diagnosisText ?? "",
+    biopsyDate: source?.biopsyDate ?? "",
     icd10: source?.icd10 ?? "",
     projectedFractions: source?.projectedFractions ?? null
   };
@@ -158,12 +159,17 @@ function buildCourseNameFromIntakeSites(sites: ScheduleIntakeSiteInput[]) {
   return sites.map((site) => site.treatmentLocationText.trim()).filter(Boolean).join(" + ");
 }
 
+function getFirstIntakeBiopsyDate(sites: ScheduleIntakeSiteInput[], fallback = "") {
+  return sites[0]?.biopsyDate?.trim() || fallback;
+}
+
 function toCourseSiteInput(site: ScheduleIntakeSiteInput): CourseInput["sites"][number] {
   return {
     siteNumber: site.siteNumber,
     bodyLocation: site.treatmentLocationText,
     treatmentLocationText: site.treatmentLocationText,
     diagnosisText: site.diagnosisText,
+    biopsyDate: site.biopsyDate ?? "",
     icd10: site.icd10,
     numberOfBlocks: 0,
     lesionSize: "",
@@ -674,7 +680,14 @@ function appointmentToForm(appointment: ScheduleAppointmentRecord): AppointmentF
     moveFollowing: false,
     intakeCourseType: appointment.intakeCourseType ?? "one_site",
     intakeBiopsyDate: appointment.intakeBiopsyDate,
-    intakeSites: appointment.intakeSites.length ? appointment.intakeSites : [createEmptyIntakeSite(1)],
+    intakeSites: appointment.intakeSites.length
+      ? appointment.intakeSites.map((site) =>
+          createEmptyIntakeSite(site.siteNumber, {
+            ...site,
+            biopsyDate: site.biopsyDate || appointment.intakeBiopsyDate
+          })
+        )
+      : [createEmptyIntakeSite(1, { biopsyDate: appointment.intakeBiopsyDate })],
     originalDate: appointment.appointmentDate,
     originalStartTime: appointment.startTime
   };
@@ -722,7 +735,7 @@ function buildAppointmentInput(
     notes: form.notes,
     seriesId,
     intakeCourseType: isSimConsult ? form.intakeCourseType : null,
-    intakeBiopsyDate: isSimConsult ? form.intakeBiopsyDate : "",
+    intakeBiopsyDate: isSimConsult ? getFirstIntakeBiopsyDate(form.intakeSites, form.intakeBiopsyDate) : "",
     intakeSites: isSimConsult ? form.intakeSites : []
   };
 }
@@ -1418,12 +1431,13 @@ export function ScheduleScreen(props: {
   function buildCourseInputFromIntake(patientId: string, form: AppointmentFormState): CourseInput {
     const sites = form.intakeSites.map(toCourseSiteInput);
     const prescribedFractions = Math.max(0, ...form.intakeSites.map((site) => site.projectedFractions ?? 0));
+    const firstBiopsyDate = getFirstIntakeBiopsyDate(form.intakeSites, form.intakeBiopsyDate);
     return {
       patientId,
       courseName: buildCourseNameFromIntakeSites(form.intakeSites),
       courseType: form.intakeCourseType,
       prescribedFractions,
-      startDate: form.intakeBiopsyDate || form.appointmentDate,
+      startDate: firstBiopsyDate || form.appointmentDate,
       simConsultDate: form.appointmentDate,
       status: "pending",
       sites
@@ -1595,17 +1609,24 @@ export function ScheduleScreen(props: {
   function updateIntakeSite(index: number, patch: Partial<ScheduleIntakeSiteInput>) {
     setAppointmentForm((current) =>
       current
-        ? {
-            ...current,
-            intakeSites: current.intakeSites.map((site, siteIndex) =>
+        ? (() => {
+            const nextSites = current.intakeSites.map((site, siteIndex) =>
               siteIndex === index
                 ? {
                     ...site,
                     ...patch
                   }
                 : site
-            )
-          }
+            );
+            return {
+              ...current,
+              intakeBiopsyDate:
+                index === 0 && patch.biopsyDate !== undefined
+                  ? patch.biopsyDate
+                  : getFirstIntakeBiopsyDate(nextSites, current.intakeBiopsyDate),
+              intakeSites: nextSites
+            };
+          })()
         : current
     );
   }
@@ -2011,23 +2032,35 @@ export function ScheduleScreen(props: {
                         const nextSites =
                           nextType === "two_site"
                             ? [
-                                createEmptyIntakeSite(1, appointmentForm.intakeSites[0]),
-                                createEmptyIntakeSite(2, appointmentForm.intakeSites[1])
+                                createEmptyIntakeSite(1, {
+                                  ...appointmentForm.intakeSites[0],
+                                  biopsyDate: appointmentForm.intakeSites[0]?.biopsyDate || appointmentForm.intakeBiopsyDate
+                                }),
+                                createEmptyIntakeSite(2, {
+                                  ...appointmentForm.intakeSites[1],
+                                  biopsyDate:
+                                    appointmentForm.intakeSites[1]?.biopsyDate ||
+                                    appointmentForm.intakeSites[0]?.biopsyDate ||
+                                    appointmentForm.intakeBiopsyDate
+                                })
                               ]
-                            : [createEmptyIntakeSite(1, appointmentForm.intakeSites[0])];
-                        setAppointmentForm({ ...appointmentForm, intakeCourseType: nextType, intakeSites: nextSites });
+                            : [
+                                createEmptyIntakeSite(1, {
+                                  ...appointmentForm.intakeSites[0],
+                                  biopsyDate: appointmentForm.intakeSites[0]?.biopsyDate || appointmentForm.intakeBiopsyDate
+                                })
+                              ];
+                        setAppointmentForm({
+                          ...appointmentForm,
+                          intakeCourseType: nextType,
+                          intakeBiopsyDate: getFirstIntakeBiopsyDate(nextSites, appointmentForm.intakeBiopsyDate),
+                          intakeSites: nextSites
+                        });
                       }}
                     >
                       <option value="one_site">1 Lesion</option>
                       <option value="two_site">2 Lesions</option>
                     </select>
-                  </label>
-                  <label className="field">
-                    Biopsy Date
-                    <CalendarDateInput
-                      value={appointmentForm.intakeBiopsyDate}
-                      onChange={(value) => setAppointmentForm({ ...appointmentForm, intakeBiopsyDate: value })}
-                    />
                   </label>
                 </div>
                 <div className={appointmentForm.intakeCourseType === "two_site" ? "site-grid two-site-course-grid" : "site-grid"}>
@@ -2042,6 +2075,13 @@ export function ScheduleScreen(props: {
                       <div className="subpanel" key={site.siteNumber}>
                         <h4>{appointmentForm.intakeCourseType === "two_site" ? `Lesion ${site.siteNumber}` : "Lesion"}</h4>
                         <div className="form-grid course-top-grid">
+                          <label>
+                            {appointmentForm.intakeCourseType === "two_site" ? `Biopsy Date Lesion ${site.siteNumber}` : "Biopsy Date"}
+                            <CalendarDateInput
+                              value={site.biopsyDate || (index === 0 ? appointmentForm.intakeBiopsyDate : "")}
+                              onChange={(value) => updateIntakeSite(index, { biopsyDate: value })}
+                            />
+                          </label>
                           <label>
                             Treatment Lesion
                             <input

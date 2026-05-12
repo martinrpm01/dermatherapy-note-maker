@@ -112,6 +112,7 @@ export interface TreatmentSiteRecord {
   bodyLocation: string;
   treatmentLocationText: string;
   diagnosisText: string;
+  biopsyDate?: string;
   icd10: string;
   numberOfBlocks: number;
   lesionSize: string;
@@ -195,6 +196,7 @@ export interface ScheduleIntakeSiteInput {
   siteNumber: 1 | 2;
   treatmentLocationText: string;
   diagnosisText: string;
+  biopsyDate?: string;
   icd10: string;
   projectedFractions: number | null;
 }
@@ -251,6 +253,7 @@ export interface DocumentOnlySiteRecord {
   bodyLocation: string;
   treatmentLocationText: string;
   diagnosisText: string;
+  biopsyDate?: string;
   icd10: string;
   numberOfBlocks: number;
   lesionSize: string;
@@ -408,6 +411,7 @@ export interface TreatmentSiteInput {
   bodyLocation: string;
   treatmentLocationText: string;
   diagnosisText: string;
+  biopsyDate?: string;
   icd10: string;
   numberOfBlocks: number;
   lesionSize: string;

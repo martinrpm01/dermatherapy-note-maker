@@ -532,6 +532,7 @@ export function buildSiteSnapshots(
     bodyLocation: string;
     treatmentLocationText: string;
     diagnosisText: string;
+    biopsyDate?: string;
     icd10: string;
     numberOfBlocks: number;
     lesionSize: string;
@@ -557,7 +558,7 @@ export function buildSiteSnapshots(
   ): SiteSnapshot[] {
   return sites.map((site) => ({
     ...site,
-    biopsyDate: "",
+    biopsyDate: site.biopsyDate ?? "",
     cumulativeDose: calculateCumulativeDose(site.dailyDose, treatmentNumber)
   }));
 }
@@ -634,7 +635,7 @@ export function refreshVisitSiteSnapshots(
       const totalDose = doseManuallyAdjusted ? existingSnapshot?.totalDose ?? site.totalDose : site.totalDose;
       return {
         ...site,
-        biopsyDate: existingSnapshot?.biopsyDate || fallbackBiopsyDate || "",
+        biopsyDate: existingSnapshot?.biopsyDate || site.biopsyDate || fallbackBiopsyDate || "",
         dailyDose,
         totalDose,
         cumulativeDose: calculateCumulativeDose(dailyDose, treatmentNumber),

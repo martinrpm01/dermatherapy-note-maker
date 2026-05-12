@@ -665,6 +665,7 @@ function createIntakeSite(siteNumber: 1 | 2, source?: CourseInput["sites"][numbe
       bodyLocation: "",
       treatmentLocationText: "",
       diagnosisText: "",
+      biopsyDate: "",
       icd10: "",
       numberOfBlocks: 0,
       lesionSize: "",
@@ -690,6 +691,7 @@ function createIntakeSite(siteNumber: 1 | 2, source?: CourseInput["sites"][numbe
     bodyLocation: source?.bodyLocation ?? "",
     treatmentLocationText: source?.treatmentLocationText ?? "",
     diagnosisText: source?.diagnosisText ?? "",
+    biopsyDate: source?.biopsyDate ?? "",
     icd10: source?.icd10 ?? ""
   };
 }
@@ -700,6 +702,7 @@ function createDocumentOnlySite(siteNumber: 1 | 2, source?: DocumentOnlyInput["s
       bodyLocation: "",
       treatmentLocationText: "",
       diagnosisText: "",
+      biopsyDate: "",
       icd10: "",
       numberOfBlocks: 1,
       lesionSize: "",
@@ -726,6 +729,7 @@ function createDocumentOnlySite(siteNumber: 1 | 2, source?: DocumentOnlyInput["s
     bodyLocation: source?.bodyLocation ?? "",
     treatmentLocationText: source?.treatmentLocationText ?? "",
     diagnosisText: source?.diagnosisText ?? "",
+    biopsyDate: source?.biopsyDate ?? "",
     icd10: source?.icd10 ?? ""
   };
 }
@@ -772,7 +776,12 @@ export function PendingCourseIntakeModal(props: {
           }
         : site
     );
-    updateSites(nextSites);
+    props.onChange({
+      ...courseForm,
+      courseName: buildIntakeCourseName(nextSites),
+      startDate: index === 0 && patch.biopsyDate !== undefined ? patch.biopsyDate : courseForm.startDate,
+      sites: nextSites
+    });
   }
 
   return (
@@ -797,13 +806,25 @@ export function PendingCourseIntakeModal(props: {
                 const nextSites =
                   nextType === "two_site"
                     ? [
-                        createIntakeSite(1, courseForm.sites[0]),
-                        createIntakeSite(2, courseForm.sites[1])
+                        createIntakeSite(1, {
+                          ...courseForm.sites[0],
+                          biopsyDate: courseForm.sites[0]?.biopsyDate || courseForm.startDate
+                        }),
+                        createIntakeSite(2, {
+                          ...courseForm.sites[1],
+                          biopsyDate: courseForm.sites[1]?.biopsyDate || courseForm.sites[0]?.biopsyDate || courseForm.startDate
+                        })
                       ]
-                    : [createIntakeSite(1, courseForm.sites[0])];
+                    : [
+                        createIntakeSite(1, {
+                          ...courseForm.sites[0],
+                          biopsyDate: courseForm.sites[0]?.biopsyDate || courseForm.startDate
+                        })
+                      ];
                 props.onChange({
                   ...courseForm,
                   courseType: nextType,
+                  startDate: nextSites[0]?.biopsyDate || courseForm.startDate,
                   courseName: buildIntakeCourseName(nextSites),
                   sites: nextSites
                 });
@@ -812,10 +833,6 @@ export function PendingCourseIntakeModal(props: {
               <option value="one_site">1 Lesion</option>
               <option value="two_site">2 Lesions</option>
             </select>
-            </label>
-            <label>
-              Biopsy Date
-              <CalendarDateInput value={courseForm.startDate} onChange={(next) => props.onChange({ ...courseForm, startDate: next })} />
             </label>
             <label>
               Sim / Consult Date
@@ -827,6 +844,13 @@ export function PendingCourseIntakeModal(props: {
             <div className="subpanel" key={site.siteNumber}>
               <h4>{isTwoSite ? `Lesion ${site.siteNumber}` : "Lesion"}</h4>
           <div className="form-grid course-top-grid">
+                <label>
+                  {isTwoSite ? `Biopsy Date Lesion ${site.siteNumber}` : "Biopsy Date"}
+                  <CalendarDateInput
+                    value={site.biopsyDate || (index === 0 ? courseForm.startDate : "")}
+                    onChange={(next) => updateSite(index, { biopsyDate: next })}
+                  />
+                </label>
                 <label>
                   Treatment Lesion
                   <input
@@ -925,18 +949,20 @@ export function DocumentOnlyRecordModal(props: {
   const isTwoSite = recordForm.courseType === "two_site";
 
   function updateSite(index: number, patch: Partial<DocumentOnlyInput["sites"][0]>) {
+    const nextSites = recordForm.sites.map((site, siteIndex) =>
+      siteIndex === index
+        ? {
+            ...site,
+            ...patch,
+            bodyLocation: patch.treatmentLocationText ?? patch.bodyLocation ?? site.bodyLocation,
+            treatmentLocationText: patch.treatmentLocationText ?? patch.bodyLocation ?? site.treatmentLocationText
+          }
+        : site
+    );
     props.onChange({
       ...recordForm,
-      sites: recordForm.sites.map((site, siteIndex) =>
-        siteIndex === index
-          ? {
-              ...site,
-              ...patch,
-              bodyLocation: patch.treatmentLocationText ?? patch.bodyLocation ?? site.bodyLocation,
-              treatmentLocationText: patch.treatmentLocationText ?? patch.bodyLocation ?? site.treatmentLocationText
-            }
-          : site
-      )
+      biopsyDate: index === 0 && patch.biopsyDate !== undefined ? patch.biopsyDate : recordForm.biopsyDate,
+      sites: nextSites
     });
   }
 
@@ -980,13 +1006,29 @@ export function DocumentOnlyRecordModal(props: {
               value={recordForm.courseType}
               onChange={(event) => {
                 const nextType = event.target.value as DocumentOnlyInput["courseType"];
+                const nextSites =
+                  nextType === "two_site"
+                    ? [
+                        createDocumentOnlySite(1, {
+                          ...recordForm.sites[0],
+                          biopsyDate: recordForm.sites[0]?.biopsyDate || recordForm.biopsyDate
+                        }),
+                        createDocumentOnlySite(2, {
+                          ...recordForm.sites[1],
+                          biopsyDate: recordForm.sites[1]?.biopsyDate || recordForm.sites[0]?.biopsyDate || recordForm.biopsyDate
+                        })
+                      ]
+                    : [
+                        createDocumentOnlySite(1, {
+                          ...recordForm.sites[0],
+                          biopsyDate: recordForm.sites[0]?.biopsyDate || recordForm.biopsyDate
+                        })
+                      ];
                 props.onChange({
                   ...recordForm,
                   courseType: nextType,
-                  sites:
-                    nextType === "two_site"
-                      ? [createDocumentOnlySite(1, recordForm.sites[0]), createDocumentOnlySite(2, recordForm.sites[1])]
-                      : [createDocumentOnlySite(1, recordForm.sites[0])]
+                  biopsyDate: nextSites[0]?.biopsyDate || recordForm.biopsyDate,
+                  sites: nextSites
                 });
               }}
             >
@@ -1005,6 +1047,13 @@ export function DocumentOnlyRecordModal(props: {
               <div className="subpanel compact-course-subpanel" key={site.siteNumber}>
                 <h4>{isTwoSite ? `Lesion ${site.siteNumber}` : "Lesion"}</h4>
                 <div className="form-grid course-top-grid">
+                  <label>
+                    {isTwoSite ? `Biopsy Date Lesion ${site.siteNumber}` : "Biopsy Date"}
+                    <CalendarDateInput
+                      value={site.biopsyDate || (index === 0 ? recordForm.biopsyDate : "")}
+                      onChange={(next) => updateSite(index, { biopsyDate: next })}
+                    />
+                  </label>
                   <label>
                     Treatment Lesion
                     <input

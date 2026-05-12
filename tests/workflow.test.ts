@@ -9,6 +9,7 @@ import { PDFDocument } from "pdf-lib";
 import { RadiationNoteRepository } from "../src/main/repository";
 import { RadiationNoteService } from "../src/main/backend";
 import { DesktopBinaryAssetStore } from "../src/main/storage/desktop-binary-asset-store";
+import { createEmptyDocumentOnlyInput, createEmptyDocumentOnlySiteInput } from "../src/shared/document-only";
 import { buildTreatmentDeliveryStatement, formatDisplayDate, getSuggestedNoteType } from "../src/shared/note-rules";
 import { buildVisitPreviewText, createCourseFormFromDetail, createEmptyCourseForm } from "../src/renderer/src/helpers";
 
@@ -96,6 +97,7 @@ async function createTwoSitePatientAndCourse() {
         bodyLocation: "Left cheek",
         treatmentLocationText: "Left medial malar cheek",
         diagnosisText: "Basal cell carcinoma",
+        biopsyDate: "2026-04-01",
         icd10: "C44.319",
         numberOfBlocks: 1,
         lesionSize: "8mm",
@@ -115,6 +117,7 @@ async function createTwoSitePatientAndCourse() {
         bodyLocation: "Right ear",
         treatmentLocationText: "Right post auricular skin",
         diagnosisText: "Squamous cell carcinoma",
+        biopsyDate: "2026-04-05",
         icd10: "C44.222",
         numberOfBlocks: 1,
         lesionSize: "10mm",
@@ -1741,10 +1744,14 @@ describe("RadiationNoteService workflow", () => {
     const { course } = await createTwoSitePatientAndCourse();
 
     const consultDraft = service.buildVisitDraft(course.id, "consult_sim");
+    expect(consultDraft.note.structuredFields.siteSnapshots.map((site) => site.biopsyDate)).toEqual([
+      "2026-04-01",
+      "2026-04-05"
+    ]);
     consultDraft.note.structuredFields.siteSnapshots = consultDraft.note.structuredFields.siteSnapshots.map((site) =>
       site.siteNumber === 1
-        ? { ...site, biopsyDate: "2026-04-01", prescribedFractions: 10 }
-        : { ...site, biopsyDate: "2026-04-05", prescribedFractions: 12 }
+        ? { ...site, prescribedFractions: 10 }
+        : { ...site, prescribedFractions: 12 }
     );
     consultDraft.note.structuredFields.biopsyDate = "2026-04-01";
     consultDraft.note.generatedText = "";
@@ -1793,6 +1800,32 @@ describe("RadiationNoteService workflow", () => {
     expect(savedConsult.generatedText).toContain(
       "Clinical Setup Photographs Obtained: Yes\n\nNote: This plan will be the initial intent for treatment."
     );
+  });
+
+  it("persists separate biopsy dates for two-site document-only records", () => {
+    const input = createEmptyDocumentOnlyInput("Therapist RT(T)");
+    const saved = repository.saveDocumentOnlyRecord({
+      ...input,
+      courseType: "two_site",
+      biopsyDate: "2026-04-01",
+      sites: [
+        {
+          ...createEmptyDocumentOnlySiteInput(1),
+          treatmentLocationText: "Left cheek",
+          diagnosisText: "Basal Cell Carcinoma",
+          biopsyDate: "2026-04-01"
+        },
+        {
+          ...createEmptyDocumentOnlySiteInput(2),
+          treatmentLocationText: "Right ear",
+          diagnosisText: "Squamous Cell Carcinoma",
+          biopsyDate: "2026-04-05"
+        }
+      ]
+    });
+
+    const sites = repository.fetchDocumentOnlySites([saved.id]);
+    expect(sites.map((site) => site.biopsyDate)).toEqual(["2026-04-01", "2026-04-05"]);
   });
 
   it("only includes additional notes when provided and places them above follow up", async () => {

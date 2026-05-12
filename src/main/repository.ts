@@ -512,6 +512,7 @@ export class RadiationNoteRepository implements StructuredDataStore {
          body_location AS bodyLocation,
          treatment_location_text AS treatmentLocationText,
          diagnosis_text AS diagnosisText,
+         biopsy_date AS biopsyDate,
          icd10,
          number_of_blocks AS numberOfBlocks,
          lesion_size AS lesionSize,
@@ -1766,6 +1767,7 @@ export class RadiationNoteRepository implements StructuredDataStore {
          body_location AS bodyLocation,
          treatment_location_text AS treatmentLocationText,
          diagnosis_text AS diagnosisText,
+         biopsy_date AS biopsyDate,
          icd10,
          number_of_blocks AS numberOfBlocks,
          lesion_size AS lesionSize,
@@ -2440,11 +2442,11 @@ export class RadiationNoteRepository implements StructuredDataStore {
   private insertDocumentOnlySite(recordId: string, site: DocumentOnlySiteInput, timestamp: string) {
     this.run(
       `INSERT INTO document_only_sites (
-         id, record_id, site_number, body_location, treatment_location_text, diagnosis_text, icd10,
+         id, record_id, site_number, body_location, treatment_location_text, diagnosis_text, biopsy_date, icd10,
          number_of_blocks, lesion_size, treatment_depth, cone_size, cutout_size, shields, machine, energy_kv, treatment_interval,
          additional_devices, worksheet_side, worksheet_positioning, worksheet_vac_lok_area, worksheet_eye_shield_type,
          worksheet_gum_shield_position, worksheet_lip_shield_position, daily_dose, total_dose, projected_fractions, created_at, updated_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         site.id ?? makeId("document-only-site"),
         recordId,
@@ -2452,6 +2454,7 @@ export class RadiationNoteRepository implements StructuredDataStore {
         site.bodyLocation,
         site.treatmentLocationText,
         site.diagnosisText,
+        site.biopsyDate ?? "",
         site.icd10,
         site.numberOfBlocks,
         site.lesionSize,
@@ -2481,11 +2484,11 @@ export class RadiationNoteRepository implements StructuredDataStore {
   private insertSite(courseId: string, site: TreatmentSiteInput, timestamp: string) {
     this.run(
       `INSERT INTO treatment_sites (
-         id, course_id, site_number, body_location, treatment_location_text, diagnosis_text, icd10,
+         id, course_id, site_number, body_location, treatment_location_text, diagnosis_text, biopsy_date, icd10,
          number_of_blocks, lesion_size, treatment_depth, cone_size, cutout_size, shields, machine, energy_kv, treatment_interval,
          additional_devices, worksheet_side, worksheet_positioning, worksheet_vac_lok_area, worksheet_eye_shield_type,
          worksheet_gum_shield_position, worksheet_lip_shield_position, daily_dose, total_dose, prescribed_fractions, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
         [
         site.id ?? makeId("site"),
         courseId,
@@ -2493,6 +2496,7 @@ export class RadiationNoteRepository implements StructuredDataStore {
         site.bodyLocation,
         site.treatmentLocationText,
         site.diagnosisText,
+        site.biopsyDate ?? "",
         site.icd10,
         site.numberOfBlocks,
         site.lesionSize,
@@ -2588,6 +2592,7 @@ export class RadiationNoteRepository implements StructuredDataStore {
         body_location TEXT NOT NULL,
         treatment_location_text TEXT NOT NULL,
         diagnosis_text TEXT NOT NULL,
+        biopsy_date TEXT NOT NULL DEFAULT '',
         icd10 TEXT NOT NULL,
         number_of_blocks INTEGER NOT NULL DEFAULT 1,
         lesion_size TEXT NOT NULL DEFAULT '',
@@ -2650,6 +2655,7 @@ export class RadiationNoteRepository implements StructuredDataStore {
         body_location TEXT NOT NULL,
         treatment_location_text TEXT NOT NULL,
         diagnosis_text TEXT NOT NULL,
+        biopsy_date TEXT NOT NULL DEFAULT '',
         icd10 TEXT NOT NULL,
         number_of_blocks INTEGER NOT NULL DEFAULT 1,
         lesion_size TEXT NOT NULL DEFAULT '',
@@ -2840,6 +2846,8 @@ export class RadiationNoteRepository implements StructuredDataStore {
 
     // Migration: add lesion_size column if missing
     try { this.run(`ALTER TABLE treatment_sites ADD COLUMN lesion_size TEXT NOT NULL DEFAULT ''`); } catch { /* already exists */ }
+    try { this.run(`ALTER TABLE treatment_sites ADD COLUMN biopsy_date TEXT NOT NULL DEFAULT ''`); } catch { /* already exists */ }
+    try { this.run(`ALTER TABLE document_only_sites ADD COLUMN biopsy_date TEXT NOT NULL DEFAULT ''`); } catch { /* already exists */ }
 
     // Migration: add number_of_blocks column if missing
     try { this.run(`ALTER TABLE treatment_sites ADD COLUMN number_of_blocks INTEGER NOT NULL DEFAULT 1`); } catch { /* already exists */ }
