@@ -1448,6 +1448,12 @@ export class RadiationNoteRepository implements StructuredDataStore {
     });
   }
 
+  deleteGeneratedPdfRecord(pdfId: string) {
+    this.mutate(() => {
+      this.run(`DELETE FROM generated_pdfs WHERE id = ?`, [pdfId]);
+    });
+  }
+
   upsertCourseDocument(
     courseId: string,
     documentType: CourseDocumentRecord["documentType"],

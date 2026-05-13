@@ -110,6 +110,7 @@ type AssetAwareStructuredDataStore = StructuredDataStore & {
     originalName: string
   ): void;
   insertGeneratedPdf(visitId: string, file: AssetReference, versionNumber: number): void;
+  deleteGeneratedPdfRecord(pdfId: string): void;
   updateSettings(input: Omit<SettingsPayload["settings"], "dermatologyOfficeLogoUpload" | "removeDermatologyOfficeLogo">): void;
 };
 
@@ -1399,7 +1400,7 @@ export class RadiationNoteService {
     const attachments = this.repository.fetchVisitAttachments(visitId);
     const linkedCourseDocuments = visit.noteType === "consult_sim" ? this.repository.fetchCourseDocuments(course.id) : [];
     const existingPdfs = this.repository.fetchGeneratedPdfs(visitId);
-    const versionNumber = existingPdfs.length + 1;
+    const versionNumber = Math.max(0, ...existingPdfs.map((pdf) => pdf.versionNumber)) + 1;
     const pdfBaseName = this.buildPdfBaseName(patient, visit);
     const libraryRoot = this.getPatientNoteLibraryRoot();
     const categoryFolder = this.getPdfCategoryFolder(visit.noteType);
@@ -1408,7 +1409,7 @@ export class RadiationNoteService {
       libraryRoot,
       categoryFolder,
       patientFolder,
-      `${pdfBaseName}-v${versionNumber}.pdf`
+      `${pdfBaseName}.pdf`
     );
 
     const pdfBytes = await buildVisitPdf({
@@ -1440,6 +1441,7 @@ export class RadiationNoteService {
       this.assetStore.createAssetReference(outputPath, "generated_pdf")!,
       versionNumber
     );
+    this.removeSupersededGeneratedPdfs(existingPdfs, outputPath);
     const persistedPdf = this.repository.fetchGeneratedPdfs(visitId).find((pdf) => pdf.versionNumber === versionNumber);
     if (!persistedPdf) {
       throw new Error("Generated PDF record could not be reloaded after save.");
@@ -2381,6 +2383,25 @@ export class RadiationNoteService {
   private buildPatientFolderName(patient: PatientRecord) {
     const folderName = sanitizeFolderName(`${patient.lastName}, ${patient.firstName}`);
     return folderName || patient.id;
+  }
+
+  private removeSupersededGeneratedPdfs(existingPdfs: Array<{ id: string; fileAsset: AssetReference }>, currentOutputPath: string) {
+    const currentResolvedPath = path.resolve(currentOutputPath);
+    const oldPathsToDelete: string[] = [];
+
+    for (const pdf of existingPdfs) {
+      const resolvedPath = this.assetStore.resolveAssetPath(pdf.fileAsset);
+      if (resolvedPath && path.resolve(resolvedPath) !== currentResolvedPath) {
+        oldPathsToDelete.push(resolvedPath);
+      }
+      (this.repository as AssetAwareStructuredDataStore).deleteGeneratedPdfRecord(pdf.id);
+    }
+
+    const uniqueOldPaths = [...new Set(oldPathsToDelete)];
+    this.assetStore.deleteFiles(uniqueOldPaths);
+    for (const oldPath of uniqueOldPaths) {
+      this.assetStore.cleanupEmptyDirectoryChain(path.dirname(oldPath), this.getPatientNoteLibraryRoot());
+    }
   }
 
   private getCurrentNoteLogoPath() {

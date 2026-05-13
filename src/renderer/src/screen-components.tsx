@@ -2528,7 +2528,10 @@ export function PatientScreen(props: {
           </div>
           <div className="visit-list">
             {courseDetail.visits.map((visit) => {
-              const isFinalizedVisit = visit.note.status === "finalized" && Boolean(visit.note.pdfAsset);
+              const latestPdfAsset =
+                [...visit.pdfs].sort((left, right) => right.versionNumber - left.versionNumber)[0]?.fileAsset ??
+                visit.note.pdfAsset;
+              const isFinalizedVisit = visit.note.status === "finalized" && Boolean(latestPdfAsset);
               return (
                 <div className="visit-row" key={visit.note.id}>
                 <div>
@@ -2537,9 +2540,9 @@ export function PatientScreen(props: {
                   {visit.note.treatmentNumber ? <span style={{ marginLeft: "0.4rem" }}>{`· Fraction ${visit.note.treatmentNumber}`}</span> : null}
                 </div>
                 <div className="button-row">
-                  {isFinalizedVisit && visit.note.pdfAsset ? (
+                  {isFinalizedVisit && latestPdfAsset ? (
                     <>
-                      <button onClick={() => props.onOpenPdf(visit.note.pdfAsset!)}>
+                      <button onClick={() => props.onOpenPdf(latestPdfAsset)}>
                         Open Finalized Note
                       </button>
                       <button

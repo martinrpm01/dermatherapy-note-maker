@@ -2360,6 +2360,8 @@ describe("RadiationNoteService workflow", () => {
     const firstPdfPath = assetStore.resolveAssetPath(firstPdf.pdfAsset)!;
     expect(fs.existsSync(firstPdfPath)).toBe(true);
     expect(path.basename(firstPdfPath)).toContain("ava-derm-tx1-note");
+    expect(path.basename(firstPdfPath)).not.toContain("-v1");
+    expect(repository.fetchGeneratedPdfs(saved.id)).toHaveLength(1);
     expect(firstPdfPath).toContain(path.join("All Patient Notes", "Treatment Notes", "Derm, Ava"));
 
     const firstDoc = await PDFDocument.load(fs.readFileSync(firstPdfPath));
@@ -2373,7 +2375,9 @@ describe("RadiationNoteService workflow", () => {
     const secondPdfPath = assetStore.resolveAssetPath(secondPdf.pdfAsset)!;
 
     expect(secondPdf.versionNumber).toBe(2);
-    expect(secondPdfPath).not.toBe(firstPdfPath);
+    expect(secondPdfPath).toBe(firstPdfPath);
+    expect(repository.fetchGeneratedPdfs(saved.id)).toHaveLength(1);
+    expect(fs.existsSync(secondPdfPath)).toBe(true);
   });
 
   it("stores consult PDFs in the desktop consult folder structure", async () => {

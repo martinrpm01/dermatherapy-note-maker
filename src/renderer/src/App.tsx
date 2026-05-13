@@ -1630,7 +1630,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
       }
       showToast(generatePdf ? "Visit saved and PDF generated." : "Visit saved.");
       if (revealTarget) {
-        await appClient.revealAsset(revealTarget);
+        await appClient.openAsset(revealTarget);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error.";

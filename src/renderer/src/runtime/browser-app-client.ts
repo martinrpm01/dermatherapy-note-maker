@@ -240,6 +240,25 @@ export class BrowserAppClient implements AppClient {
     binaryAssetStore.cleanupEmptyDirectoryChain(dirPath, binaryAssetStore.rootDir);
   }
 
+  private removeSupersededGeneratedPdfs(
+    structuredDataStore: BrowserStructuredDataStore,
+    binaryAssetStore: BrowserBinaryAssetStore,
+    existingPdfs: Array<{ id: string; fileAsset: AssetReference }>,
+    currentOutputPath: string
+  ) {
+    const oldPathsToDelete: string[] = [];
+
+    for (const pdf of existingPdfs) {
+      const storedPath = this.getStoredAssetPath(binaryAssetStore, pdf.fileAsset);
+      if (storedPath && storedPath !== currentOutputPath) {
+        oldPathsToDelete.push(storedPath);
+      }
+      structuredDataStore.deleteGeneratedPdfRecord(pdf.id);
+    }
+
+    this.deleteStoredFiles(binaryAssetStore, oldPathsToDelete);
+  }
+
   private async readBlobInput(blob: Blob, fileName?: string): Promise<PdfBinaryAssetInput> {
     return {
       bytes: new Uint8Array(await blob.arrayBuffer()),
@@ -1706,9 +1725,9 @@ export class BrowserAppClient implements AppClient {
     const attachments = structuredDataStore.fetchVisitAttachments(visitId);
     const linkedCourseDocuments = visit.noteType === "consult_sim" ? structuredDataStore.fetchCourseDocuments(course.id) : [];
     const existingPdfs = structuredDataStore.fetchGeneratedPdfs(visitId);
-    const versionNumber = existingPdfs.length + 1;
+    const versionNumber = Math.max(0, ...existingPdfs.map((pdf) => pdf.versionNumber)) + 1;
     const pdfBaseName = this.buildPdfBaseName(patient, visit);
-    const pdfFileName = `${pdfBaseName}-v${versionNumber}.pdf`;
+    const pdfFileName = `${pdfBaseName}.pdf`;
 
     const pdfBytes = await buildVisitPdf({
       noteText: visit.editedText || visit.generatedText,
@@ -1753,9 +1772,10 @@ export class BrowserAppClient implements AppClient {
     const filePath = binaryAssetStore.saveUpload(
       pdfUpload,
       `${binaryAssetStore.getVisitWorkspaceDir(patient.id, course.id, visit.id)}/pdfs`,
-      `${pdfBaseName}-v${versionNumber}`
+      pdfBaseName
     );
     structuredDataStore.insertGeneratedPdf(visitId, filePath, versionNumber);
+    this.removeSupersededGeneratedPdfs(structuredDataStore, binaryAssetStore, existingPdfs, filePath);
 
     this.triggerPdfDownload(pdfFileName, pdfBytes);
 

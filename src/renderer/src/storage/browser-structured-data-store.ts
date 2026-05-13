@@ -1065,7 +1065,7 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
     this.ensureInitialized();
     return [...this.generatedPdfs.values()]
       .filter((pdf) => pdf.visitNoteId === visitId)
-      .sort((a, b) => a.versionNumber - b.versionNumber);
+      .sort((a, b) => b.versionNumber - a.versionNumber);
   }
 
   saveVisit(input: VisitInput, generatedText: string, editedText: string) {
@@ -1153,6 +1153,12 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
     this.ensureInitialized();
     this.visitAttachments.delete(attachmentId);
     this.queueDelete("visitAttachments", attachmentId);
+  }
+
+  deleteGeneratedPdfRecord(pdfId: string) {
+    this.ensureInitialized();
+    this.generatedPdfs.delete(pdfId);
+    this.queueDelete("generatedPdfs", pdfId);
   }
 
   upsertCourseDocument(

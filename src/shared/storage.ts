@@ -133,6 +133,7 @@ export interface StructuredDataStore {
   restoreVisitAttachmentRecord(record: VisitAttachmentRecord, filePath: string): void;
   deleteVisitPhotoRecord(photoId: string): void;
   deleteVisitAttachmentRecord(attachmentId: string): void;
+  deleteGeneratedPdfRecord(pdfId: string): void;
   upsertCourseDocument(
     courseId: string,
     documentType: CourseDocumentRecord["documentType"],

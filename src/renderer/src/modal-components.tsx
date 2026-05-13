@@ -1059,13 +1059,6 @@ export function DocumentOnlyRecordModal(props: {
                 <h4>{isTwoSite ? `Lesion ${site.siteNumber}` : "Lesion"}</h4>
                 <div className="form-grid course-top-grid">
                   <label>
-                    {isTwoSite ? `Biopsy Date Lesion ${site.siteNumber}` : "Biopsy Date"}
-                    <CalendarDateInput
-                      value={site.biopsyDate || (index === 0 ? recordForm.biopsyDate : "")}
-                      onChange={(next) => updateSite(index, { biopsyDate: next })}
-                    />
-                  </label>
-                  <label>
                     Treatment Lesion
                     <input
                       placeholder="Treatment location"
