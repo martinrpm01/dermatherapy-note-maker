@@ -40,6 +40,6 @@ describe("visit PDF generation", () => {
     });
 
     const pdf = await PDFDocument.load(pdfBytes);
-    expect(pdf.getPageCount()).toBeGreaterThanOrEqual(2);
+    expect(pdf.getPageCount()).toBe(1);
   });
 });

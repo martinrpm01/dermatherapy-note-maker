@@ -705,6 +705,7 @@ export async function buildVisitPdf({ noteText, photoInputs, attachmentInputs, l
     const colGap = 10;
     const rowGap = 8;
     const captionH = 13;
+    const minimumPhotoRowHeight = 128;
 
     // Pre-embed all images
     const embedded: Array<{ img: Awaited<ReturnType<typeof embedRasterImage>>; input: PdfPhotoInput }> = [];
@@ -712,42 +713,83 @@ export async function buildVisitPdf({ noteText, photoInputs, attachmentInputs, l
       embedded.push({ img: await embedRasterImage(pdfDoc, photoInput.image), input: photoInput });
     }
 
+    function drawPhotoGrid(
+      targetPage: Awaited<ReturnType<PDFDocument["addPage"]>>,
+      startY: number,
+      labelText: string,
+      pageGroup: Array<{ img: NonNullable<Awaited<ReturnType<typeof embedRasterImage>>>; input: PdfPhotoInput }>,
+      rows: number
+    ) {
+      drawSimpleLine(targetPage, labelText, margin, startY, 11, boldFont, textColor);
+
+      const gridTop = startY - 18;
+      const availH = gridTop - margin;
+      const rowH = (availH - (rows - 1) * rowGap) / rows;
+      const colW = (pageSize[0] - margin * 2 - (COLS - 1) * colGap) / COLS;
+      const photoH = rowH - captionH - 4;
+
+      for (let i = 0; i < pageGroup.length; i++) {
+        const { img, input } = pageGroup[i];
+        const col = i % COLS;
+        const row = Math.floor(i / COLS);
+        const cellX = margin + col * (colW + colGap);
+        const cellTopY = gridTop - row * (rowH + rowGap);
+        const caption = input.caption || input.image.fileName || "Photo";
+        drawSimpleLine(targetPage, caption, cellX, cellTopY, captionH - 1, regularFont, textColor);
+        const fitted = scaleToFit(img.width, img.height, colW, photoH);
+        const imgX = cellX + (colW - fitted.width) / 2;
+        const imgY = cellTopY - captionH - 4 - fitted.height;
+        targetPage.drawImage(img, { x: imgX, y: imgY, width: fitted.width, height: fitted.height });
+      }
+
+      return gridTop - rows * rowH - (rows - 1) * rowGap - 12;
+    }
+
+    function rowsAvailableBelow(startY: number) {
+      const availableGridH = startY - 18 - margin;
+      if (availableGridH < minimumPhotoRowHeight) {
+        return 0;
+      }
+
+      return Math.min(ROWS, Math.floor((availableGridH + rowGap) / (minimumPhotoRowHeight + rowGap)));
+    }
+
     // Group by siteNumber
     const siteNums = [...new Set(embedded.map((e) => e.input.siteNumber ?? 1))].sort() as (1 | 2)[];
     const isTwoSite = siteNums.length > 1;
 
     for (const siteNum of siteNums) {
-      const group = embedded.filter((e) => (e.input.siteNumber ?? 1) === siteNum && e.img !== null);
+      const group = embedded.filter((e) => (e.input.siteNumber ?? 1) === siteNum && e.img !== null) as Array<{
+        img: NonNullable<Awaited<ReturnType<typeof embedRasterImage>>>;
+        input: PdfPhotoInput;
+      }>;
       if (group.length === 0) continue;
       const sectionLabel = isTwoSite ? `Lesion ${siteNum} Photos` : "Other Photos";
+      let remainingGroup = group;
+      let pageIndex = 0;
+      const availableRowsOnCurrentPage = rowsAvailableBelow(cursorY);
 
-      for (let pageStart = 0; pageStart < group.length; pageStart += PER_PAGE) {
-        const pageGroup = group.slice(pageStart, pageStart + PER_PAGE);
+      if (availableRowsOnCurrentPage > 0) {
+        const currentPageCount = Math.min(availableRowsOnCurrentPage * COLS, remainingGroup.length);
+        const currentPageGroup = remainingGroup.slice(0, currentPageCount);
+        cursorY = drawPhotoGrid(
+          page,
+          cursorY,
+          sectionLabel,
+          currentPageGroup,
+          Math.ceil(currentPageGroup.length / COLS)
+        );
+        remainingGroup = remainingGroup.slice(currentPageCount);
+        pageIndex += 1;
+      }
+
+      for (let pageStart = 0; pageStart < remainingGroup.length; pageStart += PER_PAGE) {
+        const pageGroup = remainingGroup.slice(pageStart, pageStart + PER_PAGE);
         const photoPage = pdfDoc.addPage(pageSize);
         const headerY = drawBrandHeader(photoPage, logo, margin);
-        const labelText = pageStart === 0 ? sectionLabel : `${sectionLabel} (cont.)`;
-        drawSimpleLine(photoPage, labelText, margin, headerY, 11, boldFont, textColor);
-
-        const gridTop = headerY - 18;
-        const availH = gridTop - margin;
-        const rowH = (availH - (ROWS - 1) * rowGap) / ROWS;
-        const colW = (pageSize[0] - margin * 2 - (COLS - 1) * colGap) / COLS;
-        const photoH = rowH - captionH - 4;
-
-        for (let i = 0; i < pageGroup.length; i++) {
-          const { img, input } = pageGroup[i];
-          if (!img) continue;
-          const col = i % COLS;
-          const row = Math.floor(i / COLS);
-          const cellX = margin + col * (colW + colGap);
-          const cellTopY = gridTop - row * (rowH + rowGap);
-          const caption = input.caption || input.image.fileName || "Photo";
-          drawSimpleLine(photoPage, caption, cellX, cellTopY, captionH - 1, regularFont, textColor);
-          const fitted = scaleToFit(img.width, img.height, colW, photoH);
-          const imgX = cellX + (colW - fitted.width) / 2;
-          const imgY = cellTopY - captionH - 4 - fitted.height;
-          photoPage.drawImage(img, { x: imgX, y: imgY, width: fitted.width, height: fitted.height });
-        }
+        const labelText = pageIndex === 0 ? sectionLabel : `${sectionLabel} (cont.)`;
+        drawPhotoGrid(photoPage, headerY, labelText, pageGroup, ROWS);
+        pageIndex += 1;
       }
     }
   }
