@@ -45,6 +45,7 @@ import { VisitEditorScreen } from "./visit-editor-screen";
 import { ScheduleScreen, printPatientSchedule } from "./schedule-screen";
 import {
   canCheckRefreshPulse,
+  checkBrowserRefreshUpdate,
   fetchLatestRefreshPulse,
   CURRENT_REFRESH_PULSE,
   REFRESH_PULSE_CHECK_INTERVAL_MS
@@ -531,6 +532,65 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
   const [recoveryDraftPrompt, setRecoveryDraftPrompt] = useState<RecoveryDraft | null>(null);
   const autosaveTimerRef = useRef<number | null>(null);
   const autosaveSignatureRef = useRef("");
+
+  async function refreshBrowserBuildIfNeeded() {
+    if (!canCheckRefreshPulse()) {
+      return false;
+    }
+
+    const updateCheck = await checkBrowserRefreshUpdate();
+    if (updateCheck.action !== "refresh") {
+      window.sessionStorage.removeItem("clearskin:unlock-refresh-attempt");
+      return false;
+    }
+    const refreshTarget = updateCheck.latestVersionLabel || "latest";
+    const lastRefreshAttempt = window.sessionStorage.getItem("clearskin:unlock-refresh-attempt");
+    if (lastRefreshAttempt === refreshTarget) {
+      return false;
+    }
+
+    if ("serviceWorker" in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.update().catch(() => undefined)));
+    }
+
+    window.sessionStorage.setItem("clearskin:unlock-refresh-attempt", refreshTarget);
+    window.location.reload();
+    return true;
+  }
+
+  function clearUnlockedWorkflowState() {
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+    autosaveSignatureRef.current = "";
+    setScreen({ name: "dashboard" });
+    setDashboard(null);
+    setDocumentOnlySnapshot(null);
+    setPatientDetail(null);
+    setCompleted(null);
+    setArchive(null);
+    setSettingsPayload(null);
+    setTemplates([]);
+    setSelectedTemplateId("");
+    setTemplateDraft("");
+    setVisitEditor(null);
+    setPatientForm(null);
+    setCourseForm(null);
+    setDocumentOnlyForm(null);
+    setDocumentOnlyWorksheetForm(null);
+    setCourseCompletionFacePhotoUpload(null);
+    setCourseCompletionNeedsFacePhoto(false);
+    setConsentSigning(null);
+    setCourseConsentActions(null);
+    setTextDirty(false);
+    setArchiveExportResult(null);
+    setArchiveExportError(null);
+    setArchivePreflightResult(null);
+    setArchiveRestoreResult(null);
+    setLogoCropState(null);
+  }
 
   function restoreRecoveryDraft(draft: RecoveryDraft) {
     if (draft.kind === "patient") {
@@ -1057,8 +1117,15 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
       setStatusMessage("Incorrect PIN.");
       return;
     }
+    const reloadingForFreshBuild = await refreshBrowserBuildIfNeeded();
+    if (reloadingForFreshBuild) {
+      return;
+    }
+    clearUnlockedWorkflowState();
     setBoot(await appClient.bootstrap());
+    await Promise.all([loadTemplates(), loadSettings(), loadDashboard()]);
     setStatusMessage("");
+    setUnlockPin("");
   }
 
   async function handleSetupPin() {
