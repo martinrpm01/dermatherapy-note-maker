@@ -884,6 +884,8 @@ describe("RadiationNoteService workflow", () => {
     firstDraft.note.structuredFields.prescribedFractionsInput = 10;
     const savedFirst = service.saveVisit(firstDraft.note);
     expect(savedFirst.generatedText).toContain("Fractions: 10");
+    expect(savedFirst.generatedText).toContain("Total Treatments: 10");
+    expect(savedFirst.generatedText).not.toContain("Total Treatments: \n");
 
     const updatedCourse = service.getPatientDetail(patient.id).courses[0].course;
     expect(updatedCourse.prescribedFractions).toBe(10);

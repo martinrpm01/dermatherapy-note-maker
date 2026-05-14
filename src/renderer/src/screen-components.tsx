@@ -944,10 +944,6 @@ export function CalendarDateInput(props: { value: string; onChange: (value: stri
       value={props.value || ""}
       onPointerDown={refocusEditableInput}
       onChange={(event) => props.onChange(event.target.value)}
-      onClick={(event) => {
-        const input = event.currentTarget as HTMLInputElement & { showPicker?: () => void };
-        input.showPicker?.();
-      }}
     />
   );
 }

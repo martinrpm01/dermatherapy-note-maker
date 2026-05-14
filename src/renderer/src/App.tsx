@@ -1609,7 +1609,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
       if (!appClient) return;
       const currentPatientId = visitEditor.patient.id;
       const noteInput = generatePdf
-        ? { ...visitEditor.note, status: "finalized" as const }
+        ? { ...visitEditor.note, status: "finalized" as const, editedText: textDirty ? visitEditor.note.editedText : "" }
         : visitEditor.note;
       const saved = await appClient.saveVisit(noteInput);
       autosaveSignatureRef.current = JSON.stringify({

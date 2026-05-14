@@ -2205,6 +2205,11 @@ export class RadiationNoteService {
     const site2 = normalizedSites.find((site) => site.siteNumber === 2) || emptySite(2);
     const projectedFractionsInput = note.structuredFields.projectedFractionsInput ?? null;
     const courseFractions = course.prescribedFractions > 0 ? course.prescribedFractions : null;
+    const renderedCourseFractions =
+      courseFractions ??
+      getMaxSitePrescribedFractions(normalizedSites) ??
+      note.structuredFields.prescribedFractionsInput ??
+      (note.noteType === "consult_sim" ? projectedFractionsInput : null);
     const getTxSiteName = (site: typeof site1) => site.treatmentLocationText.trim() || site.bodyLocation.trim();
     const getTotalFractionValue = (site: typeof site1) =>
       site.prescribedFractions ?? (note.noteType === "consult_sim" ? projectedFractionsInput : null) ?? courseFractions;
@@ -2292,7 +2297,7 @@ export class RadiationNoteService {
         therapistName: note.therapistName
       },
       course: {
-        prescribedFractions: course.prescribedFractions > 0 ? course.prescribedFractions : ""
+        prescribedFractions: renderedCourseFractions && renderedCourseFractions > 0 ? renderedCourseFractions : ""
       },
       settings: {
         supervisingPhysician: settings.supervisingPhysician,
