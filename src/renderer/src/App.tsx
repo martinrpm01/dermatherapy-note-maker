@@ -73,7 +73,8 @@ import type {
   TreatmentCourseRecord,
   TreatmentSiteRecord,
   VisitDraftOptions,
-  VisitEditorState
+  VisitEditorState,
+  VisitInput
 } from "../../shared/types";
 
 type Screen =
@@ -1640,6 +1641,28 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     }
   }
 
+  async function saveVisitDraftPoint(noteInput: VisitInput, toastMessage = "Draft saved.") {
+    if (!appClient) return null;
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+
+    const saved = await appClient.saveVisit(noteInput);
+    autosaveSignatureRef.current = JSON.stringify({
+      ...buildAutosaveVisitInput(noteInput),
+      id: saved.id,
+      status: saved.status,
+      generatedText: saved.generatedText,
+      editedText: noteInput.editedText
+    });
+    const draftMode = screen.name === "visit" ? screen.mode : "next_treatment";
+    await loadVisit(noteInput.courseId, draftMode, saved.id);
+    await loadDashboard();
+    showToast(toastMessage);
+    return saved;
+  }
+
   async function saveSettingsForm() {
     if (!settingsPayload) return;
     if (!appClient) return;
@@ -2178,7 +2201,17 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
                   const upload = await fileToCompressedUpload(file, 1600);
                   uploads.push({ ...upload, siteNumber });
                 }
-                setVisitEditor({ ...visitEditor, note: { ...visitEditor.note, newPhotoUploads: [...visitEditor.note.newPhotoUploads, ...uploads] } });
+                const nextNote = {
+                  ...visitEditor.note,
+                  newPhotoUploads: [...visitEditor.note.newPhotoUploads, ...uploads]
+                };
+                setVisitEditor({ ...visitEditor, note: nextNote });
+                try {
+                  await saveVisitDraftPoint(nextNote, "Photo saved to draft.");
+                } catch (error) {
+                  const message = error instanceof Error ? error.message : "Unknown error.";
+                  showToast(`Could not save photo to draft: ${message}`);
+                }
               })();
             }}
             onVisitAttachmentAdd={(files) => {
@@ -2192,13 +2225,20 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
                       : await fileToUpload(file)
                   );
                 }
+                const nextNote = {
+                  ...visitEditor.note,
+                  newAttachmentUploads: [...visitEditor.note.newAttachmentUploads, ...uploads]
+                };
                 setVisitEditor({
                   ...visitEditor,
-                  note: {
-                    ...visitEditor.note,
-                    newAttachmentUploads: [...visitEditor.note.newAttachmentUploads, ...uploads]
-                  }
+                  note: nextNote
                 });
+                try {
+                  await saveVisitDraftPoint(nextNote, "Attachment saved to draft.");
+                } catch (error) {
+                  const message = error instanceof Error ? error.message : "Unknown error.";
+                  showToast(`Could not save attachment to draft: ${message}`);
+                }
               })();
             }}
             onUpdate={updateVisitEditor}
