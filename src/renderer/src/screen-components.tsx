@@ -29,6 +29,17 @@ function matchesSearch(value: string, search: string) {
   return value.toLowerCase().includes(search.trim().toLowerCase());
 }
 
+function comparePatientRowsByName(
+  left: { patientName: string; patientMrn: string },
+  right: { patientName: string; patientMrn: string }
+) {
+  return `${left.patientName}|${left.patientMrn}`.localeCompare(
+    `${right.patientName}|${right.patientMrn}`,
+    undefined,
+    { sensitivity: "base", numeric: true }
+  );
+}
+
 function isDashboardCourseRow(
   row: DashboardSnapshot["activeCourses"][number] | DashboardSnapshot["patientsWithoutCourse"][number]
 ): row is DashboardSnapshot["activeCourses"][number] {
@@ -2004,10 +2015,10 @@ export function DashboardScreen(props: {
     }
   }
 
-  // Collect unique patients (from courses + no-course rows), preserve order
+  // Collect unique patients (from courses + no-course rows) in last-name order.
   const patientIds: string[] = [];
   const seen = new Set<string>();
-  for (const row of [...allCourseRows, ...noCourseRows]) {
+  for (const row of [...allCourseRows, ...noCourseRows].sort(comparePatientRowsByName)) {
     if (!seen.has(row.patientId)) { seen.add(row.patientId); patientIds.push(row.patientId); }
   }
 
@@ -2018,7 +2029,7 @@ export function DashboardScreen(props: {
     const ref = courses[0] || noC!;
     return matchesSearch(`${ref.patientName} ${ref.patientMrn} ${courses.map((c) => `${c.courseName} ${c.siteSummary}`).join(" ")}`, props.search);
   });
-  const pendingPatientIds = [...new Set(pendingRows.map((row) => row.patientId))].filter((patientId) => {
+  const pendingPatientIds = [...new Set([...pendingRows].sort(comparePatientRowsByName).map((row) => row.patientId))].filter((patientId) => {
     const patientRows = pendingRows.filter((row) => row.patientId === patientId);
     const ref = patientRows[0];
     return matchesSearch(

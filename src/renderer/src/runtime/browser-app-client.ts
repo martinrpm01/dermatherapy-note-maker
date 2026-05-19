@@ -111,6 +111,28 @@ function ensureUniqueCourseSiteIds(sites: Parameters<AppClient["saveCourse"]>[0]
   });
 }
 
+function comparePatientNameParts(
+  left: { firstName: string; lastName: string; mrn?: string },
+  right: { firstName: string; lastName: string; mrn?: string }
+) {
+  return `${left.lastName}|${left.firstName}|${left.mrn ?? ""}`.localeCompare(
+    `${right.lastName}|${right.firstName}|${right.mrn ?? ""}`,
+    undefined,
+    { sensitivity: "base", numeric: true }
+  );
+}
+
+function compareDashboardPatientRows(
+  left: { patientName: string; patientMrn: string; courseName?: string },
+  right: { patientName: string; patientMrn: string; courseName?: string }
+) {
+  return `${left.patientName}|${left.patientMrn}|${left.courseName ?? ""}`.localeCompare(
+    `${right.patientName}|${right.patientMrn}|${right.courseName ?? ""}`,
+    undefined,
+    { sensitivity: "base", numeric: true }
+  );
+}
+
 /**
  * Planning stub for the future browser/PWA AppClient.
  *
@@ -710,7 +732,8 @@ export class BrowserAppClient implements AppClient {
         patientMrn: patient.mrn,
         patientDob: patient.dob,
         patientFacePhoto: patient.facePhoto
-      }));
+      }))
+      .sort(compareDashboardPatientRows);
 
     return {
       activeCourses: activeCourses
@@ -754,7 +777,8 @@ export class BrowserAppClient implements AppClient {
             latestDraftUpdatedAt: latestDraftVisit?.note.updatedAt ?? null
           };
         })
-        .filter((course): course is DashboardSnapshot["activeCourses"][number] => Boolean(course)),
+        .filter((course): course is DashboardSnapshot["activeCourses"][number] => Boolean(course))
+        .sort(compareDashboardPatientRows),
       pendingCourses: pendingCourses
         .map((course) => {
           const patient = patientMap.get(course.patientId);
@@ -778,7 +802,8 @@ export class BrowserAppClient implements AppClient {
             hasConsentForm: documentsForCourse.some((document) => document.documentType === "consent_form")
           };
         })
-        .filter((course): course is DashboardSnapshot["pendingCourses"][number] => Boolean(course)),
+        .filter((course): course is DashboardSnapshot["pendingCourses"][number] => Boolean(course))
+        .sort(compareDashboardPatientRows),
       patientsWithoutCourse,
       archivedPatients: structuredDataStore.fetchPatients("1 = 1", []).filter((patient) => patient.status !== "active").length,
       archivedCourses: structuredDataStore.fetchCourses("1 = 1", []).filter((course) => course.status !== "active").length
@@ -946,7 +971,9 @@ export class BrowserAppClient implements AppClient {
     this.assertUnlocked();
     const structuredDataStore = await this.getStructuredDataStore();
     return {
-      patients: structuredDataStore.loadPatientDetails(structuredDataStore.fetchCompletedPatientIds())
+      patients: structuredDataStore
+        .loadPatientDetails(structuredDataStore.fetchCompletedPatientIds())
+        .sort((left, right) => comparePatientNameParts(left.patient, right.patient))
     };
   }
 
@@ -956,7 +983,9 @@ export class BrowserAppClient implements AppClient {
     this.assertUnlocked();
     const structuredDataStore = await this.getStructuredDataStore();
     return {
-      patients: structuredDataStore.loadPatientDetails(structuredDataStore.fetchArchivePatientIds())
+      patients: structuredDataStore
+        .loadPatientDetails(structuredDataStore.fetchArchivePatientIds())
+        .sort((left, right) => comparePatientNameParts(left.patient, right.patient))
     };
   }
 

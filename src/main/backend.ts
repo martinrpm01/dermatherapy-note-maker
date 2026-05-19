@@ -125,6 +125,28 @@ type RecoveryCapableStructuredDataStore = StructuredDataStore & {
   wipeAllData(): void;
 };
 
+function comparePatientNameParts(
+  left: { firstName: string; lastName: string; mrn?: string },
+  right: { firstName: string; lastName: string; mrn?: string }
+) {
+  return `${left.lastName}|${left.firstName}|${left.mrn ?? ""}`.localeCompare(
+    `${right.lastName}|${right.firstName}|${right.mrn ?? ""}`,
+    undefined,
+    { sensitivity: "base", numeric: true }
+  );
+}
+
+function compareDashboardPatientRows(
+  left: { patientName: string; patientMrn: string; courseName?: string },
+  right: { patientName: string; patientMrn: string; courseName?: string }
+) {
+  return `${left.patientName}|${left.patientMrn}|${left.courseName ?? ""}`.localeCompare(
+    `${right.patientName}|${right.patientMrn}|${right.courseName ?? ""}`,
+    undefined,
+    { sensitivity: "base", numeric: true }
+  );
+}
+
 type WipeCapableBinaryAssetStore = BinaryAssetStore & {
   wipeAllData(): void;
 };
@@ -535,7 +557,8 @@ export class RadiationNoteService {
         patientMrn: p.mrn,
         patientDob: p.dob,
         patientFacePhoto: p.facePhoto
-      }));
+      }))
+      .sort(compareDashboardPatientRows);
 
     return {
       activeCourses: activeCourses
@@ -577,7 +600,8 @@ export class RadiationNoteService {
             latestDraftUpdatedAt: latestDraftVisit?.note.updatedAt ?? null
           };
         })
-        .filter(Boolean) as DashboardSnapshot["activeCourses"],
+        .filter(Boolean)
+        .sort(compareDashboardPatientRows) as DashboardSnapshot["activeCourses"],
       pendingCourses: pendingCourses
         .map((course) => {
           const patient = patientMap.get(course.patientId);
@@ -601,7 +625,8 @@ export class RadiationNoteService {
             hasConsentForm: documentsForCourse.some((document) => document.documentType === "consent_form")
           };
         })
-        .filter(Boolean) as DashboardSnapshot["pendingCourses"],
+        .filter(Boolean)
+        .sort(compareDashboardPatientRows) as DashboardSnapshot["pendingCourses"],
       patientsWithoutCourse,
       archivedPatients: this.repository.countPatients("status != 'active'"),
       archivedCourses: this.repository.countCourses("status != 'active'")
@@ -735,14 +760,18 @@ export class RadiationNoteService {
   listCompleted(): ArchiveSnapshot {
     this.assertUnlocked();
     return {
-      patients: this.repository.loadPatientDetails(this.repository.fetchCompletedPatientIds()) as PatientDetail[]
+      patients: (this.repository.loadPatientDetails(this.repository.fetchCompletedPatientIds()) as PatientDetail[]).sort((left, right) =>
+        comparePatientNameParts(left.patient, right.patient)
+      )
     };
   }
 
   listArchive(): ArchiveSnapshot {
     this.assertUnlocked();
     return {
-      patients: this.repository.loadPatientDetails(this.repository.fetchArchivePatientIds()) as PatientDetail[]
+      patients: (this.repository.loadPatientDetails(this.repository.fetchArchivePatientIds()) as PatientDetail[]).sort((left, right) =>
+        comparePatientNameParts(left.patient, right.patient)
+      )
     };
   }
 

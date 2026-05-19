@@ -259,6 +259,68 @@ describe("RadiationNoteService workflow", () => {
     expect(emptyCourse.sites[0].totalDose).toBe(0);
   });
 
+  it("orders dashboard patients alphabetically by last name", () => {
+    const saveNamedPatient = (firstName: string, lastName: string) =>
+      service.savePatient({
+        firstName,
+        lastName,
+        mrn: `${lastName}-${firstName}`,
+        dob: "1970-01-01",
+        notes: ""
+      });
+
+    const saveSimpleCourse = (patientId: string, status: "active" | "pending" = "active") =>
+      service.saveCourse({
+        patientId,
+        courseName: `${patientId} course`,
+        courseType: "one_site",
+        prescribedFractions: status === "active" ? 10 : 0,
+        startDate: "2026-05-01",
+        status,
+        sites: [
+          {
+            siteNumber: 1,
+            bodyLocation: "Left cheek",
+            treatmentLocationText: "Left cheek",
+            diagnosisText: "Basal Cell Carcinoma",
+            icd10: "C44.319",
+            numberOfBlocks: 1,
+            lesionSize: "5mm",
+            treatmentDepth: "3",
+            coneSize: "20",
+            cutoutSize: "10",
+            shields: "",
+            machine: "Xoft Elekta 1200 SPX",
+            energyKv: "50kV",
+            treatmentInterval: "bi-weekly",
+            additionalDevices: "",
+            dailyDose: status === "active" ? 400 : 0,
+            totalDose: status === "active" ? 4000 : 0
+          }
+        ]
+      });
+
+    const zephyr = saveNamedPatient("Zoey", "Zephyr");
+    const abbott = saveNamedPatient("Amy", "Abbott");
+    const morris = saveNamedPatient("Mia", "Morris");
+    const carter = saveNamedPatient("Chris", "Carter");
+    const delta = saveNamedPatient("Dana", "Delta");
+    const alpha = saveNamedPatient("Alex", "Alpha");
+
+    saveSimpleCourse(zephyr.id);
+    saveSimpleCourse(abbott.id);
+    saveSimpleCourse(delta.id, "pending");
+    saveSimpleCourse(alpha.id, "pending");
+    void morris;
+    void carter;
+
+    const dashboard = service.getDashboardSnapshot();
+
+    expect(dashboard.activeCourses.map((row) => row.patientName)).toEqual(["Abbott, Amy", "Zephyr, Zoey"]);
+    expect(dashboard.patientsWithoutCourse.map((row) => row.patientName)).toEqual(["Carter, Chris", "Morris, Mia"]);
+    expect(dashboard.pendingCourses.map((row) => row.patientName)).toEqual(["Alpha, Alex", "Delta, Dana"]);
+  });
+
   it("preserves unknown dose values when reopening edit-course data", async () => {
     const { patient, course } = await createPatientAndCourse();
 
