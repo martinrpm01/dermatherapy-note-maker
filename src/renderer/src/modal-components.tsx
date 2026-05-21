@@ -1737,6 +1737,15 @@ export function CourseModal(props: {
               </select>
             </label>
           ) : null}
+          {!isPendingCourseSetup ? (
+            <label>
+              Sim / Consult Date
+              <CalendarDateInput
+                value={courseForm.simConsultDate ?? ""}
+                onChange={(next) => props.onChange({ ...courseForm, simConsultDate: next })}
+              />
+            </label>
+          ) : null}
           {showFractionsField && !isTwoSite ? <label>
             Prescribed Fractions
             <select
