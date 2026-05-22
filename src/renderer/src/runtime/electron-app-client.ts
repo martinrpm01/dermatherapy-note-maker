@@ -162,6 +162,13 @@ export class ElectronAppClient implements AppClient {
     return this.api.finalizeDocumentOnlyConsent(recordId, input);
   }
 
+  generateDocumentOnlyConsultQuestionnaire(
+    recordId: string,
+    input: Parameters<AppClient["generateDocumentOnlyConsultQuestionnaire"]>[1]
+  ) {
+    return this.api.generateDocumentOnlyConsultQuestionnaire(recordId, input);
+  }
+
   generateDocumentOnlySimWorksheet(recordId: string) {
     return this.api.generateDocumentOnlySimWorksheet(recordId);
   }
@@ -205,6 +212,13 @@ export class ElectronAppClient implements AppClient {
 
   generateConsentForm(courseId: string) {
     return this.api.generateConsentForm(courseId);
+  }
+
+  generateCourseConsultQuestionnaire(
+    courseId: string,
+    input: Parameters<AppClient["generateCourseConsultQuestionnaire"]>[1]
+  ) {
+    return this.api.generateCourseConsultQuestionnaire(courseId, input);
   }
 
   generateCourseSimWorksheet(courseId: string) {

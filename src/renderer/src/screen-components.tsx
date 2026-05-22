@@ -77,10 +77,6 @@ function buildPatientDetailMatches(details: PatientDetail[], search: string) {
   );
 }
 
-function getCourseConsentDocument(courseDetail: PatientDetail["courses"][number]) {
-  return courseDetail.documents.find((document) => document.documentType === "consent_form") ?? null;
-}
-
 function CourseScheduleMenu(props: {
   hasSchedule: boolean;
   onOpenSchedule: () => void;
@@ -1974,9 +1970,12 @@ export function DashboardScreen(props: {
   onScheduleCourse: (courseId: string) => void;
   onPrintCourseSchedule: (courseId: string) => void;
   onDeleteCourseSchedule: (courseId: string) => boolean | Promise<boolean>;
+  onOpenConsultForms: (patientId: string, courseId: string) => void;
   onGenerateConsentForm: (courseId: string) => void;
   onUploadConsentForm: (patientId: string, courseId: string) => void;
   onOpenConsentForm: (patientId: string, courseId: string) => void;
+  onGenerateConsultQuestionnaire: (patientId: string, courseId: string) => void;
+  onOpenConsultQuestionnaire: (patientId: string, courseId: string) => void;
   onRestoreArchivedPatient: (patientId: string) => void;
   }) {
   const allCourseRows = props.dashboard?.activeCourses || [];
@@ -2166,18 +2165,7 @@ export function DashboardScreen(props: {
                       </div>
                       <div className="patient-row-actions">
                         <button onClick={() => props.onEditPendingCourse(patientId, row.courseId, "intake")}>Edit Intake</button>
-                        {row.hasConsentForm ? (
-                          <>
-                            <button onClick={() => props.onOpenConsentForm(patientId, row.courseId)}>Open Consent Form</button>
-                            <button onClick={() => props.onGenerateConsentForm(row.courseId)}>Re-sign Consent</button>
-                            <button onClick={() => props.onUploadConsentForm(patientId, row.courseId)}>Replace Consent</button>
-                          </>
-                        ) : (
-                          <>
-                            <button onClick={() => props.onGenerateConsentForm(row.courseId)}>Review / Sign Consent</button>
-                            <button onClick={() => props.onUploadConsentForm(patientId, row.courseId)}>Import Signed Consent</button>
-                          </>
-                        )}
+                        <button onClick={() => props.onOpenConsultForms(patientId, row.courseId)}>Consult Forms</button>
                         <CourseScheduleMenu
                           hasSchedule={scheduledCourseIds.has(row.courseId)}
                           onOpenSchedule={() => props.onScheduleCourse(row.courseId)}
@@ -2208,8 +2196,10 @@ export function DocumentOnlyScreen(props: {
   onEditRecord: (recordId: string) => void;
   onDeleteRecord: (recordId: string) => void;
   onReviewConsent: (recordId: string) => void;
+  onGenerateConsultQuestionnaire: (recordId: string) => void;
   onGenerateSimWorksheet: (recordId: string) => void;
   onOpenConsent: (asset: AssetReference) => void;
+  onOpenConsultQuestionnaire: (asset: AssetReference) => void;
   onOpenSimWorksheet: (asset: AssetReference) => void;
 }) {
   const records = (props.snapshot?.records ?? []).filter((detail) =>
@@ -2226,8 +2216,8 @@ export function DocumentOnlyScreen(props: {
       <section className="panel">
         <div className="section-header">
           <div>
-            <h2>Consent / Sim Docs</h2>
-            <p>Generate and sign consent forms first, then add worksheet-only setup when you need the sim worksheet.</p>
+            <h2>Consult Form Generator</h2>
+            <p>Generate the consult questionnaire, consent form, and sim worksheet from one patient-info record.</p>
           </div>
           <button className="primary" onClick={props.onAddRecord}>Add Patient Info</button>
         </div>
@@ -2242,14 +2232,15 @@ export function DocumentOnlyScreen(props: {
 
       {!records.length ? (
         <section className="panel empty-state">
-          <h3>No Document Records Yet</h3>
-          <p>Create a document-only record to review/sign consent and generate a sim worksheet in one place.</p>
+          <h3>No Consult Forms Yet</h3>
+          <p>Create a patient-info record to generate consult forms in one place.</p>
         </section>
       ) : (
         <section className="panel">
           <div className="patient-list">
             {records.map((detail) => {
               const consentFile = detail.files.find((file) => file.fileType === "consent_form") ?? null;
+              const questionnaireFile = detail.files.find((file) => file.fileType === "consult_questionnaire") ?? null;
               const worksheetFile = detail.files.find((file) => file.fileType === "sim_worksheet") ?? null;
               return (
                 <article className="patient-row-card patient-row-grouped" key={detail.record.id}>
@@ -2277,6 +2268,23 @@ export function DocumentOnlyScreen(props: {
                       >
                         Delete Record
                       </button>
+                    </div>
+                  </div>
+
+                  <div className="patient-row-grouped-course-row">
+                    <div>
+                      <div className="strong" style={{ fontSize: "0.92rem" }}>Consult Questionnaire</div>
+                      <div className="muted" style={{ fontSize: "0.85rem" }}>
+                        {questionnaireFile ? "Questionnaire is saved for this record." : "Ask and save the consult questionnaire around consent time."}
+                      </div>
+                    </div>
+                    <div className="patient-row-actions">
+                      <button onClick={() => props.onGenerateConsultQuestionnaire(detail.record.id)}>
+                        {questionnaireFile ? "Regenerate Questionnaire" : "Generate Questionnaire"}
+                      </button>
+                      {questionnaireFile ? (
+                        <button onClick={() => props.onOpenConsultQuestionnaire(questionnaireFile.fileAsset)}>Open Questionnaire</button>
+                      ) : null}
                     </div>
                   </div>
 
@@ -2337,7 +2345,9 @@ export function PatientScreen(props: {
   onCompleteCourse: (courseId: string) => void;
   onRestoreCourse: (courseId: string) => void;
   onOpenPdf: (asset: AssetReference) => void;
+  onOpenConsultForms: (patientId: string, courseId: string) => void;
   onGenerateConsentForm: (courseId: string) => void;
+  onGenerateConsultQuestionnaire: (patientId: string, courseId: string) => void;
   onUploadConsentForm: (patientId: string, courseId: string) => void;
   onDeleteVisit: (visitId: string) => void;
 }) {
@@ -2426,7 +2436,6 @@ export function PatientScreen(props: {
             </p>
           </div>
           {pendingCourses.map((courseDetail) => {
-            const consentDocument = getCourseConsentDocument(courseDetail);
             return (
               <section className="panel" key={courseDetail.course.id}>
                 <div className="section-header">
@@ -2436,18 +2445,9 @@ export function PatientScreen(props: {
                   </div>
                   <div className="button-row">
                     <button onClick={() => props.onEditCourse(courseDetail.course.id)}>Edit Intake</button>
-                    {consentDocument ? (
-                      <>
-                        <button onClick={() => props.onOpenPdf(consentDocument.fileAsset)}>Open Consent Form</button>
-                        <button onClick={() => props.onGenerateConsentForm(courseDetail.course.id)}>Re-sign Consent</button>
-                        <button onClick={() => props.onUploadConsentForm(courseDetail.course.patientId, courseDetail.course.id)}>Replace Consent</button>
-                      </>
-                    ) : (
-                      <>
-                        <button onClick={() => props.onGenerateConsentForm(courseDetail.course.id)}>Review / Sign Consent</button>
-                        <button onClick={() => props.onUploadConsentForm(courseDetail.course.patientId, courseDetail.course.id)}>Import Signed Consent</button>
-                      </>
-                    )}
+                    <button onClick={() => props.onOpenConsultForms(courseDetail.course.patientId, courseDetail.course.id)}>
+                      Consult Forms
+                    </button>
                     <CourseScheduleMenu
                       hasSchedule={scheduledCourseIds.has(courseDetail.course.id)}
                       onOpenSchedule={() => props.onScheduleCourse(courseDetail.course.id)}

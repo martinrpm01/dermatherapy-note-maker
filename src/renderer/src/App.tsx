@@ -7,6 +7,7 @@ import {
   createEmptyDocumentOnlyInput,
   buildDocumentOnlySyntheticContext
 } from "../../shared/document-only";
+import { createDefaultConsultQuestionnaireInput } from "../../shared/consult-questionnaire-pdf";
 import {
   buildVisitPreviewText,
   createCourseFormFromDetail,
@@ -34,6 +35,7 @@ import {
 } from "./screen-components";
 import {
   ConsentSigningModal,
+  ConsultQuestionnaireModal,
   CourseConsentModal,
   DocumentOnlyRecordModal,
   DocumentOnlyWorksheetModal,
@@ -59,6 +61,7 @@ import type {
   ArchiveSnapshot,
   BootstrapPayload,
   ConsentSigningInput,
+  ConsultQuestionnaireInput,
   CourseInput,
   DashboardSnapshot,
   DocumentOnlyInput,
@@ -114,9 +117,25 @@ type DocumentOnlyConsentSigningState = {
   input: ConsentSigningInput;
 };
 
+type ConsultQuestionnaireState =
+  | {
+      kind: "course";
+      patientId: string;
+      courseId: string;
+      title: string;
+      input: ConsultQuestionnaireInput;
+    }
+  | {
+      kind: "document-only";
+      recordId: string;
+      title: string;
+      input: ConsultQuestionnaireInput;
+    };
+
 type CourseConsentActionsState = {
   patientId: string;
   courseId: string;
+  mode: "consult_forms" | "documents";
 };
 
 type RecoveryDraft =
@@ -499,6 +518,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
   const [courseCompletionFacePhotoUpload, setCourseCompletionFacePhotoUpload] = useState<StoredAssetUpload | null>(null);
   const [courseCompletionNeedsFacePhoto, setCourseCompletionNeedsFacePhoto] = useState(false);
   const [consentSigning, setConsentSigning] = useState<CourseConsentSigningState | DocumentOnlyConsentSigningState | null>(null);
+  const [consultQuestionnaire, setConsultQuestionnaire] = useState<ConsultQuestionnaireState | null>(null);
   const [courseConsentActions, setCourseConsentActions] = useState<CourseConsentActionsState | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [templateDraft, setTemplateDraft] = useState("");
@@ -1055,6 +1075,17 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     setPatientDetail(await appClient.getPatientDetail(patientId));
   }
 
+  async function openCourseConsentActions(patientId: string, courseId: string, mode: CourseConsentActionsState["mode"]) {
+    if (!appClient) return;
+    const detail = await appClient.getPatientDetail(patientId);
+    if (!detail.courses.some((courseDetail) => courseDetail.course.id === courseId)) {
+      window.alert("This course could not be found. Refresh the patient and try again.");
+      return;
+    }
+    setPatientDetail(detail);
+    setCourseConsentActions({ patientId, courseId, mode });
+  }
+
   async function loadCompleted() {
     if (!appClient) return;
     setCompleted(await appClient.listCompleted());
@@ -1512,6 +1543,70 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not generate the sim worksheet.";
       showToast(message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openCourseConsultQuestionnaire(patientId: string, courseId: string) {
+    if (!appClient) return;
+    const detail = patientDetail?.patient.id === patientId ? patientDetail : await appClient.getPatientDetail(patientId);
+    const targetCourse = detail?.courses.find((courseDetail) => courseDetail.course.id === courseId);
+    if (!detail || !targetCourse) {
+      return;
+    }
+    setConsultQuestionnaire({
+      kind: "course",
+      patientId,
+      courseId,
+      title: `${detail.patient.lastName}, ${detail.patient.firstName} - ${targetCourse.course.courseName || "Pending course"}`,
+      input: createDefaultConsultQuestionnaireInput()
+    });
+  }
+
+  async function openExistingCourseConsultQuestionnaire(patientId: string, courseId: string) {
+    if (!appClient) return;
+    const detail = patientDetail?.patient.id === patientId ? patientDetail : await appClient.getPatientDetail(patientId);
+    const document = detail?.courses
+      .find((courseDetail) => courseDetail.course.id === courseId)
+      ?.documents.find((item) => item.documentType === "consult_questionnaire");
+    if (document) {
+      await appClient.openAsset(document.fileAsset);
+    }
+  }
+
+  async function openDocumentOnlyConsultQuestionnaire(recordId: string) {
+    if (!appClient) return;
+    const snapshot = documentOnlySnapshot ?? (await appClient.getDocumentOnlySnapshot());
+    const detail = snapshot.records.find((record) => record.record.id === recordId);
+    if (!detail) {
+      return;
+    }
+
+    setConsultQuestionnaire({
+      kind: "document-only",
+      recordId,
+      title: `${detail.record.lastName}, ${detail.record.firstName}`,
+      input: createDefaultConsultQuestionnaireInput()
+    });
+  }
+
+  async function saveConsultQuestionnaire() {
+    if (!consultQuestionnaire || !appClient) return;
+    setBusy(true);
+    try {
+      if (consultQuestionnaire.kind === "course") {
+        await appClient.generateCourseConsultQuestionnaire(consultQuestionnaire.courseId, consultQuestionnaire.input);
+        await loadDashboard();
+        if (patientDetail?.patient.id === consultQuestionnaire.patientId) {
+          await loadPatient(consultQuestionnaire.patientId);
+        }
+      } else {
+        await appClient.generateDocumentOnlyConsultQuestionnaire(consultQuestionnaire.recordId, consultQuestionnaire.input);
+        await loadDocumentOnly();
+      }
+      setConsultQuestionnaire(null);
+      showToast("Consult questionnaire generated.");
     } finally {
       setBusy(false);
     }
@@ -2099,7 +2194,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
             <button className={screen.name === "dashboard" ? "nav active" : "nav"} onClick={() => setScreen({ name: "dashboard" })}>Active Patients</button>
             <button className={screen.name === "completed" ? "nav active" : "nav"} onClick={() => setScreen({ name: "completed" })}>Completed Patients</button>
             <button className={screen.name === "archive" ? "nav active" : "nav"} onClick={() => setScreen({ name: "archive" })}>Archive</button>
-            <button className={screen.name === "documents" ? "nav active" : "nav"} onClick={() => setScreen({ name: "documents" })}>Consent / Sim Docs</button>
+            <button className={screen.name === "documents" ? "nav active" : "nav"} onClick={() => setScreen({ name: "documents" })}>Consult Form Generator</button>
             <button className={screen.name === "settings" ? "nav active" : "nav"} onClick={() => setScreen({ name: "settings" })}>Settings</button>
           </nav>
         </aside>
@@ -2138,6 +2233,9 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
               })()}
               onGenerateConsentForm={(courseId) => void generateConsentFormForCourse(courseId)}
               onUploadConsentForm={(patientId, courseId) => void uploadConsentFormForCourse(patientId, courseId)}
+              onOpenConsultForms={(patientId, courseId) => void openCourseConsentActions(patientId, courseId, "consult_forms")}
+              onGenerateConsultQuestionnaire={(patientId, courseId) => void openCourseConsultQuestionnaire(patientId, courseId)}
+              onOpenConsultQuestionnaire={(patientId, courseId) => void openExistingCourseConsultQuestionnaire(patientId, courseId)}
               onScheduleCourse={(courseId) => setScreen({ name: "schedule", courseId })}
               onPrintCourseSchedule={(courseId) => void printCourseSchedule(courseId)}
               onDeleteCourseSchedule={(courseId) => deleteCourseTreatmentSchedule(courseId)}
@@ -2185,10 +2283,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
               if (!targetCourse) {
                 return;
               }
-              setCourseConsentActions({
-                patientId: patientDetail.patient.id,
-                courseId: targetCourse.course.id
-              });
+              void openCourseConsentActions(patientDetail.patient.id, targetCourse.course.id, "documents");
             }}
             onCompleteCourseSetup={(courseId) => {
               const targetCourse = patientDetail.courses.find((courseDetail) => courseDetail.course.id === courseId);
@@ -2222,7 +2317,9 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
               await loadPatient(patientDetail.patient.id);
             })()}
               onOpenPdf={(asset) => void appClient?.openAsset(asset)}
+              onOpenConsultForms={(patientId, courseId) => void openCourseConsentActions(patientId, courseId, "consult_forms")}
               onGenerateConsentForm={(courseId) => void generateConsentFormForCourse(courseId)}
+              onGenerateConsultQuestionnaire={(patientId, courseId) => void openCourseConsultQuestionnaire(patientId, courseId)}
               onUploadConsentForm={(patientId, courseId) => void uploadConsentFormForCourse(patientId, courseId)}
               onDeleteVisit={(visitId) => void (async () => {
               if (!appClient) return;
@@ -2416,8 +2513,10 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
               void deleteDocumentOnlyForm(recordId);
             }}
             onReviewConsent={(recordId) => void openConsentSigningForDocumentOnly(recordId)}
+            onGenerateConsultQuestionnaire={(recordId) => void openDocumentOnlyConsultQuestionnaire(recordId)}
             onGenerateSimWorksheet={(recordId) => void openDocumentOnlyWorksheetSetup(recordId)}
             onOpenConsent={(asset) => void appClient?.openAsset(asset)}
+            onOpenConsultQuestionnaire={(asset) => void appClient?.openAsset(asset)}
             onOpenSimWorksheet={(asset) => void appClient?.openAsset(asset)}
           />
         ) : null}
@@ -2583,18 +2682,43 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
               onSave={() => void saveAndGenerateDocumentOnlySimWorksheet()}
             />
           ) : null}
-          {courseConsentActions && patientDetail ? (() => {
+          {consultQuestionnaire ? (
+            <ConsultQuestionnaireModal
+              title={consultQuestionnaire.title}
+              questionnaire={consultQuestionnaire.input}
+              busy={busy}
+              onChange={(next) => setConsultQuestionnaire((current) => (current ? { ...current, input: next } : current))}
+              onClose={() => setConsultQuestionnaire(null)}
+              onSave={() => void saveConsultQuestionnaire()}
+            />
+          ) : null}
+          {courseConsentActions && patientDetail?.patient.id === courseConsentActions.patientId ? (() => {
             const targetCourse = patientDetail.courses.find((courseDetail) => courseDetail.course.id === courseConsentActions.courseId);
             if (!targetCourse) {
               return null;
             }
             const consentDocument = targetCourse.documents.find((document) => document.documentType === "consent_form") ?? null;
+            const consultQuestionnaireDocument = targetCourse.documents.find((document) => document.documentType === "consult_questionnaire") ?? null;
             const simWorksheetDocument = targetCourse.documents.find((document) => document.documentType === "sim_worksheet") ?? null;
+            const isConsultForms = courseConsentActions.mode === "consult_forms";
             return (
               <CourseConsentModal
                 courseName={targetCourse.course.courseName || "this course"}
+                title={isConsultForms ? "Consult Forms" : "Documents"}
+                description={
+                  isConsultForms
+                    ? `Manage consult forms for ${targetCourse.course.courseName || "this course"}.`
+                    : undefined
+                }
+                footerNote={
+                  isConsultForms
+                    ? "Reminder: The sim worksheet will be generated when completing course setup."
+                    : undefined
+                }
                 hasConsentForm={Boolean(consentDocument)}
+                hasConsultQuestionnaire={Boolean(consultQuestionnaireDocument)}
                 hasSimWorksheet={Boolean(simWorksheetDocument)}
+                showSimWorksheet={!isConsultForms}
                 busy={busy}
                 onClose={() => setCourseConsentActions(null)}
                 onOpenConsentForm={() => {
@@ -2607,6 +2731,15 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
                   void generateConsentFormForCourse(targetCourse.course.id);
                 }}
                 onUploadConsentForm={() => void uploadConsentFormForCourse(targetCourse.course.patientId, targetCourse.course.id)}
+                onOpenConsultQuestionnaire={() => {
+                  if (consultQuestionnaireDocument) {
+                    void appClient?.openAsset(consultQuestionnaireDocument.fileAsset);
+                  }
+                }}
+                onGenerateConsultQuestionnaire={() => {
+                  setCourseConsentActions(null);
+                  void openCourseConsultQuestionnaire(targetCourse.course.patientId, targetCourse.course.id);
+                }}
                 onOpenSimWorksheet={() => {
                   if (simWorksheetDocument) {
                     void appClient?.openAsset(simWorksheetDocument.fileAsset);

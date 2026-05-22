@@ -20,6 +20,7 @@ import {
   parseWorksheetSelection
 } from "../../shared/note-rules";
 import type {
+  ConsultQuestionnaireInput,
   ConsentSigningInput,
   CourseInput,
   DocumentOnlyInput,
@@ -53,6 +54,21 @@ const DIAGNOSIS_OPTIONS = [
   "Squamous Cell Carcinoma",
   "Squamous Cell Carcinoma in-situ"
 ] as const;
+
+type QuestionnaireItemKey =
+  | "medicalDevices"
+  | "delayedWoundHealing"
+  | "pastRadiation"
+  | "smoking"
+  | "lupus"
+  | "scleroderma"
+  | "keloids"
+  | "otherSkinIllnesses"
+  | "transplantHistory"
+  | "bloodThinners"
+  | "recentTreatmentAreaTreatments";
+
+const RECENT_TREATMENT_OPTIONS = ["Lasers", "Chemical peels", "Chemo cream"] as const;
 
 const CONSENT_REVIEW_SECTIONS = [
   {
@@ -650,6 +666,357 @@ export function ConsentSigningModal(props: {
             </div>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+function QuestionnaireItemField(props: {
+  title: string;
+  question: string;
+  value: ConsultQuestionnaireInput[QuestionnaireItemKey];
+  detailsPlaceholder?: string;
+  onChange: (next: ConsultQuestionnaireInput[QuestionnaireItemKey]) => void;
+}) {
+  return (
+    <div className="subpanel compact-course-subpanel">
+      <div className="section-header compact">
+        <div>
+          <h4 style={{ marginBottom: "0.25rem" }}>{props.title}</h4>
+          <p className="muted" style={{ margin: 0, fontSize: "0.86rem", lineHeight: 1.35 }}>{props.question}</p>
+        </div>
+        <label style={{ minWidth: "96px" }}>
+          Answer
+          <select
+            value={props.value.answer}
+            onChange={(event) => props.onChange({ ...props.value, answer: event.target.value as ConsultQuestionnaireInput[QuestionnaireItemKey]["answer"] })}
+          >
+            <option value="">Select</option>
+            <option value="no">No</option>
+            <option value="yes">Yes</option>
+          </select>
+        </label>
+      </div>
+      {props.value.answer === "yes" ? (
+        <label>
+          Details
+          <input
+            placeholder={props.detailsPlaceholder ?? "Add details if yes"}
+            value={props.value.details}
+            onChange={(event) => props.onChange({ ...props.value, details: event.target.value })}
+          />
+        </label>
+      ) : null}
+    </div>
+  );
+}
+
+function deriveSkinConditionsAnswer(questionnaire: ConsultQuestionnaireInput) {
+  if (questionnaire.skinConditionsAnswer) {
+    return questionnaire.skinConditionsAnswer;
+  }
+  return [questionnaire.lupus, questionnaire.scleroderma, questionnaire.keloids, questionnaire.otherSkinIllnesses].some((item) => item.answer === "yes")
+    ? "yes"
+    : "no";
+}
+
+function parseRecentTreatmentDetails(details: string) {
+  const parts = details.split(",").map((part) => part.trim()).filter(Boolean);
+  const selected = RECENT_TREATMENT_OPTIONS.filter((option) =>
+    parts.some((part) => part.toLowerCase() === option.toLowerCase())
+  );
+  return { selected };
+}
+
+function buildRecentTreatmentDetails(selected: readonly string[]) {
+  return selected.join(", ");
+}
+
+export function ConsultQuestionnaireModal(props: {
+  title: string;
+  questionnaire: ConsultQuestionnaireInput;
+  busy: boolean;
+  onChange: (next: ConsultQuestionnaireInput) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const q = props.questionnaire;
+
+  function updateItem(key: QuestionnaireItemKey, value: ConsultQuestionnaireInput[QuestionnaireItemKey]) {
+    props.onChange({ ...q, [key]: value });
+  }
+
+  function updateSkinAnswer(answer: ConsultQuestionnaireInput["skinConditionsAnswer"]) {
+    if (answer === "no") {
+      props.onChange({
+        ...q,
+        skinConditionsAnswer: "no",
+        lupus: { answer: "no", details: "" },
+        scleroderma: { answer: "no", details: "" },
+        keloids: { answer: "no", details: "" },
+        otherSkinIllnesses: { answer: "no", details: "" }
+      });
+      return;
+    }
+
+    props.onChange({ ...q, skinConditionsAnswer: answer });
+  }
+
+  function updateSkinCondition(key: "lupus" | "scleroderma" | "keloids" | "otherSkinIllnesses", checked: boolean) {
+    props.onChange({
+      ...q,
+      skinConditionsAnswer: "yes",
+      [key]: {
+        ...q[key],
+        answer: checked ? "yes" : "no",
+        details: checked ? q[key].details : ""
+      }
+    });
+  }
+
+  function updateRecentTreatmentChoice(option: string, checked: boolean) {
+    const parsed = parseRecentTreatmentDetails(q.recentTreatmentAreaTreatments.details);
+    const selected = checked
+      ? Array.from(new Set([...parsed.selected, option]))
+      : parsed.selected.filter((item) => item !== option);
+    props.onChange({
+      ...q,
+      recentTreatmentAreaTreatments: {
+        ...q.recentTreatmentAreaTreatments,
+        answer: "yes",
+        details: buildRecentTreatmentDetails(selected)
+      }
+    });
+  }
+
+  const skinAnswer = deriveSkinConditionsAnswer(q);
+  const recentTreatmentDetails = parseRecentTreatmentDetails(q.recentTreatmentAreaTreatments.details);
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal-card wide">
+        <h3>Consult Questionnaire</h3>
+        <div className="pending-course-intro">
+          <p className="muted">
+            Ask these around the consent and sim/consult step. Yes answers should include enough detail for the clinical team to review before treatment starts.
+          </p>
+          {props.title ? <p className="muted" style={{ marginTop: "0.4rem" }}>{props.title}</p> : null}
+        </div>
+        <div className="site-grid two-site-course-grid">
+          <QuestionnaireItemField
+            title="Medical Devices"
+            question="Implanted medical devices near the treatment area?"
+            value={q.medicalDevices}
+            detailsPlaceholder="Device type and location"
+            onChange={(next) => updateItem("medicalDevices", next)}
+          />
+          <QuestionnaireItemField
+            title="Delayed Wound Healing"
+            question="Delayed wound healing or healing issues in the past?"
+            value={q.delayedWoundHealing}
+            onChange={(next) => updateItem("delayedWoundHealing", next)}
+          />
+          <QuestionnaireItemField
+            title="Past Radiation"
+            question="Therapeutic radiation in the past?"
+            value={q.pastRadiation}
+            detailsPlaceholder="Where and when, if known"
+            onChange={(next) => updateItem("pastRadiation", next)}
+          />
+          <div className="subpanel compact-course-subpanel">
+            <div className="section-header compact">
+              <div>
+                <h4 style={{ marginBottom: "0.25rem" }}>Alcohol Consumption</h4>
+                <p className="muted" style={{ margin: 0, fontSize: "0.86rem", lineHeight: 1.35 }}>Does the patient consume alcohol?</p>
+              </div>
+              <label style={{ minWidth: "96px" }}>
+                Answer
+                <select
+                  value={q.alcoholUse.answer}
+                  onChange={(event) => props.onChange({ ...q, alcoholUse: { ...q.alcoholUse, answer: event.target.value as typeof q.alcoholUse.answer } })}
+                >
+                  <option value="">Select</option>
+                  <option value="no">No</option>
+                  <option value="yes">Yes</option>
+                </select>
+              </label>
+            </div>
+            {q.alcoholUse.answer === "yes" ? (
+              <div className="form-grid course-top-grid">
+                <label>
+                  Drinks Per Week
+                  <input
+                    value={q.alcoholUse.drinksPerWeek}
+                    onChange={(event) => props.onChange({ ...q, alcoholUse: { ...q.alcoholUse, drinksPerWeek: event.target.value } })}
+                  />
+                </label>
+                <label>
+                  Details
+                  <input
+                    value={q.alcoholUse.details}
+                    onChange={(event) => props.onChange({ ...q, alcoholUse: { ...q.alcoholUse, details: event.target.value } })}
+                  />
+                </label>
+              </div>
+            ) : null}
+          </div>
+          <div className="subpanel compact-course-subpanel">
+            <div className="section-header compact">
+              <div>
+                <h4 style={{ marginBottom: "0.25rem" }}>Diabetes</h4>
+                <p className="muted" style={{ margin: 0, fontSize: "0.86rem", lineHeight: 1.35 }}>Does the patient have diabetes?</p>
+              </div>
+              <label style={{ minWidth: "96px" }}>
+                Answer
+                <select
+                  value={q.diabetes.answer}
+                  onChange={(event) => props.onChange({ ...q, diabetes: { ...q.diabetes, answer: event.target.value as typeof q.diabetes.answer } })}
+                >
+                  <option value="">Select</option>
+                  <option value="no">No</option>
+                  <option value="yes">Yes</option>
+                </select>
+              </label>
+            </div>
+            {q.diabetes.answer === "yes" ? (
+              <div className="form-grid course-top-grid">
+                <label>
+                  Controlled?
+                  <input
+                    value={q.diabetes.controlled}
+                    onChange={(event) => props.onChange({ ...q, diabetes: { ...q.diabetes, controlled: event.target.value } })}
+                  />
+                </label>
+                <label>
+                  Type
+                  <input
+                    value={q.diabetes.diabetesType}
+                    onChange={(event) => props.onChange({ ...q, diabetes: { ...q.diabetes, diabetesType: event.target.value } })}
+                  />
+                </label>
+                <label>
+                  Details
+                  <input
+                    value={q.diabetes.details}
+                    onChange={(event) => props.onChange({ ...q, diabetes: { ...q.diabetes, details: event.target.value } })}
+                  />
+                </label>
+              </div>
+            ) : null}
+          </div>
+          <QuestionnaireItemField
+            title="Smoking"
+            question="Does the patient currently smoke?"
+            value={q.smoking}
+            detailsPlaceholder="Approximate amount"
+            onChange={(next) => updateItem("smoking", next)}
+          />
+          <div className="subpanel compact-course-subpanel">
+            <div className="section-header compact">
+              <div>
+                <h4 style={{ marginBottom: "0.25rem" }}>Skin Conditions</h4>
+                <p className="muted" style={{ margin: 0, fontSize: "0.86rem", lineHeight: 1.35 }}>Any lupus, scleroderma, keloids, or other skin-related illnesses?</p>
+              </div>
+              <label style={{ minWidth: "96px" }}>
+                Answer
+                <select
+                  value={skinAnswer}
+                  onChange={(event) => updateSkinAnswer(event.target.value as ConsultQuestionnaireInput["skinConditionsAnswer"])}
+                >
+                  <option value="">Select</option>
+                  <option value="no">No</option>
+                  <option value="yes">Yes</option>
+                </select>
+              </label>
+            </div>
+            {skinAnswer === "yes" ? (
+              <div className="checkbox-group compact">
+                <label className="checkbox-label">
+                  <input type="checkbox" checked={q.lupus.answer === "yes"} onChange={(event) => updateSkinCondition("lupus", event.target.checked)} />
+                  <span>Lupus</span>
+                </label>
+                <label className="checkbox-label">
+                  <input type="checkbox" checked={q.scleroderma.answer === "yes"} onChange={(event) => updateSkinCondition("scleroderma", event.target.checked)} />
+                  <span>Scleroderma</span>
+                </label>
+                <label className="checkbox-label">
+                  <input type="checkbox" checked={q.keloids.answer === "yes"} onChange={(event) => updateSkinCondition("keloids", event.target.checked)} />
+                  <span>Prone to keloids</span>
+                </label>
+                <label className="checkbox-label">
+                  <input type="checkbox" checked={q.otherSkinIllnesses.answer === "yes"} onChange={(event) => updateSkinCondition("otherSkinIllnesses", event.target.checked)} />
+                  <span>Other skin-related illness</span>
+                </label>
+                {q.otherSkinIllnesses.answer === "yes" ? (
+                  <label>
+                    Other Details
+                    <input
+                      value={q.otherSkinIllnesses.details}
+                      onChange={(event) => updateItem("otherSkinIllnesses", { ...q.otherSkinIllnesses, answer: "yes", details: event.target.value })}
+                    />
+                  </label>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+          <QuestionnaireItemField
+            title="Transplant"
+            question="History of organ or tissue transplant?"
+            value={q.transplantHistory}
+            onChange={(next) => updateItem("transplantHistory", next)}
+          />
+          <QuestionnaireItemField
+            title="Blood Thinners"
+            question="Prescribed blood thinning medication?"
+            value={q.bloodThinners}
+            detailsPlaceholder="Medication type"
+            onChange={(next) => updateItem("bloodThinners", next)}
+          />
+          <div className="subpanel compact-course-subpanel">
+            <div className="section-header compact">
+              <div>
+                <h4 style={{ marginBottom: "0.25rem" }}>Medical Treatments</h4>
+                <p className="muted" style={{ margin: 0, fontSize: "0.86rem", lineHeight: 1.35 }}>Recent treatment-area treatments besides biopsy?</p>
+              </div>
+              <label style={{ minWidth: "96px" }}>
+                Answer
+                <select
+                  value={q.recentTreatmentAreaTreatments.answer}
+                  onChange={(event) => updateItem("recentTreatmentAreaTreatments", { ...q.recentTreatmentAreaTreatments, answer: event.target.value as typeof q.recentTreatmentAreaTreatments.answer })}
+                >
+                  <option value="">Select</option>
+                  <option value="no">No</option>
+                  <option value="yes">Yes</option>
+                </select>
+              </label>
+            </div>
+            {q.recentTreatmentAreaTreatments.answer === "yes" ? (
+              <div className="checkbox-group compact">
+                {RECENT_TREATMENT_OPTIONS.map((option) => (
+                  <label className="checkbox-label" key={option}>
+                    <input
+                      type="checkbox"
+                      checked={recentTreatmentDetails.selected.includes(option)}
+                      onChange={(event) => updateRecentTreatmentChoice(option, event.target.checked)}
+                    />
+                    <span>{option}</span>
+                  </label>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
+        <div className="subpanel">
+          <p className="muted" style={{ margin: 0 }}>
+            Reminder: below-knee treatment areas or delayed/slow healing history need the wound risk assessment and leg documents.
+          </p>
+        </div>
+        <div className="button-row">
+          <button onClick={props.onClose}>Cancel</button>
+          <button className="primary" disabled={props.busy} onClick={props.onSave}>
+            Save Questionnaire PDF
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1504,22 +1871,29 @@ export function DocumentOnlyWorksheetModal(props: {
 
 export function CourseConsentModal(props: {
   courseName: string;
+  title?: string;
+  description?: string;
+  footerNote?: string;
   hasConsentForm: boolean;
+  hasConsultQuestionnaire: boolean;
   hasSimWorksheet: boolean;
+  showSimWorksheet?: boolean;
   busy: boolean;
   onClose: () => void;
   onOpenConsentForm?: () => void;
   onGenerateConsentForm?: () => void;
   onUploadConsentForm?: () => void;
+  onOpenConsultQuestionnaire?: () => void;
+  onGenerateConsultQuestionnaire?: () => void;
   onOpenSimWorksheet?: () => void;
   onGenerateSimWorksheet?: () => void;
 }) {
   return (
     <div className="modal-backdrop">
       <div className="modal-card">
-        <h3>Documents</h3>
+        <h3>{props.title ?? "Documents"}</h3>
         <p className="muted" style={{ marginTop: 0 }}>
-          Manage the course documents for {props.courseName || "this course"} after treatment setup has been completed.
+          {props.description ?? `Manage the course documents for ${props.courseName || "this course"} after treatment setup has been completed.`}
         </p>
         <div className="subpanel">
           <h4 style={{ marginBottom: "0.6rem" }}>Consent Form</h4>
@@ -1539,18 +1913,40 @@ export function CourseConsentModal(props: {
           </div>
         </div>
         <div className="subpanel">
-          <h4 style={{ marginBottom: "0.6rem" }}>Sim Worksheet</h4>
+          <h4 style={{ marginBottom: "0.6rem" }}>Consult Questionnaire</h4>
           <div className="button-row">
-            {props.hasSimWorksheet ? (
+            {props.hasConsultQuestionnaire ? (
               <>
-                <button onClick={props.onOpenSimWorksheet}>Open Sim Worksheet</button>
-                <button onClick={props.onGenerateSimWorksheet}>Regenerate Sim Worksheet</button>
+                <button onClick={props.onOpenConsultQuestionnaire}>Open Questionnaire</button>
+                <button onClick={props.onGenerateConsultQuestionnaire}>Regenerate Questionnaire</button>
               </>
             ) : (
-              <button onClick={props.onGenerateSimWorksheet}>Generate Sim Worksheet</button>
+              <button onClick={props.onGenerateConsultQuestionnaire}>Generate Questionnaire</button>
             )}
           </div>
         </div>
+        {props.showSimWorksheet === false ? null : (
+          <div className="subpanel">
+            <h4 style={{ marginBottom: "0.6rem" }}>Sim Worksheet</h4>
+            <div className="button-row">
+              {props.hasSimWorksheet ? (
+                <>
+                  <button onClick={props.onOpenSimWorksheet}>Open Sim Worksheet</button>
+                  <button onClick={props.onGenerateSimWorksheet}>Regenerate Sim Worksheet</button>
+                </>
+              ) : (
+                <button onClick={props.onGenerateSimWorksheet}>Generate Sim Worksheet</button>
+              )}
+            </div>
+          </div>
+        )}
+        {props.footerNote ? (
+          <div className="subpanel" style={{ marginBottom: 0 }}>
+            <p className="muted" style={{ margin: 0, fontSize: "0.9rem" }}>
+              {props.footerNote}
+            </p>
+          </div>
+        ) : null}
         <div className="button-row">
           <button onClick={props.onClose}>Close</button>
         </div>

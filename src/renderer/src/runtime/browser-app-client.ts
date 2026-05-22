@@ -69,6 +69,7 @@ import {
   buildConsentUploadPdf,
   buildSignedConsentFormPdfFromTemplateBytes
 } from "../../../shared/consent-form-pdf";
+import { buildConsultQuestionnairePdfFromTemplateBytes } from "../../../shared/consult-questionnaire-pdf";
 import { buildSimWorksheetPdfFromTemplateBytes } from "../../../shared/sim-worksheet-pdf";
 import { validateTemplate } from "../../../shared/template-engine";
 import { buildDocumentOnlySyntheticContext } from "../../../shared/document-only";
@@ -77,6 +78,7 @@ import { BrowserStructuredDataStore } from "../storage/browser-structured-data-s
 import { checkBrowserRefreshUpdate } from "../refresh-pulse";
 import brandLogo from "../assets/clear-skin-note-logo.jpg";
 import consentFormTemplateUrl from "../../../../assets/templates/radiation-therapy-consent-form.pdf";
+import consultQuestionnaireTemplateUrl from "../../../../assets/templates/radiation-therapy-consult-questionnaire.pdf";
 import simWorksheetTemplateUrl from "../../../../assets/templates/radiation-therapy-sim-worksheet.pdf";
 
 export interface BrowserArchiveClientDependencies {
@@ -145,6 +147,7 @@ export class BrowserAppClient implements AppClient {
   private readonly structuredDataStore: BrowserStructuredDataStore;
   private readonly binaryAssetStore: BrowserBinaryAssetStore;
   private consentFormTemplateBytesPromise: Promise<Uint8Array> | null = null;
+  private consultQuestionnaireTemplateBytesPromise: Promise<Uint8Array> | null = null;
   private simWorksheetTemplateBytesPromise: Promise<Uint8Array> | null = null;
   private isLocked = false;
   private hasBootstrapped = false;
@@ -353,6 +356,21 @@ export class BrowserAppClient implements AppClient {
     }
 
     return this.consentFormTemplateBytesPromise;
+  }
+
+  private async readConsultQuestionnaireTemplateBytes() {
+    if (!this.consultQuestionnaireTemplateBytesPromise) {
+      this.consultQuestionnaireTemplateBytesPromise = (async () => {
+        const response = await fetch(consultQuestionnaireTemplateUrl);
+        if (!response.ok) {
+          throw new Error("Could not resolve consult questionnaire template.");
+        }
+
+        return new Uint8Array(await response.arrayBuffer());
+      })();
+    }
+
+    return this.consultQuestionnaireTemplateBytesPromise;
   }
 
   private async bytesToDataUrl(bytes: Uint8Array, mimeType: string) {
@@ -799,7 +817,8 @@ export class BrowserAppClient implements AppClient {
             courseType: course.courseType,
             prescribedFractions: course.prescribedFractions,
             siteSummary: sitesForCourse.map((site) => site.bodyLocation).join(" + "),
-            hasConsentForm: documentsForCourse.some((document) => document.documentType === "consent_form")
+            hasConsentForm: documentsForCourse.some((document) => document.documentType === "consent_form"),
+            hasConsultQuestionnaire: documentsForCourse.some((document) => document.documentType === "consult_questionnaire")
           };
         })
         .filter((course): course is DashboardSnapshot["pendingCourses"][number] => Boolean(course))
@@ -2001,6 +2020,59 @@ export class BrowserAppClient implements AppClient {
     return persistedFile;
   }
 
+  async generateDocumentOnlyConsultQuestionnaire(
+    recordId: string,
+    input: Parameters<AppClient["generateDocumentOnlyConsultQuestionnaire"]>[1]
+  ) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    const detail = structuredDataStore.loadDocumentOnlyDetails([recordId])[0];
+    if (!detail) {
+      throw new Error("Document record not found.");
+    }
+
+    const { patient, course, sites } = buildDocumentOnlySyntheticContext(detail);
+    const existingFile = detail.files.find((file) => file.fileType === "consult_questionnaire") ?? null;
+    const consultQuestionnaire = await buildConsultQuestionnairePdfFromTemplateBytes(
+      await this.readConsultQuestionnaireTemplateBytes(),
+      {
+        patient,
+        course,
+        sites,
+        questionnaire: input
+      }
+    );
+
+    const filePath = binaryAssetStore.saveUpload(
+      {
+        name: consultQuestionnaire.fileName,
+        mimeType: "application/pdf",
+        dataUrl: await this.bytesToDataUrl(consultQuestionnaire.bytes, "application/pdf")
+      },
+      binaryAssetStore.getDocumentOnlyFilesDir(recordId),
+      consultQuestionnaire.caption
+    );
+
+    const persistedFile = structuredDataStore.upsertDocumentOnlyFile(
+      recordId,
+      "consult_questionnaire",
+      filePath,
+      consultQuestionnaire.caption,
+      "application/pdf",
+      consultQuestionnaire.fileName
+    );
+
+    const previousPath = existingFile ? this.getStoredAssetPath(binaryAssetStore, existingFile.fileAsset) : null;
+    if (previousPath && previousPath !== filePath) {
+      this.deleteStoredFiles(binaryAssetStore, [previousPath]);
+    }
+
+    this.triggerPdfDownload(consultQuestionnaire.fileName, consultQuestionnaire.bytes);
+    await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
+    return persistedFile;
+  }
+
   async generateDocumentOnlySimWorksheet(recordId: string) {
     this.assertUnlocked();
     const structuredDataStore = await this.getStructuredDataStore();
@@ -2105,6 +2177,66 @@ export class BrowserAppClient implements AppClient {
     }
 
     this.triggerPdfDownload(consentForm.fileName, consentForm.bytes);
+    await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
+    return persistedDocument;
+  }
+
+  async generateCourseConsultQuestionnaire(
+    courseId: string,
+    input: Parameters<AppClient["generateCourseConsultQuestionnaire"]>[1]
+  ) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    const course = structuredDataStore.fetchCourse(courseId);
+    if (!course) {
+      throw new Error("Course not found.");
+    }
+
+    const patient = structuredDataStore.fetchPatient(course.patientId);
+    if (!patient) {
+      throw new Error("Patient not found.");
+    }
+
+    const sites = structuredDataStore.fetchSites([course.id]);
+    const existingDocument = structuredDataStore
+      .fetchCourseDocuments(course.id)
+      .find((document) => document.documentType === "consult_questionnaire") ?? null;
+    const consultQuestionnaire = await buildConsultQuestionnairePdfFromTemplateBytes(
+      await this.readConsultQuestionnaireTemplateBytes(),
+      {
+        patient,
+        course,
+        sites,
+        questionnaire: input
+      }
+    );
+
+    const filePath = binaryAssetStore.saveUpload(
+      {
+        name: consultQuestionnaire.fileName,
+        mimeType: "application/pdf",
+        dataUrl: await this.bytesToDataUrl(consultQuestionnaire.bytes, "application/pdf")
+      },
+      binaryAssetStore.getCourseDocumentsDir(patient.id, course.id),
+      consultQuestionnaire.caption
+    );
+
+    const persistedDocument = structuredDataStore.upsertCourseDocument(
+      course.id,
+      "consult_questionnaire",
+      filePath,
+      consultQuestionnaire.caption,
+      "application/pdf",
+      consultQuestionnaire.fileName
+    );
+
+    const previousPath = existingDocument ? this.getStoredAssetPath(binaryAssetStore, existingDocument.fileAsset) : null;
+    if (previousPath && previousPath !== filePath) {
+      this.deleteStoredFiles(binaryAssetStore, [previousPath]);
+    }
+
+    this.triggerPdfDownload(consultQuestionnaire.fileName, consultQuestionnaire.bytes);
     await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
     return persistedDocument;
   }

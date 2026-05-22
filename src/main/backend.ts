@@ -13,6 +13,7 @@ import type {
 import { buildVisitPdf } from "./pdf";
 import { buildConsentFormPdf, buildSignedConsentFormPdf, buildUploadedConsentPdf } from "./consent-form";
 import { buildSimWorksheetPdf } from "./sim-worksheet";
+import { buildConsultQuestionnairePdf } from "./consult-questionnaire";
 import { PatientArchivePreparationService } from "./archive-preparation";
 import { DesktopPatientArchiveExportService } from "./archive-export";
 import { DesktopPatientArchiveReaderService } from "./archive-reader";
@@ -73,6 +74,7 @@ import type {
   ArchiveSnapshot,
   BootstrapPayload,
   ConsentSigningInput,
+  ConsultQuestionnaireInput,
   DocumentOnlyInput,
   DocumentOnlySnapshot,
   CourseInput,
@@ -622,7 +624,8 @@ export class RadiationNoteService {
             courseType: course.courseType,
             prescribedFractions: course.prescribedFractions,
             siteSummary: sitesForCourse.map((site) => site.bodyLocation).join(" + "),
-            hasConsentForm: documentsForCourse.some((document) => document.documentType === "consent_form")
+            hasConsentForm: documentsForCourse.some((document) => document.documentType === "consent_form"),
+            hasConsultQuestionnaire: documentsForCourse.some((document) => document.documentType === "consult_questionnaire")
           };
         })
         .filter(Boolean)
@@ -1639,6 +1642,60 @@ export class RadiationNoteService {
     return persistedFile;
   }
 
+  async generateDocumentOnlyConsultQuestionnaire(recordId: string, questionnaire: ConsultQuestionnaireInput) {
+    this.assertUnlocked();
+    const detail = this.repository.loadDocumentOnlyDetails([recordId])[0];
+    if (!detail) {
+      throw new Error("Document record not found.");
+    }
+
+    const { patient, course, sites } = buildDocumentOnlySyntheticContext(detail);
+    const existingFile = detail.files.find((file) => file.fileType === "consult_questionnaire") ?? null;
+    const documentsDir = this.assetStore.getDocumentOnlyFilesDir(recordId);
+    this.assetStore.ensureDirectory(documentsDir);
+
+    const consultQuestionnaire = await buildConsultQuestionnairePdf({
+      patient,
+      course,
+      sites,
+      questionnaire
+    });
+    const preferredPath = path.join(documentsDir, consultQuestionnaire.fileName);
+    let outputPath = preferredPath;
+    try {
+      this.assetStore.writeBinaryFile(outputPath, consultQuestionnaire.bytes);
+    } catch (error) {
+      if (!isLockedFileError(error)) {
+        throw error;
+      }
+      outputPath = buildVersionedDocumentPath(preferredPath);
+      this.assetStore.writeBinaryFile(outputPath, consultQuestionnaire.bytes);
+    }
+
+    const persistedFile = this.repository.upsertDocumentOnlyFile(
+      recordId,
+      "consult_questionnaire",
+      outputPath,
+      consultQuestionnaire.caption,
+      "application/pdf",
+      consultQuestionnaire.fileName
+    );
+
+    const previousPath = existingFile ? this.resolveAssetPath(existingFile.fileAsset) : null;
+    if (previousPath && previousPath !== outputPath) {
+      try {
+        this.assetStore.deleteFile(previousPath);
+        this.assetStore.cleanupEmptyDirectoryChain(path.dirname(previousPath), this.assetStore.rootDir);
+      } catch (error) {
+        if (!isLockedFileError(error)) {
+          throw error;
+        }
+      }
+    }
+
+    return persistedFile;
+  }
+
   async generateDocumentOnlySimWorksheet(recordId: string) {
     this.assertUnlocked();
     const detail = this.repository.loadDocumentOnlyDetails([recordId])[0];
@@ -1728,8 +1785,69 @@ export class RadiationNoteService {
       this.assetStore.cleanupEmptyDirectoryChain(path.dirname(previousPath), this.assetStore.rootDir);
     }
 
-      return persistedDocument;
+    return persistedDocument;
+  }
+
+  async generateCourseConsultQuestionnaire(courseId: string, questionnaire: ConsultQuestionnaireInput) {
+    this.assertUnlocked();
+    const course = this.repository.fetchCourse(courseId);
+    if (!course) {
+      throw new Error("Course not found.");
     }
+
+    const patient = this.repository.fetchPatient(course.patientId);
+    if (!patient) {
+      throw new Error("Patient not found.");
+    }
+
+    const sites = this.repository.fetchSites([course.id]);
+    const existingDocument = this.repository
+      .fetchCourseDocuments(course.id)
+      .find((document) => document.documentType === "consult_questionnaire") ?? null;
+    const documentsDir = this.assetStore.getCourseDocumentsDir(patient.id, course.id);
+    this.assetStore.ensureDirectory(documentsDir);
+
+    const consultQuestionnaire = await buildConsultQuestionnairePdf({
+      patient,
+      course,
+      sites,
+      questionnaire
+    });
+    const preferredPath = path.join(documentsDir, consultQuestionnaire.fileName);
+    let outputPath = preferredPath;
+    try {
+      this.assetStore.writeBinaryFile(outputPath, consultQuestionnaire.bytes);
+    } catch (error) {
+      if (!isLockedFileError(error)) {
+        throw error;
+      }
+      outputPath = buildVersionedDocumentPath(preferredPath);
+      this.assetStore.writeBinaryFile(outputPath, consultQuestionnaire.bytes);
+    }
+
+    const persistedDocument = (this.repository as AssetAwareStructuredDataStore).upsertCourseDocument(
+      course.id,
+      "consult_questionnaire",
+      this.assetStore.createAssetReference(outputPath, "course_document")!,
+      consultQuestionnaire.caption,
+      "application/pdf",
+      consultQuestionnaire.fileName
+    );
+
+    const previousPath = existingDocument ? this.resolveAssetPath(existingDocument.fileAsset) : null;
+    if (previousPath && previousPath !== outputPath) {
+      try {
+        this.assetStore.deleteFile(previousPath);
+        this.assetStore.cleanupEmptyDirectoryChain(path.dirname(previousPath), this.assetStore.rootDir);
+      } catch (error) {
+        if (!isLockedFileError(error)) {
+          throw error;
+        }
+      }
+    }
+
+    return persistedDocument;
+  }
 
   async generateCourseSimWorksheet(courseId: string) {
     this.assertUnlocked();

@@ -10,6 +10,7 @@ import { RadiationNoteRepository } from "../src/main/repository";
 import { RadiationNoteService } from "../src/main/backend";
 import { DesktopBinaryAssetStore } from "../src/main/storage/desktop-binary-asset-store";
 import { createEmptyDocumentOnlyInput, createEmptyDocumentOnlySiteInput } from "../src/shared/document-only";
+import { createDefaultConsultQuestionnaireInput } from "../src/shared/consult-questionnaire-pdf";
 import { buildTreatmentDeliveryStatement, formatDisplayDate, getSuggestedNoteType } from "../src/shared/note-rules";
 import { buildVisitPreviewText, createCourseFormFromDetail, createEmptyCourseForm } from "../src/renderer/src/helpers";
 
@@ -1890,6 +1891,37 @@ describe("RadiationNoteService workflow", () => {
 
     const sites = repository.fetchDocumentOnlySites([saved.id]);
     expect(sites.map((site) => site.biopsyDate)).toEqual(["2026-04-01", "2026-04-05"]);
+  });
+
+  it("generates consult questionnaire files for course and document-only records", async () => {
+    const { course } = await createPatientAndCourse();
+    const questionnaire = createDefaultConsultQuestionnaireInput();
+    questionnaire.medicalDevices = { answer: "yes", details: "Pacemaker" };
+
+    const courseDocument = await service.generateCourseConsultQuestionnaire(course.id, questionnaire);
+    expect(courseDocument.documentType).toBe("consult_questionnaire");
+    expect(courseDocument.originalName).toBe("Ava Derm - Radiation Questionaire.pdf");
+
+    const input = createEmptyDocumentOnlyInput("Therapist RT(T)");
+    const record = repository.saveDocumentOnlyRecord({
+      ...input,
+      firstName: "Doc",
+      lastName: "Only",
+      mrn: "MRN-DO",
+      dob: "1940-01-01",
+      sites: [
+        {
+          ...createEmptyDocumentOnlySiteInput(1),
+          treatmentLocationText: "Left cheek",
+          bodyLocation: "Left cheek",
+          diagnosisText: "Basal Cell Carcinoma",
+          icd10: "C44.319"
+        }
+      ]
+    });
+    const documentOnlyFile = await service.generateDocumentOnlyConsultQuestionnaire(record.id, questionnaire);
+    expect(documentOnlyFile.fileType).toBe("consult_questionnaire");
+    expect(documentOnlyFile.originalName).toBe("Doc Only - Radiation Questionaire.pdf");
   });
 
   it("only includes additional notes when provided and places them above follow up", async () => {

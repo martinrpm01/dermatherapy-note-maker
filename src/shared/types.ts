@@ -23,8 +23,8 @@ export type AssetKind =
   | "generated_pdf"
   | "course_document"
   | "settings_logo";
-export type CourseDocumentType = "consent_form" | "sim_worksheet";
-export type DocumentOnlyFileType = "consent_form" | "sim_worksheet";
+export type CourseDocumentType = "consent_form" | "consult_questionnaire" | "sim_worksheet";
+export type DocumentOnlyFileType = "consent_form" | "consult_questionnaire" | "sim_worksheet";
 
 export interface AssetReference {
   assetId: string;
@@ -508,6 +508,35 @@ export interface ConsentSigningInput {
   witnessSignatureDataUrl: string;
 }
 
+export type ConsultQuestionnaireAnswer = "" | "yes" | "no";
+
+export interface ConsultQuestionnaireItemInput {
+  answer: ConsultQuestionnaireAnswer;
+  details: string;
+}
+
+export interface ConsultQuestionnaireInput {
+  medicalDevices: ConsultQuestionnaireItemInput;
+  delayedWoundHealing: ConsultQuestionnaireItemInput;
+  pastRadiation: ConsultQuestionnaireItemInput;
+  alcoholUse: ConsultQuestionnaireItemInput & {
+    drinksPerWeek: string;
+  };
+  diabetes: ConsultQuestionnaireItemInput & {
+    controlled: string;
+    diabetesType: string;
+  };
+  smoking: ConsultQuestionnaireItemInput;
+  skinConditionsAnswer?: ConsultQuestionnaireAnswer;
+  lupus: ConsultQuestionnaireItemInput;
+  scleroderma: ConsultQuestionnaireItemInput;
+  keloids: ConsultQuestionnaireItemInput;
+  otherSkinIllnesses: ConsultQuestionnaireItemInput;
+  transplantHistory: ConsultQuestionnaireItemInput;
+  bloodThinners: ConsultQuestionnaireItemInput;
+  recentTreatmentAreaTreatments: ConsultQuestionnaireItemInput;
+}
+
 export interface VisitInput {
   id?: string;
   patientId: string;
@@ -556,6 +585,7 @@ export interface DashboardPendingCourseRow {
   prescribedFractions: number;
   siteSummary: string;
   hasConsentForm: boolean;
+  hasConsultQuestionnaire: boolean;
 }
 
 export interface VisitNoteBundle {
@@ -729,6 +759,10 @@ export interface AppClient {
   deleteDocumentOnlyRecord: (recordId: string) => Promise<void>;
   generateDocumentOnlyConsent: (recordId: string) => Promise<DocumentOnlyFileRecord>;
   finalizeDocumentOnlyConsent: (recordId: string, input: ConsentSigningInput) => Promise<DocumentOnlyFileRecord>;
+  generateDocumentOnlyConsultQuestionnaire: (
+    recordId: string,
+    input: ConsultQuestionnaireInput
+  ) => Promise<DocumentOnlyFileRecord>;
   generateDocumentOnlySimWorksheet: (recordId: string) => Promise<DocumentOnlyFileRecord>;
   completeCourse: (courseId: string) => Promise<void>;
   restoreCourse: (courseId: string) => Promise<void>;
@@ -744,6 +778,10 @@ export interface AppClient {
   generatePdf: (visitId: string) => Promise<PdfGenerationResult>;
   generateSimWorksheet: (visitId: string) => Promise<VisitAttachmentRecord>;
   generateConsentForm: (courseId: string) => Promise<CourseDocumentRecord>;
+  generateCourseConsultQuestionnaire: (
+    courseId: string,
+    input: ConsultQuestionnaireInput
+  ) => Promise<CourseDocumentRecord>;
   generateCourseSimWorksheet: (courseId: string) => Promise<CourseDocumentRecord>;
   finalizeConsentForm: (courseId: string, input: ConsentSigningInput) => Promise<CourseDocumentRecord>;
   uploadConsentForm: (courseId: string, upload: StoredAssetUpload) => Promise<CourseDocumentRecord>;
