@@ -89,6 +89,7 @@ function createVisit(siteSnapshots: SiteSnapshot[]): VisitNoteRecord {
     vitals: {
       bloodPressure: "",
       heartRate: "",
+      pulse: "",
       oxygenSaturation: "",
       weight: ""
     },

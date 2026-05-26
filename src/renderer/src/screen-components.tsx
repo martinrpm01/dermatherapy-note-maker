@@ -14,7 +14,7 @@ import type {
   AppSettingsView,
   AppUpdateCheckResult
 } from "../../shared/types";
-import { NOTE_TYPE_LABELS, formatBloodPressure, formatDisplayDate, formatHeartRate, formatOxygenSaturation, formatWeight } from "../../shared/note-rules";
+import { NOTE_TYPE_LABELS, formatBloodPressure, formatDisplayDate, formatHeartRate, formatOxygenSaturation, formatPulse, formatWeight } from "../../shared/note-rules";
 import { useResolvedAssetUrl } from "./asset-url";
 
 function patientDisplayName(detail: PatientDetail["patient"]) {
@@ -1265,6 +1265,18 @@ export function HeartRateInput(props: { value: string; onChange: (value: string)
       placeholder="e.g. 72 BPM"
       toEditable={(value) => value.replace(/\s*bpm\s*$/i, "").trim()}
       formatter={formatHeartRate}
+    />
+  );
+}
+
+export function PulseInput(props: { value: string; onChange: (value: string) => void }) {
+  return (
+    <FormattedNumericInput
+      value={props.value}
+      onChange={props.onChange}
+      placeholder="e.g. 72 BPM"
+      toEditable={(value) => value.replace(/\s*bpm\s*$/i, "").trim()}
+      formatter={formatPulse}
     />
   );
 }

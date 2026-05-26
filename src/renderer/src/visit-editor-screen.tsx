@@ -15,10 +15,9 @@ import {
   isFinalTreatmentEligible,
   isOtvTreatmentNumber,
   normalizePostCareText,
-  shouldIncludeExamVitals
 } from "../../shared/note-rules";
 import { useResolvedAssetUrl } from "./asset-url";
-import { BloodPressureInput, CalendarDateInput, HeartRateInput, NumericInput, OxygenSaturationInput, VisitDateInput, WeightInput } from "./screen-components";
+import { BloodPressureInput, CalendarDateInput, HeartRateInput, NumericInput, OxygenSaturationInput, PulseInput, VisitDateInput, WeightInput } from "./screen-components";
 
 const STANDARD_PRESCRIBED_FRACTION_OPTIONS = [8, 10, 12] as const;
 
@@ -609,8 +608,7 @@ const showProjectedFractionsInput = false;
               );
             })()}
           </div>
-          {(editor.note.noteType === "consult_sim" || editor.note.noteType === "otv") &&
-          shouldIncludeExamVitals(editor.note.noteType, editor.note.structuredFields.includeExamVitals) ? (
+          {(editor.note.noteType === "consult_sim" || editor.note.noteType === "otv") ? (
             <div>
               <h4 style={{ margin: "0 0 0.4rem" }}>Exam Vitals</h4>
               <div className="form-grid">
@@ -626,6 +624,13 @@ const showProjectedFractionsInput = false;
                   <HeartRateInput
                     value={editor.note.vitals.heartRate}
                     onChange={(next) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, heartRate: next } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                  />
+                </label>
+                <label>
+                  Pulse
+                  <PulseInput
+                    value={editor.note.vitals.pulse ?? ""}
+                    onChange={(next) => props.onUpdate((current) => ({ ...current, note: { ...current.note, vitals: { ...current.note.vitals, pulse: next } } }), { regenerate: true, overwriteEdited: !props.textDirty })}
                   />
                 </label>
                 <label>
@@ -875,33 +880,6 @@ const showProjectedFractionsInput = false;
                 Ultrasound
               </label>
             )}
-            {(editor.note.noteType === "consult_sim" || editor.note.noteType === "otv") ? (
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={shouldIncludeExamVitals(
-                    editor.note.noteType,
-                    editor.note.structuredFields.includeExamVitals
-                  )}
-                  onChange={(event) =>
-                    props.onUpdate(
-                      (current) => ({
-                        ...current,
-                        note: {
-                          ...current.note,
-                          structuredFields: {
-                            ...current.note.structuredFields,
-                            includeExamVitals: event.target.checked
-                          }
-                        }
-                      }),
-                      { regenerate: true, overwriteEdited: !props.textDirty }
-                    )
-                  }
-                />
-                Exam Vitals
-              </label>
-            ) : null}
             {otvEligible ? (
               <label className="checkbox-label">
                 <input

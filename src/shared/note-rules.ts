@@ -451,16 +451,17 @@ export function createEmptyVitals(): Vitals {
   return {
     bloodPressure: "",
     heartRate: "",
+    pulse: "",
     oxygenSaturation: "",
     weight: ""
   };
 }
 
-function normalizeVitalsWhitespace(value: string): string {
-  return value.trim().replace(/\s+/g, " ");
+function normalizeVitalsWhitespace(value: string | null | undefined): string {
+  return (value ?? "").trim().replace(/\s+/g, " ");
 }
 
-function normalizeVitalUnit(value: string, unit: string, trailingUnitPattern: RegExp): string {
+function normalizeVitalUnit(value: string | null | undefined, unit: string, trailingUnitPattern: RegExp): string {
   const trimmed = normalizeVitalsWhitespace(value);
   if (!trimmed) {
     return "";
@@ -475,6 +476,10 @@ export function formatBloodPressure(value: string): string {
 }
 
 export function formatHeartRate(value: string): string {
+  return normalizeVitalUnit(value, "BPM", /(?:\s*bpm)+$/i);
+}
+
+export function formatPulse(value: string): string {
   return normalizeVitalUnit(value, "BPM", /(?:\s*bpm)+$/i);
 }
 
@@ -496,6 +501,7 @@ export function formatVitals(vitals: Vitals): Vitals {
   return {
     bloodPressure: formatBloodPressure(vitals.bloodPressure),
     heartRate: formatHeartRate(vitals.heartRate),
+    pulse: formatPulse(vitals.pulse),
     oxygenSaturation: formatOxygenSaturation(vitals.oxygenSaturation),
     weight: formatWeight(vitals.weight)
   };
@@ -792,7 +798,7 @@ export function shouldIncludeExamVitals(noteType: NoteType, includeExamVitals: b
     return false;
   }
 
-  return includeExamVitals !== false;
+  return true;
 }
 
 export function stripExamVitalsSection(
@@ -800,14 +806,22 @@ export function stripExamVitalsSection(
   noteType: NoteType,
   includeExamVitals: boolean | undefined
 ): string {
-  if (shouldIncludeExamVitals(noteType, includeExamVitals)) {
-    return renderedText;
+  const vitalsBlockPattern =
+    /\nExam Vitals:\n(?:(?:Blood Pressure|Heart Rate|Pulse|Oxygen Saturation|Weight):[^\n]*\n?)+/;
+
+  if (!shouldIncludeExamVitals(noteType, includeExamVitals)) {
+    return renderedText.replace(vitalsBlockPattern, "\n");
   }
 
-  return renderedText.replace(
-    /\nExam Vitals:\nBlood Pressure:[^\n]*\nHeart Rate:[^\n]*\nOxygen Saturation:[^\n]*\nWeight:[^\n]*\n?/,
-    "\n"
-  );
+  return renderedText.replace(vitalsBlockPattern, (block) => {
+    const lines = block.split(/\n/);
+    const filledVitalLines = lines.filter((line) => {
+      const match = line.match(/^(Blood Pressure|Heart Rate|Pulse|Oxygen Saturation|Weight):\s*(.*)$/);
+      return match ? match[2].trim().length > 0 : false;
+    });
+
+    return filledVitalLines.length ? `\nExam Vitals:\n${filledVitalLines.join("\n")}\n` : "\n";
+  });
 }
 
 export function getDefaultFinalTreatmentNote(): string {

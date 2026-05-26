@@ -307,6 +307,7 @@ export function buildDocumentOnlySyntheticContext(detail: DocumentOnlyDetail): {
     vitals: {
       bloodPressure: "",
       heartRate: "",
+      pulse: "",
       oxygenSaturation: "",
       weight: ""
     },

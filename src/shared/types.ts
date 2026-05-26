@@ -293,6 +293,7 @@ export interface DocumentOnlyFileRecord {
 export interface Vitals {
   bloodPressure: string;
   heartRate: string;
+  pulse: string;
   oxygenSaturation: string;
   weight: string;
 }

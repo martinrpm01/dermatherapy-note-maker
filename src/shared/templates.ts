@@ -69,6 +69,7 @@ export const TEMPLATE_PLACEHOLDERS: TemplatePlaceholderDefinition[] = [
   { token: "site2.totalFractions", description: "Total projected or prescribed fractions for site 2." },
   { token: "vitals.bloodPressure", description: "Documented blood pressure." },
   { token: "vitals.heartRate", description: "Documented heart rate." },
+  { token: "vitals.pulse", description: "Documented pulse." },
   { token: "vitals.oxygenSaturation", description: "Documented oxygen saturation." },
   { token: "vitals.weight", description: "Documented weight." },
   { token: "structured.chiefComplaint", description: "Chief complaint wording." },
@@ -136,6 +137,7 @@ Exam:
 Exam Vitals:
 Blood Pressure: {{vitals.bloodPressure}}
 Heart Rate: {{vitals.heartRate}}
+Pulse: {{vitals.pulse}}
 Oxygen Saturation: {{vitals.oxygenSaturation}}
 Weight: {{vitals.weight}}
 
@@ -390,6 +392,7 @@ Exam Comment:
 Exam Vitals:
 Blood Pressure: {{vitals.bloodPressure}}
 Heart Rate: {{vitals.heartRate}}
+Pulse: {{vitals.pulse}}
 Oxygen Saturation: {{vitals.oxygenSaturation}}
 Weight: {{vitals.weight}}
 
@@ -475,6 +478,7 @@ Focused Exam:
 Exam Vitals:
 Blood Pressure: {{vitals.bloodPressure}}
 Heart Rate: {{vitals.heartRate}}
+Pulse: {{vitals.pulse}}
 Oxygen Saturation: {{vitals.oxygenSaturation}}
 Weight: {{vitals.weight}}
 
@@ -833,6 +837,7 @@ Exam Comment:
 Exam Vitals:
 Blood Pressure: {{vitals.bloodPressure}}
 Heart Rate: {{vitals.heartRate}}
+Pulse: {{vitals.pulse}}
 Oxygen Saturation: {{vitals.oxygenSaturation}}
 Weight: {{vitals.weight}}
 
