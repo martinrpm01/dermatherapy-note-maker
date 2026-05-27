@@ -1,6 +1,74 @@
 import type { CourseType, NoteType, TemplateDefinitionRecord, TemplatePlaceholderDefinition } from "./types";
 import { getTemplateKey } from "./note-rules";
 
+function insertFinalTreatmentSectionBefore(text: string, marker: string) {
+  if (!text.includes(marker)) {
+    return text;
+  }
+
+  const gap = marker.includes("\r\n") ? "\r\n\r\n" : "\n\n";
+  return text.replace(marker, `{{structured.finalTreatmentSection}}${gap}${marker}`);
+}
+
+export function normalizeTemplateTextForRendering(text: string) {
+  let normalized = text
+    .replaceAll(
+      "Follow Up: The patient is scheduled to start Radiation Therapy on {{structured.startRadiationDate}}",
+      "Follow Up: {{structured.consultFollowUp}}"
+    )
+    .replaceAll(
+      "\n{{structured.additionalNotesSection}}\n\n{{structured.finalTreatmentSection}}\n\nFollow Up:",
+      "\n{{structured.additionalNotesSection}}\n\nFollow Up:"
+    )
+    .replaceAll(
+      "\r\n{{structured.additionalNotesSection}}\r\n\r\n{{structured.finalTreatmentSection}}\r\n\r\nFollow Up:",
+      "\r\n{{structured.additionalNotesSection}}\r\n\r\nFollow Up:"
+    );
+
+  normalized = insertFinalTreatmentSectionBefore(
+    normalized,
+    "Exam Comment:\n{{structured.examComment}}\n\nExam Vitals:"
+  );
+  normalized = insertFinalTreatmentSectionBefore(
+    normalized,
+    "Exam Comment:\r\n{{structured.examComment}}\r\n\r\nExam Vitals:"
+  );
+  normalized = insertFinalTreatmentSectionBefore(
+    normalized,
+    "Exam:\n{{structured.focusedExam}}\n\nImpression / Plan Comments:"
+  );
+  normalized = insertFinalTreatmentSectionBefore(
+    normalized,
+    "Exam:\r\n{{structured.focusedExam}}\r\n\r\nImpression / Plan Comments:"
+  );
+  normalized = insertFinalTreatmentSectionBefore(
+    normalized,
+    "Exam:\n{{structured.focusedExam}}\n\nImpression / Plan:"
+  );
+  normalized = insertFinalTreatmentSectionBefore(
+    normalized,
+    "Exam:\r\n{{structured.focusedExam}}\r\n\r\nImpression / Plan:"
+  );
+  normalized = insertFinalTreatmentSectionBefore(
+    normalized,
+    "Focused Exam Sites 1 & 2:\n{{structured.focusedExam}}\n\nImpression / Plan Comments:"
+  );
+  normalized = insertFinalTreatmentSectionBefore(
+    normalized,
+    "Focused Exam Sites 1 & 2:\r\n{{structured.focusedExam}}\r\n\r\nImpression / Plan Comments:"
+  );
+  normalized = insertFinalTreatmentSectionBefore(
+    normalized,
+    "Focused Exam Sites 1 & 2:\n{{structured.focusedExam}}\n\n1. {{site1.diagnosisText}}"
+  );
+  normalized = insertFinalTreatmentSectionBefore(
+    normalized,
+    "Focused Exam Sites 1 & 2:\r\n{{structured.focusedExam}}\r\n\r\n1. {{site1.diagnosisText}}"
+  );
+
+  return normalized;
+}
+
 export const TEMPLATE_PLACEHOLDERS: TemplatePlaceholderDefinition[] = [
   { token: "patient.fullName", description: "Patient first and last name." },
   { token: "patient.mrn", description: "Patient medical record number." },
@@ -84,6 +152,7 @@ export const TEMPLATE_PLACEHOLDERS: TemplatePlaceholderDefinition[] = [
   { token: "structured.postCare", description: "Post-care wording." },
   { token: "structured.finalTreatmentSection", description: "Final treatment completion wording." },
   { token: "structured.followUp", description: "Follow-up wording." },
+  { token: "structured.consultFollowUp", description: "Consult follow-up wording with optional treatment start date." },
   { token: "structured.simulationComplications", description: "Simulation complications wording." },
   { token: "structured.treatmentComment", description: "Treatment comment wording." },
   { token: "structured.treatmentDeliveryStatement", description: "Treatment delivery wording for treatment visits." },
@@ -178,7 +247,7 @@ Risks and Benefits: {{structured.risksAndBenefits}}
 
 {{structured.additionalNotesSection}}
 
-Follow Up: The patient is scheduled to start Radiation Therapy on {{structured.startRadiationDate}}
+Follow Up: {{structured.consultFollowUp}}
 
 Additional Information: {{visit.therapistName}} was the Radiation Therapist at time of visit.
 
@@ -219,6 +288,8 @@ The patient presents for XRT treatment.
 
 Exam:
 {{structured.focusedExam}}
+
+{{structured.finalTreatmentSection}}
 
 Impression / Plan Comments:
 {{structured.impressionPlanComments}}
@@ -275,8 +346,6 @@ Post Care: {{structured.postCare}}
 
 {{structured.additionalNotesSection}}
 
-{{structured.finalTreatmentSection}}
-
 Follow Up: {{structured.followUp}}
 
 {{structured.mipsSection}}
@@ -311,6 +380,8 @@ The patient presents for XRT treatment.
 
 Exam:
 {{structured.focusedExam}}
+
+{{structured.finalTreatmentSection}}
 
 Impression / Plan:
 1. {{site1.diagnosisText}} ({{site1.icd10}})
@@ -349,8 +420,6 @@ Post Care: {{structured.postCare}}
 
 {{structured.additionalNotesSection}}
 
-{{structured.finalTreatmentSection}}
-
 Follow Up: {{structured.followUp}}
 
 {{structured.mipsSection}}
@@ -388,6 +457,8 @@ Exam:
 
 Exam Comment:
 {{structured.examComment}}
+
+{{structured.finalTreatmentSection}}
 
 Exam Vitals:
 Blood Pressure: {{vitals.bloodPressure}}
@@ -437,8 +508,6 @@ Physics Consultation: Fraction Number: {{visit.treatmentNumber}} of {{course.pre
 {{structured.physicsComment}}
 
 {{structured.additionalNotesSection}}
-
-{{structured.finalTreatmentSection}}
 
 Follow Up: {{structured.followUp}}
 
@@ -517,7 +586,7 @@ Treatment Options: {{structured.treatmentOptions}}
 
 Risks and Benefits: {{structured.risksAndBenefits}}
 
-Follow Up: The patient is scheduled to start Radiation Therapy on {{structured.startRadiationDate}}
+Follow Up: {{structured.consultFollowUp}}
 
 Additional Information: {{visit.therapistName}} was the Radiation Therapist at time of visit.
 
@@ -555,7 +624,7 @@ Treatment Options: {{structured.treatmentOptions}}
 
 Risks and Benefits: {{structured.risksAndBenefits}}
 
-Follow Up: The patient is scheduled to start Radiation Therapy on {{structured.startRadiationDate}}
+Follow Up: {{structured.consultFollowUp}}
 
 Additional Information: {{visit.therapistName}} was the Radiation Therapist at time of visit.
 
@@ -599,6 +668,8 @@ The patient presents for XRT treatment.
 
 Focused Exam Sites 1 & 2:
 {{structured.focusedExam}}
+
+{{structured.finalTreatmentSection}}
 
 Impression / Plan Comments:
 {{structured.impressionPlanComments}}
@@ -693,8 +764,6 @@ Post Care: {{structured.postCare}}
 
 {{structured.additionalNotesSection}}
 
-{{structured.finalTreatmentSection}}
-
 Follow Up: {{structured.followUp}}
 
 {{structured.mipsSection}}
@@ -730,6 +799,8 @@ The patient presents for XRT treatment.
 
 Focused Exam Sites 1 & 2:
 {{structured.focusedExam}}
+
+{{structured.finalTreatmentSection}}
 
 1. {{site1.diagnosisText}} ({{site1.icd10}})
 Appropriately healing biopsy site distributed on the {{site1.bodyLocation}}.
@@ -793,8 +864,6 @@ Post Care: {{structured.postCare}}
 
 {{structured.additionalNotesSection}}
 
-{{structured.finalTreatmentSection}}
-
 Follow Up: {{structured.followUp}}
 
 {{structured.mipsSection}}
@@ -833,6 +902,8 @@ Focused Exam Sites 1 & 2:
 
 Exam Comment:
 {{structured.examComment}}
+
+{{structured.finalTreatmentSection}}
 
 Exam Vitals:
 Blood Pressure: {{vitals.bloodPressure}}
@@ -912,8 +983,6 @@ Post Care: {{structured.postCare}}
 {{structured.treatmentComment}}
 
 {{structured.additionalNotesSection}}
-
-{{structured.finalTreatmentSection}}
 
 Follow Up: {{structured.followUp}}
 

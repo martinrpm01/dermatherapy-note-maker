@@ -26,8 +26,10 @@ import {
   buildSimulationComplicationLine,
   buildSimulationComplicationText,
   calculateAgeAtDate,
+  buildConsultFollowUp,
   buildTreatmentDeliveryStatement,
   buildSiteSnapshots,
+  cleanupConsultFollowUp,
   createEmptyVitals,
   fillMissingSitePrescribedFractions,
   formatAdditionalDevicesForSite,
@@ -261,15 +263,39 @@ function injectFinalTreatmentSection(renderedText: string, finalTreatmentSection
     return renderedText;
   }
 
-  if (renderedText.includes(trimmedSection)) {
-    return renderedText;
+  const sectionBlock = `${trimmedSection}\n`;
+  const cleanedText = renderedText
+    .replaceAll(trimmedSection, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trimEnd();
+
+  const examCommentIndex = cleanedText.indexOf("\nExam Comment:");
+  const examVitalsIndex = cleanedText.indexOf("\nExam Vitals:");
+  if (examCommentIndex >= 0 && examVitalsIndex > examCommentIndex) {
+    return `${cleanedText.slice(0, examVitalsIndex)}\n\n${sectionBlock}${cleanedText.slice(examVitalsIndex)}`;
   }
 
-  if (!renderedText.includes("Follow Up:")) {
-    return renderedText;
+  for (const marker of ["\nImpression / Plan Comments:", "\nImpression / Plan:"]) {
+    const markerIndex = cleanedText.indexOf(marker);
+    if (markerIndex >= 0) {
+      return `${cleanedText.slice(0, markerIndex)}\n\n${sectionBlock}${cleanedText.slice(markerIndex)}`;
+    }
   }
 
-  return renderedText.replace("Follow Up:", `${trimmedSection}\n\nFollow Up:`);
+  const focusedExamIndex = cleanedText.indexOf("\nFocused Exam Sites 1 & 2:");
+  if (focusedExamIndex >= 0) {
+    const firstDiagnosisIndex = cleanedText.indexOf("\n1. ", focusedExamIndex);
+    if (firstDiagnosisIndex >= 0) {
+      return `${cleanedText.slice(0, firstDiagnosisIndex)}\n\n${sectionBlock}${cleanedText.slice(firstDiagnosisIndex)}`;
+    }
+  }
+
+  const followUpIndex = cleanedText.indexOf("\nFollow Up:");
+  if (followUpIndex >= 0) {
+    return `${cleanedText.slice(0, followUpIndex)}\n\n${sectionBlock}${cleanedText.slice(followUpIndex)}`;
+  }
+
+  return `${cleanedText}\n\n${sectionBlock}`;
 }
 
 function injectMipsSection(renderedText: string, mipsSection: string) {
@@ -2427,6 +2453,8 @@ export class RadiationNoteService {
     );
     const mipsSection = buildMipsSection(note.structuredFields.addMips, note.structuredFields.mipsNote);
     const treatmentDeliveryStatement = buildTreatmentDeliveryStatement(note.noteType, normalizedSites);
+    const startRadiationDate = formatDisplayDate(note.structuredFields.startRadiationDate);
+    const consultFollowUp = buildConsultFollowUp(startRadiationDate, note.structuredFields.followUp);
 
     const renderedText = renderTemplate(template.templateText, {
       patient: {
@@ -2462,7 +2490,8 @@ export class RadiationNoteService {
         treatmentComment: normalizeTreatmentComment(note.structuredFields.treatmentComment),
         treatmentDeliveryStatement,
         ultrasoundPerformed: normalizeInlineSectionText(note.structuredFields.ultrasoundPerformed),
-        startRadiationDate: formatDisplayDate(note.structuredFields.startRadiationDate),
+        startRadiationDate,
+        consultFollowUp,
         biopsyDate: formatDisplayDate(note.structuredFields.biopsyDate),
         lastTreatmentDate: formatDisplayDate(note.structuredFields.lastTreatmentDate)
       }
@@ -2471,10 +2500,14 @@ export class RadiationNoteService {
     return stripExamVitalsSection(
       injectMipsSection(
         injectFinalTreatmentSection(
-          injectPhysicsConsultationDetails(renderedText, note.structuredFields.physicsComment, [
-            site1Render.bodyLocation,
-            site2Render.bodyLocation
-          ], note.treatmentNumber),
+          cleanupConsultFollowUp(
+            injectPhysicsConsultationDetails(renderedText, note.structuredFields.physicsComment, [
+              site1Render.bodyLocation,
+              site2Render.bodyLocation
+            ], note.treatmentNumber),
+            note.noteType,
+            consultFollowUp
+          ),
           finalTreatmentSection
         ),
         mipsSection
@@ -2558,7 +2591,7 @@ export class RadiationNoteService {
 
   private getCurrentNoteLogoPath() {
     const settings = this.repository.toSettingsView(this.repository.getSettingsRecord());
-    return this.resolveAssetPath(settings.dermatologyOfficeLogoAsset) || this.defaultNoteLogoPath;
+    return this.resolveAssetPath(settings.dermatologyOfficeLogoAsset);
   }
 
   private readPdfAssetInput(asset: AssetReference | null, assetLabel: string, fileName?: string) {

@@ -723,10 +723,81 @@ export function buildTreatmentDeliveryStatement(
   return `Treatment was delivered today per the approved prescription, reflecting the final clinical decision. The patient was treated with hypofractionated external beam radiation therapy using the ${machine} system utilizing a ${energy} x-ray source, for ${diagnosisPhrase}.`;
 }
 
+export function buildConsultFollowUp(startRadiationDate: string | null | undefined, fallbackFollowUp: string) {
+  const formattedStartDate = startRadiationDate?.trim();
+  if (formattedStartDate) {
+    return `The patient is scheduled to start Radiation Therapy on ${formattedStartDate}`;
+  }
+
+  return fallbackFollowUp.trim() || "As previously scheduled.";
+}
+
+export function cleanupConsultFollowUp(renderedText: string, noteType: NoteType, consultFollowUp: string) {
+  if (noteType !== "consult_sim") {
+    return renderedText;
+  }
+
+  return renderedText.replace(
+    /Follow Up:\s*The patient is scheduled to start Radiation Therapy on[ \t]*(?=\r?\n|$)/g,
+    `Follow Up: ${consultFollowUp}`
+  );
+}
+
 export function getDefaultPhysicsComment(noteType: NoteType): string {
   return noteType === "otv"
     ? 'In accordance with the standard of care for radiotherapy treatment, a review of care following every 5th fraction was performed by a medical physicist for the patient. The medical physicist reviewed the treatment documentation and parameters, clinical photos of the treatment set-up, the treatment prescription, any prescription changes, that the dose calculation was correct, that the fractional dose was charted correctly, that elapsed days and treatment days were charted correctly, that the cumulative dose is correct, and that the radiation dose administered to the patient was accurate. The medical physicist also ensured that the radiation therapy equipment was properly calibrated and is functioning effectively to ensure treatment efficacy and continued safe delivery of radiotherapy.\n\nContinued medical physics review following every 5th fraction of therapy is requested by the provider for appropriate radiotherapy management and is deemed medically necessary and a standard of care to meet state and regulatory standards.\n\nSee attached Documents within patient chart "Weekly Physics Check".'
     : "";
+}
+
+function resolveOtvCurrentFraction(site: SiteSnapshot, treatmentNumber?: number | null) {
+  if (typeof treatmentNumber === "number" && treatmentNumber > 0) {
+    return Math.trunc(treatmentNumber);
+  }
+
+  if (site.dailyDose > 0 && site.cumulativeDose > 0) {
+    return Math.max(1, Math.round(site.cumulativeDose / site.dailyDose));
+  }
+
+  return null;
+}
+
+function resolveOtvPrescribedFractions(site: SiteSnapshot) {
+  if (site.prescribedFractions && site.prescribedFractions > 0) {
+    return site.prescribedFractions;
+  }
+
+  if (site.dailyDose > 0 && site.totalDose > 0) {
+    return Math.max(1, Math.round(site.totalDose / site.dailyDose));
+  }
+
+  return null;
+}
+
+function buildOtvCoursePlanSentence(siteSnapshots: SiteSnapshot[], treatmentNumber?: number | null) {
+  const statuses = siteSnapshots.map((site) => {
+    const location = site.treatmentLocationText || site.bodyLocation || `Lesion ${site.siteNumber}`;
+    const currentFraction = resolveOtvCurrentFraction(site, treatmentNumber);
+    const prescribedFractions = resolveOtvPrescribedFractions(site);
+    const isFinal =
+      currentFraction !== null &&
+      prescribedFractions !== null &&
+      prescribedFractions > 0 &&
+      currentFraction >= prescribedFractions;
+
+    return { location, isFinal };
+  });
+  const finalSites = statuses.filter((status) => status.isFinal);
+  const continuingSites = statuses.filter((status) => !status.isFinal);
+
+  if (statuses.length > 0 && finalSites.length === statuses.length) {
+    return "No changes required; ongoing skin care and anticipated acute effects were reviewed.";
+  }
+
+  if (finalSites.length > 0 && continuingSites.length > 0) {
+    return `No changes required for the continuing treatment site(s); ongoing skin care and anticipated acute effects were reviewed. Treatment to ${joinClinicalList(finalSites.map((site) => site.location))} has reached the prescribed final fraction, and the plan to continue radiation therapy as prescribed for ${joinClinicalList(continuingSites.map((site) => site.location))} was reviewed.`;
+  }
+
+  return "No changes required; ongoing skin care, anticipated acute effects, and the plan to continue radiation therapy as prescribed were reviewed.";
 }
 
 export function getDefaultOtvNote(siteSnapshots: SiteSnapshot[], treatmentNumber?: number | null): string {
@@ -742,7 +813,7 @@ export function getDefaultOtvNote(siteSnapshots: SiteSnapshot[], treatmentNumber
           ? calculateCumulativeDose(site.dailyDose, treatmentNumber)
           : site.cumulativeDose;
       const totalDose = site.totalDose;
-      const prescribedFractions = site.prescribedFractions;
+      const prescribedFractions = resolveOtvPrescribedFractions(site);
       if (!currentDose || !totalDose || !prescribedFractions || !site.dailyDose) {
         return "";
       }
@@ -754,17 +825,17 @@ export function getDefaultOtvNote(siteSnapshots: SiteSnapshot[], treatmentNumber
   const doseText = doseSummaries.length
     ? ` Current dose reviewed ${joinClinicalList(doseSummaries)}.`
     : " Current dose reviewed.";
+  const coursePlanSentence = buildOtvCoursePlanSentence(siteSnapshots, treatmentNumber);
 
-  return `Patient evaluated today during the current course of radiation therapy for ${combinedSiteLabel}.${doseText} Patient reports good tolerance with no pain or new or worsening symptoms. Focused skin exam shows mild expected erythema without breakdown, ulceration, or infection. No changes required; ongoing skin care, anticipated acute effects, and the plan to continue radiation therapy as prescribed were reviewed.`;
+  return `Patient evaluated today during the current course of radiation therapy for ${combinedSiteLabel}.${doseText} Patient reports good tolerance with no pain or new or worsening symptoms. Focused skin exam shows mild expected erythema without breakdown, ulceration, or infection. ${coursePlanSentence}`;
 }
 
 export function isLegacyDefaultOtvNote(value: string): boolean {
   const normalized = value.trim();
   return (
     normalized.startsWith("Patient evaluated today during the current course of radiation therapy for ") &&
-    normalized.includes("Current dose reviewed.") &&
     normalized.includes("Patient reports good tolerance with no pain or new or worsening symptoms.") &&
-    !normalized.includes(" cGy in ")
+    normalized.includes("Focused skin exam shows mild expected erythema without breakdown, ulceration, or infection.")
   );
 }
 

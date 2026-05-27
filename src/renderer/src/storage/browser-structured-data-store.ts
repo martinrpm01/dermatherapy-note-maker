@@ -33,7 +33,7 @@ import type {
   StructuredDataStore,
   VisitAssetRecordSet
 } from "../../../shared/storage";
-import { DEFAULT_TEMPLATE_DEFINITIONS } from "../../../shared/templates";
+import { DEFAULT_TEMPLATE_DEFINITIONS, normalizeTemplateTextForRendering } from "../../../shared/templates";
 import { getDefaultFinalTreatmentNote, getDefaultMipsNote } from "../../../shared/note-rules";
 
 type BrowserStoreName =
@@ -61,7 +61,7 @@ const DATABASE_NAME = "dermatherapy-note-maker-browser";
 const DATABASE_VERSION = 4;
 
 function normalizeTemplateText(text: string) {
-  return text
+  return normalizeTemplateTextForRendering(text
     .replaceAll(
       "Cutout flex shield size: {{site1.flexShieldCutoutText}}",
       "Cutout flex shield size: {{site1.cutoutSizeDisplay}}"
@@ -97,7 +97,7 @@ function normalizeTemplateText(text: string) {
     .replaceAll(
       "1. is following up for {{site1.diagnosisText}} on the {{site1.bodyLocation}} and {{site2.diagnosisText}} on the {{site2.bodyLocation}}.",
       "1. is following up for {{site1.diagnosisText}} on the {{site1.bodyLocation}}.\n2. is following up for {{site2.diagnosisText}} on the {{site2.bodyLocation}}."
-    );
+    ));
 }
 
 function normalizeStoredTemplate(template: TemplateDefinitionRecord): TemplateDefinitionRecord {

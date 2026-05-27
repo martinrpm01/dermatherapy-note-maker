@@ -76,7 +76,6 @@ import { buildDocumentOnlySyntheticContext } from "../../../shared/document-only
 import { BrowserBinaryAssetStore } from "../storage/browser-binary-asset-store";
 import { BrowserStructuredDataStore } from "../storage/browser-structured-data-store";
 import { checkBrowserRefreshUpdate } from "../refresh-pulse";
-import brandLogo from "../assets/clear-skin-note-logo.jpg";
 import consentFormTemplateUrl from "../../../../assets/templates/radiation-therapy-consent-form.pdf";
 import consultQuestionnaireTemplateUrl from "../../../../assets/templates/radiation-therapy-consult-questionnaire.pdf";
 import simWorksheetTemplateUrl from "../../../../assets/templates/radiation-therapy-sim-worksheet.pdf";
@@ -320,12 +319,7 @@ export class BrowserAppClient implements AppClient {
       }
     }
 
-    const response = await fetch(brandLogo);
-    if (!response.ok) {
-      throw new Error("Could not resolve note logo.");
-    }
-
-    return this.readBlobInput(await response.blob(), "dermatherapy-note-logo.jpg");
+    return null;
   }
 
   private async readSimWorksheetTemplateBytes() {

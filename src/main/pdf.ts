@@ -26,6 +26,10 @@ export interface PdfBuildInput {
   logoInput?: PdfBinaryAssetInput | null;
 }
 
+export function formatVisitPdfPageNumber(pageIndex: number, totalPages: number) {
+  return `Page ${pageIndex + 1} of ${totalPages}`;
+}
+
 function wrapLine(
   text: string,
   maxWidth: number,
@@ -590,6 +594,28 @@ function drawSignatureBlock(
   return signerLineY - 26;
 }
 
+function drawPageNumbers(
+  pdfDoc: PDFDocument,
+  regularFont: Awaited<ReturnType<PDFDocument["embedFont"]>>
+) {
+  const pages = pdfDoc.getPages();
+  const totalPages = pages.length;
+  const size = 8;
+  const color = rgb(0.42, 0.42, 0.42);
+
+  pages.forEach((targetPage, index) => {
+    const label = formatVisitPdfPageNumber(index, totalPages);
+    const x = (targetPage.getWidth() - regularFont.widthOfTextAtSize(label, size)) / 2;
+    targetPage.drawText(label, {
+      x,
+      y: 16,
+      size,
+      font: regularFont,
+      color
+    });
+  });
+}
+
 export async function buildVisitPdf({ noteText, photoInputs, attachmentInputs, logoInput }: PdfBuildInput) {
   const pdfDoc = await PDFDocument.create();
   const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -829,6 +855,8 @@ export async function buildVisitPdf({ noteText, photoInputs, attachmentInputs, l
       height: fitted.height
     });
   }
+
+  drawPageNumbers(pdfDoc, regularFont);
 
   return pdfDoc.save();
 }

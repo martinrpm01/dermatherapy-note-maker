@@ -5,7 +5,7 @@ import { createRequire } from "node:module";
 import initSqlJs from "sql.js";
 import type { Database, SqlJsStatic } from "sql.js";
 
-import { DEFAULT_TEMPLATE_DEFINITIONS } from "../shared/templates";
+import { DEFAULT_TEMPLATE_DEFINITIONS, normalizeTemplateTextForRendering } from "../shared/templates";
 import type {
   AssetReference,
   AppSettingsRecord,
@@ -1581,7 +1581,7 @@ export class RadiationNoteRepository implements StructuredDataStore {
          updated_at AS updatedAt
        FROM template_definitions
        ORDER BY key ASC`
-    ).map((template) => ({ ...template, active: Boolean(template.active) }));
+    ).map((template) => this.normalizeTemplateRecord(template));
   }
 
   getTemplate(templateIdOrKey: string) {
@@ -1601,7 +1601,16 @@ export class RadiationNoteRepository implements StructuredDataStore {
       [templateIdOrKey, templateIdOrKey]
     );
 
-    return template ? { ...template, active: Boolean(template.active) } : null;
+    return template ? this.normalizeTemplateRecord(template) : null;
+  }
+
+  private normalizeTemplateRecord(template: TemplateDefinitionRecord): TemplateDefinitionRecord {
+    return {
+      ...template,
+      templateText: normalizeTemplateTextForRendering(template.templateText),
+      defaultTemplateText: normalizeTemplateTextForRendering(template.defaultTemplateText),
+      active: Boolean(template.active)
+    };
   }
 
   saveTemplate(templateId: string, templateText: string) {

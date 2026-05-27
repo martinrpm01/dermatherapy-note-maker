@@ -1253,7 +1253,8 @@ describe("RadiationNoteService workflow", () => {
     expect(consultDraft.note.generatedText).toContain("Review: An extensive history and exam was performed");
     expect(consultDraft.note.generatedText).toContain("Treatment Options: The various treatment options");
     expect(consultDraft.note.generatedText).toContain("Risks and Benefits: The rationale for radiotherapy");
-    expect(consultDraft.note.generatedText).toContain("Follow Up: The patient is scheduled to start Radiation Therapy on");
+    expect(consultDraft.note.generatedText).toContain("Follow Up: As previously scheduled.");
+    expect(consultDraft.note.generatedText).not.toContain("Follow Up: The patient is scheduled to start Radiation Therapy on");
     expect(consultDraft.note.generatedText).toContain("Additional Information:");
     expect(consultDraft.note.generatedText).toContain("Other Instructions: See attachments within chart");
     expect(consultDraft.note.generatedText).not.toContain("Treatment was delivered today per the approved prescription");
@@ -1282,6 +1283,21 @@ describe("RadiationNoteService workflow", () => {
     expect(savedConsult.generatedText).toContain("Additional Tx devices: Special Set-up - Custom cutout");
     expect(savedConsult.generatedText).not.toContain("Applicator:");
     expect(savedConsult.generatedText).not.toContain("Flex Shield (Cutout Used):");
+  });
+
+  it("uses scheduled treatment start wording on consult notes only when a start date is set", async () => {
+    const { course } = await createPatientAndCourse();
+    const consultDraft = service.buildVisitDraft(course.id, "consult_sim");
+    consultDraft.note.structuredFields.startRadiationDate = "2026-04-15";
+    consultDraft.note.generatedText = "";
+    consultDraft.note.editedText = "";
+
+    const savedConsult = service.saveVisit(consultDraft.note);
+
+    expect(savedConsult.generatedText).toContain(
+      "Follow Up: The patient is scheduled to start Radiation Therapy on 04/15/2026"
+    );
+    expect(savedConsult.generatedText).not.toContain("Follow Up: As previously scheduled.");
   });
 
   it("renders fuller first fraction and otv wording from the updated sample-based templates", async () => {
@@ -1548,6 +1564,141 @@ describe("RadiationNoteService workflow", () => {
     expect(saved.generatedText).not.toContain("Current dose reviewed 280/4200 cGy in 1 of 15 fractions.");
   });
 
+  it("adjusts OTV continue wording for final and mixed-fraction visits", async () => {
+    const patient = service.savePatient({
+      firstName: "Olive",
+      lastName: "Otv",
+      mrn: "MRN-OTV",
+      dob: "1950-01-01",
+      sex: "Female",
+      notes: ""
+    });
+    const finalCourse = service.saveCourse({
+      patientId: patient.id,
+      courseName: "Final OTV Course",
+      courseType: "one_site",
+      prescribedFractions: 10,
+      startDate: "2026-04-01",
+      sites: [
+        {
+          siteNumber: 1,
+          bodyLocation: "Nasal dorsum",
+          treatmentLocationText: "Nasal dorsum",
+          diagnosisText: "Basal cell carcinoma",
+          icd10: "C44.311",
+          numberOfBlocks: 1,
+          lesionSize: "8",
+          treatmentDepth: "3",
+          coneSize: "20",
+          cutoutSize: "10",
+          shields: "",
+          machine: "Xoft Elekta 1200 SPX",
+          energyKv: "50kV",
+          treatmentInterval: "bi-weekly",
+          additionalDevices: "",
+          dailyDose: 400,
+          totalDose: 4000
+        }
+      ]
+    });
+    const finalOtv = service.buildVisitDraft(finalCourse.id, "next_treatment", undefined, { treatmentNumber: 10 });
+    expect(finalOtv.note.noteType).toBe("otv");
+    expect(finalOtv.note.generatedText).not.toContain("continue radiation therapy as prescribed");
+    expect(finalOtv.note.generatedText).toContain(
+      "No changes required; ongoing skin care and anticipated acute effects were reviewed."
+    );
+
+    const continuingCourse = service.saveCourse({
+      patientId: patient.id,
+      courseName: "Continuing OTV Course",
+      courseType: "one_site",
+      prescribedFractions: 12,
+      startDate: "2026-04-01",
+      sites: [
+        {
+          siteNumber: 1,
+          bodyLocation: "Left cheek",
+          treatmentLocationText: "Left cheek",
+          diagnosisText: "Basal cell carcinoma",
+          icd10: "C44.319",
+          numberOfBlocks: 1,
+          lesionSize: "8",
+          treatmentDepth: "3",
+          coneSize: "20",
+          cutoutSize: "10",
+          shields: "",
+          machine: "Xoft Elekta 1200 SPX",
+          energyKv: "50kV",
+          treatmentInterval: "bi-weekly",
+          additionalDevices: "",
+          dailyDose: 400,
+          totalDose: 4800
+        }
+      ]
+    });
+    const continuingOtv = service.buildVisitDraft(continuingCourse.id, "next_treatment", undefined, {
+      treatmentNumber: 10
+    });
+    expect(continuingOtv.note.generatedText).toContain("continue radiation therapy as prescribed");
+
+    const mixedCourse = service.saveCourse({
+      patientId: patient.id,
+      courseName: "Mixed OTV Course",
+      courseType: "two_site",
+      prescribedFractions: 0,
+      startDate: "2026-04-01",
+      sites: [
+        {
+          siteNumber: 1,
+          bodyLocation: "Left cheek",
+          treatmentLocationText: "Left medial malar cheek",
+          diagnosisText: "Basal cell carcinoma",
+          icd10: "C44.319",
+          numberOfBlocks: 1,
+          lesionSize: "8",
+          treatmentDepth: "3",
+          coneSize: "20",
+          cutoutSize: "10",
+          shields: "",
+          machine: "Xoft Elekta 1200 SPX",
+          energyKv: "50kV",
+          treatmentInterval: "bi-weekly",
+          additionalDevices: "",
+          dailyDose: 400,
+          totalDose: 4000,
+          prescribedFractions: 10
+        },
+        {
+          siteNumber: 2,
+          bodyLocation: "Right ear",
+          treatmentLocationText: "Right post auricular skin",
+          diagnosisText: "Squamous cell carcinoma",
+          icd10: "C44.222",
+          numberOfBlocks: 1,
+          lesionSize: "10",
+          treatmentDepth: "3",
+          coneSize: "20",
+          cutoutSize: "12",
+          shields: "",
+          machine: "Xoft Elekta 1200 SPX",
+          energyKv: "50kV",
+          treatmentInterval: "bi-weekly",
+          additionalDevices: "",
+          dailyDose: 400,
+          totalDose: 4800,
+          prescribedFractions: 12
+        }
+      ]
+    });
+
+    const mixedOtv = service.buildVisitDraft(mixedCourse.id, "next_treatment", undefined, { treatmentNumber: 10 });
+    expect(mixedOtv.note.noteType).toBe("otv");
+    expect(mixedOtv.note.generatedText).toContain("Treatment to Left medial malar cheek has reached the prescribed final fraction");
+    expect(mixedOtv.note.generatedText).toContain(
+      "the plan to continue radiation therapy as prescribed for Right post auricular skin was reviewed"
+    );
+  });
+
   it("splits two-lesion treatment HPI numbered lines for treatment and OTV notes", async () => {
     const { course } = await createTwoSitePatientAndCourse();
     const expectedSplitHpi =
@@ -1689,11 +1840,25 @@ describe("RadiationNoteService workflow", () => {
     const savedEarly = service.saveVisit(earlyDraft.note);
     expect(savedEarly.generatedText).not.toContain("Patient successfully completed the prescribed course");
 
+    const otvTemplate = repository.getTemplate("one_site:otv")!;
+    const oldPlacedOtvTemplate = otvTemplate.templateText
+      .replace(
+        "Exam Comment:\n{{structured.examComment}}\n\n{{structured.finalTreatmentSection}}\n\nExam Vitals:",
+        "Exam Comment:\n{{structured.examComment}}\n\nExam Vitals:"
+      )
+      .replace(
+        "{{structured.additionalNotesSection}}\n\nFollow Up:",
+        "{{structured.additionalNotesSection}}\n\n{{structured.finalTreatmentSection}}\n\nFollow Up:"
+      );
+    expect(oldPlacedOtvTemplate).not.toBe(otvTemplate.templateText);
+    repository.saveTemplate(otvTemplate.id, oldPlacedOtvTemplate);
+
     const finalDraft = service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 15 });
     expect(finalDraft.note.structuredFields.finalTreatment).toBe(true);
     finalDraft.note.structuredFields.finalTreatmentNote = "Custom final treatment instructions for this course.";
     finalDraft.note.structuredFields.addMips = true;
     finalDraft.note.structuredFields.mipsNote = "Custom MIPS wording for this encounter.";
+    finalDraft.note.vitals.bloodPressure = "120/80";
     const savedFinal = service.saveVisit(finalDraft.note);
     expect(savedFinal.generatedText).toContain("Custom final treatment instructions for this course.");
     expect(savedFinal.generatedText).toContain("Treatment was delivered today per the approved prescription");
@@ -1705,6 +1870,12 @@ describe("RadiationNoteService workflow", () => {
     );
     expect(savedFinal.generatedText.indexOf("Custom final treatment instructions for this course.")).toBeLessThan(
       savedFinal.generatedText.indexOf("Follow Up:")
+    );
+    expect(savedFinal.generatedText.indexOf("Exam Comment:")).toBeLessThan(
+      savedFinal.generatedText.indexOf("Custom final treatment instructions for this course.")
+    );
+    expect(savedFinal.generatedText.indexOf("Custom final treatment instructions for this course.")).toBeLessThan(
+      savedFinal.generatedText.indexOf("Exam Vitals:")
     );
     expect(savedFinal.generatedText.indexOf("Follow Up:")).toBeLessThan(
       savedFinal.generatedText.indexOf("Plan: MIPS")
@@ -1847,7 +2018,8 @@ describe("RadiationNoteService workflow", () => {
     expect(savedConsult.generatedText).toContain(
       "Plan: Consultation for Radiotherapy.\nLocation: Right ear"
     );
-    expect(savedConsult.generatedText).toContain("Follow Up: The patient is scheduled to start Radiation Therapy on");
+    expect(savedConsult.generatedText).toContain("Follow Up: As previously scheduled for both treatment sites.");
+    expect(savedConsult.generatedText).not.toContain("Follow Up: The patient is scheduled to start Radiation Therapy on");
     expect(savedConsult.generatedText).not.toContain("Treatment Start Date:");
     expect(savedConsult.generatedText).not.toContain("Consultation and Simulation for Radiotherapy");
     expect(savedConsult.generatedText).not.toContain("Diagnosis:");
@@ -2538,7 +2710,7 @@ describe("RadiationNoteService workflow", () => {
     expect(resaved.generatedText).toContain("Additional Tx devices: Eye Shield");
   });
 
-  it("keeps remembered options hidden and allows a dermatology logo override with default fallback", async () => {
+  it("keeps remembered options hidden and allows a dermatology logo override", async () => {
     const initialSettings = service.getSettingsPayload();
     expect(initialSettings.savedOptions).toHaveLength(0);
     expect(initialSettings.settings.dermatologyOfficeLogoAsset).toBeNull();
@@ -2563,6 +2735,41 @@ describe("RadiationNoteService workflow", () => {
     removeDermatologyOfficeLogo: true
   });
   expect(resetSettings.dermatologyOfficeLogoAsset).toBeNull();
+  });
+
+  it("generates visit PDFs without the ClearSkin logo fallback and still accepts an uploaded office logo", async () => {
+    const logoFallbackPath = path.join(tempDir, "missing-default-note-logo.png");
+    const logoService = new RadiationNoteService(
+      repository,
+      assetStore,
+      undefined,
+      logoFallbackPath
+    );
+    await logoService.initialize();
+
+    const { course } = await createPatientAndCourse();
+    const noLogoDraft = logoService.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 1 });
+    const savedNoLogoVisit = logoService.saveVisit({ ...noLogoDraft.note, status: "finalized" });
+
+    await expect(logoService.generatePdf(savedNoLogoVisit.id)).resolves.toMatchObject({
+      visitId: savedNoLogoVisit.id
+    });
+
+    const settings = logoService.getSettingsPayload().settings;
+    logoService.saveSettings({
+      ...settings,
+      dermatologyOfficeLogoUpload: {
+        name: "office-logo.png",
+        mimeType: "image/png",
+        dataUrl: pngDataUrl
+      }
+    });
+
+    const logoDraft = logoService.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 2 });
+    const savedLogoVisit = logoService.saveVisit({ ...logoDraft.note, status: "finalized" });
+    await expect(logoService.generatePdf(savedLogoVisit.id)).resolves.toMatchObject({
+      visitId: savedLogoVisit.id
+    });
   });
 
   it("rebuilds persisted asset resolution across restarts without relying on creation-time mappings", async () => {
