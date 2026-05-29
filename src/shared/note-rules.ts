@@ -790,14 +790,14 @@ function buildOtvCoursePlanSentence(siteSnapshots: SiteSnapshot[], treatmentNumb
   const continuingSites = statuses.filter((status) => !status.isFinal);
 
   if (statuses.length > 0 && finalSites.length === statuses.length) {
-    return "No changes required; ongoing skin care and anticipated acute effects were reviewed.";
+    return "No changes required; treatment completed as prescribed.";
   }
 
   if (finalSites.length > 0 && continuingSites.length > 0) {
-    return `No changes required for the continuing treatment site(s); ongoing skin care and anticipated acute effects were reviewed. Treatment to ${joinClinicalList(finalSites.map((site) => site.location))} has reached the prescribed final fraction, and the plan to continue radiation therapy as prescribed for ${joinClinicalList(continuingSites.map((site) => site.location))} was reviewed.`;
+    return `No changes required for the continuing treatment site(s); continue skin care and continue radiation therapy as prescribed for ${joinClinicalList(continuingSites.map((site) => site.location))}. Treatment to ${joinClinicalList(finalSites.map((site) => site.location))} has reached the prescribed final fraction.`;
   }
 
-  return "No changes required; ongoing skin care, anticipated acute effects, and the plan to continue radiation therapy as prescribed were reviewed.";
+  return "No changes required; continue skin care and continue radiation therapy as prescribed.";
 }
 
 export function getDefaultOtvNote(siteSnapshots: SiteSnapshot[], treatmentNumber?: number | null): string {

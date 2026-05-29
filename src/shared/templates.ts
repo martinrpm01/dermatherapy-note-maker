@@ -10,6 +10,101 @@ function insertFinalTreatmentSectionBefore(text: string, marker: string) {
   return text.replace(marker, `{{structured.finalTreatmentSection}}${gap}${marker}`);
 }
 
+function removeLegacyTreatmentSimulationLines(text: string) {
+  return text
+    .replaceAll("\nNumber of Treatment Areas: 1", "")
+    .replaceAll("\r\nNumber of Treatment Areas: 1", "")
+    .replaceAll("\nNumber of Blocks: {{site1.numberOfBlocks}}", "")
+    .replaceAll("\r\nNumber of Blocks: {{site1.numberOfBlocks}}", "")
+    .replaceAll("\nNumber of Blocks: {{site2.numberOfBlocks}}", "")
+    .replaceAll("\r\nNumber of Blocks: {{site2.numberOfBlocks}}", "")
+    .replaceAll("\nType of Blocks: Simple", "")
+    .replaceAll("\r\nType of Blocks: Simple", "")
+    .replaceAll("\nType of Blocks: Complex", "")
+    .replaceAll("\r\nType of Blocks: Complex", "");
+}
+
+function removeLegacyTreatmentParameterDuplicates(text: string) {
+  return text
+    .replaceAll("\nkV: {{site1.energyKv}}", "")
+    .replaceAll("\r\nkV: {{site1.energyKv}}", "")
+    .replaceAll("\nkV: {{site2.energyKv}}", "")
+    .replaceAll("\r\nkV: {{site2.energyKv}}", "")
+    .replaceAll("\nMachine: {{site1.machine}}", "")
+    .replaceAll("\r\nMachine: {{site1.machine}}", "")
+    .replaceAll("\nMachine: {{site2.machine}}", "")
+    .replaceAll("\r\nMachine: {{site2.machine}}", "");
+}
+
+function moveTreatmentCommentUnderSimulationPlan(text: string) {
+  if (!text.includes("{{structured.treatmentComment}}")) {
+    return text;
+  }
+
+  const lowerLf = "\n{{structured.treatmentComment}}\n\n{{structured.additionalNotesSection}}";
+  const lowerCrLf = "\r\n{{structured.treatmentComment}}\r\n\r\n{{structured.additionalNotesSection}}";
+  let normalized = text.replaceAll(lowerLf, "\n{{structured.additionalNotesSection}}").replaceAll(lowerCrLf, "\r\n{{structured.additionalNotesSection}}");
+
+  const placements = [
+    {
+      marker: "Plan: Therapeutic Radiation Simulation.\n{{site1.simulationComplicationsLine}}",
+      replacement:
+        "Plan: Therapeutic Radiation Simulation.\n{{structured.treatmentComment}}\n{{site1.simulationComplicationsLine}}"
+    },
+    {
+      marker: "Plan: Therapeutic Radiation Simulation.\r\n{{site1.simulationComplicationsLine}}",
+      replacement:
+        "Plan: Therapeutic Radiation Simulation.\r\n{{structured.treatmentComment}}\r\n{{site1.simulationComplicationsLine}}"
+    },
+    {
+      marker: "Plan: Therapeutic Radiation Simulation.\n{{site2.simulationComplicationsLine}}",
+      replacement:
+        "Plan: Therapeutic Radiation Simulation.\n{{structured.treatmentComment}}\n{{site2.simulationComplicationsLine}}"
+    },
+    {
+      marker: "Plan: Therapeutic Radiation Simulation.\r\n{{site2.simulationComplicationsLine}}",
+      replacement:
+        "Plan: Therapeutic Radiation Simulation.\r\n{{structured.treatmentComment}}\r\n{{site2.simulationComplicationsLine}}"
+    }
+  ];
+
+  for (const { marker, replacement } of placements) {
+    if (!normalized.includes(marker)) {
+      continue;
+    }
+    const beforeMarker = normalized.slice(0, normalized.indexOf(marker));
+    if (beforeMarker.endsWith("{{structured.treatmentComment}}\n") || beforeMarker.endsWith("{{structured.treatmentComment}}\r\n")) {
+      continue;
+    }
+    normalized = normalized.replaceAll(marker, replacement);
+  }
+
+  return normalized;
+}
+
+function addConsultSimulationDetailsLine(text: string, anchor: string, line: string) {
+  if (text.includes(line)) {
+    return text;
+  }
+  return text.replaceAll(anchor, `${anchor}\n${line}`);
+}
+
+function addConsultPlanLine(text: string, siteNumber: 1 | 2) {
+  const line = `Lesion Size: {{site${siteNumber}.lesionSizeDisplay}}`;
+  if (text.includes(line)) {
+    return text;
+  }
+  return text
+    .replaceAll(
+      `Plan: Consultation for Radiotherapy.\nLocation: {{site${siteNumber}.bodyLocation}}`,
+      `Plan: Consultation for Radiotherapy.\nLocation: {{site${siteNumber}.bodyLocation}}\n${line}`
+    )
+    .replaceAll(
+      `Plan: Consultation for Radiotherapy.\r\nLocation: {{site${siteNumber}.bodyLocation}}`,
+      `Plan: Consultation for Radiotherapy.\r\nLocation: {{site${siteNumber}.bodyLocation}}\r\n${line}`
+    );
+}
+
 export function normalizeTemplateTextForRendering(text: string) {
   let normalized = text
     .replaceAll(
@@ -24,6 +119,32 @@ export function normalizeTemplateTextForRendering(text: string) {
       "\r\n{{structured.additionalNotesSection}}\r\n\r\n{{structured.finalTreatmentSection}}\r\n\r\nFollow Up:",
       "\r\n{{structured.additionalNotesSection}}\r\n\r\nFollow Up:"
     );
+
+  normalized = removeLegacyTreatmentSimulationLines(normalized);
+  normalized = removeLegacyTreatmentParameterDuplicates(normalized);
+  normalized = moveTreatmentCommentUnderSimulationPlan(normalized);
+  normalized = addConsultSimulationDetailsLine(
+    normalized,
+    "Total Fractions: {{site1.totalFractions}}",
+    "Frequency: {{site1.treatmentInterval}}"
+  );
+  normalized = addConsultSimulationDetailsLine(
+    normalized,
+    "Total dose: {{site1.totalDose}} cGy",
+    "Energy: {{site1.energyKv}}"
+  );
+  normalized = addConsultSimulationDetailsLine(
+    normalized,
+    "Total Fractions: {{site2.totalFractions}}",
+    "Frequency: {{site2.treatmentInterval}}"
+  );
+  normalized = addConsultSimulationDetailsLine(
+    normalized,
+    "Total dose: {{site2.totalDose}} cGy",
+    "Energy: {{site2.energyKv}}"
+  );
+  normalized = addConsultPlanLine(normalized, 1);
+  normalized = addConsultPlanLine(normalized, 2);
 
   normalized = insertFinalTreatmentSectionBefore(
     normalized,
@@ -219,15 +340,14 @@ The following treatment devices and target prescriptions were utilized pending r
 Appropriately healing biopsy site distributed on the {{site1.bodyLocation}}.
 
 Plan: Therapeutic Radiation Simulation.
-Number of Treatment Areas: 1
-Number of Blocks: {{site1.numberOfBlocks}}
-Type of Blocks: Complex
 {{site1.simulationComplicationsLine}}
 
 XRT Simulation Details:
 Total Fractions: {{site1.totalFractions}}
+Frequency: {{site1.treatmentInterval}}
 Daily dose: {{site1.dailyDose}} cGy
 Total dose: {{site1.totalDose}} cGy
+Energy: {{site1.energyKv}}
 Tx depth: {{site1.treatmentDepthDisplay}}
 Cone size: {{site1.coneSizeDisplay}}
 Cutout flex shield size: {{site1.cutoutSizeDisplay}}
@@ -238,6 +358,7 @@ Note: This plan will be the initial intent for treatment. The final approved pla
 
 Plan: Consultation for Radiotherapy.
 Location: {{site1.bodyLocation}}
+Lesion Size: {{site1.lesionSizeDisplay}}
 
 Review: {{structured.consultReview}}
 
@@ -314,9 +435,7 @@ Comments: See document named "Radiation Therapy Dose Calcs" attached to patient 
 Appropriately healing biopsy site distributed on the {{site1.bodyLocation}}.
 
 Plan: Therapeutic Radiation Simulation.
-Number of Treatment Areas: 1
-Number of Blocks: {{site1.numberOfBlocks}}
-Type of Blocks: Simple
+{{structured.treatmentComment}}
 {{site1.simulationComplicationsLine}}
 
 Plan: Radiation Treatment.
@@ -330,10 +449,8 @@ Total Target Dose: {{site1.totalDose}} cGy
 Treatment Parameters:
 Additional Treatment Devices: {{site1.additionalDevices}}
 Flex Shield (Cutout Used): {{site1.cutoutSizeDisplay}}
-kV: {{site1.energyKv}}
 Dose: {{site1.dailyDose}} cGy
 Cone Size: {{site1.coneSizeDisplay}}
-Machine: {{site1.machine}}
 Treatment Depth: {{site1.treatmentDepthDisplay}}
 
 Written consent obtained. The risks and benefits of XRT therapy were discussed in detail. Specifically, the risks of infection, scarring, bleeding, radiation dermatitis, prolonged wound healing, incomplete removal, nerve injury, inability to clear the tumor, and recurrence were addressed. The treatment site was clearly identified and confirmed by the patient. The patient received XRT as outlined above.
@@ -341,8 +458,6 @@ Written consent obtained. The risks and benefits of XRT therapy were discussed i
 Post Care: {{structured.postCare}}
 
 {{structured.treatmentDeliveryStatement}}
-
-{{structured.treatmentComment}}
 
 {{structured.additionalNotesSection}}
 
@@ -388,9 +503,7 @@ Impression / Plan:
 Appropriately healing biopsy site distributed on the {{site1.bodyLocation}}.
 
 Plan: Therapeutic Radiation Simulation.
-Number of Treatment Areas: 1
-Number of Blocks: {{site1.numberOfBlocks}}
-Type of Blocks: Simple
+{{structured.treatmentComment}}
 {{site1.simulationComplicationsLine}}
 
 Plan: Radiation Treatment.
@@ -404,10 +517,8 @@ Total Target Dose: {{site1.totalDose}} cGy
 Treatment Parameters:
 Additional Treatment Devices: {{site1.additionalDevices}}
 Flex Shield (Cutout Used): {{site1.cutoutSizeDisplay}}
-kV: {{site1.energyKv}}
 Dose: {{site1.dailyDose}} cGy
 Cone Size: {{site1.coneSizeDisplay}}
-Machine: {{site1.machine}}
 Treatment Depth: {{site1.treatmentDepthDisplay}}
 
 Written consent obtained. The risks and benefits of XRT therapy were discussed in detail. Specifically, the risks of infection, scarring, bleeding, radiation dermatitis, prolonged wound healing, incomplete removal, nerve injury, inability to clear the tumor, and recurrence were addressed. The treatment site was clearly identified and confirmed by the patient. The patient received XRT as outlined above.
@@ -415,8 +526,6 @@ Written consent obtained. The risks and benefits of XRT therapy were discussed i
 Post Care: {{structured.postCare}}
 
 {{structured.treatmentDeliveryStatement}}
-
-{{structured.treatmentComment}}
 
 {{structured.additionalNotesSection}}
 
@@ -472,9 +581,7 @@ Impression / Plan:
 {{structured.healingDescription}}
 
 Plan: Therapeutic Radiation Simulation.
-Number of Treatment Areas: 1
-Number of Blocks: {{site1.numberOfBlocks}}
-Type of Blocks: Simple
+{{structured.treatmentComment}}
 {{site1.simulationComplicationsLine}}
 
 Plan: Radiation Treatment.
@@ -488,10 +595,8 @@ Total Target Dose: {{site1.totalDose}} cGy
 Treatment Parameters:
 Additional Treatment Devices: {{site1.additionalDevices}}
 Flex Shield (Cutout Used): {{site1.cutoutSizeDisplay}}
-kV: {{site1.energyKv}}
 Dose: {{site1.dailyDose}} cGy
 Cone Size: {{site1.coneSizeDisplay}}
-Machine: {{site1.machine}}
 Treatment Depth: {{site1.treatmentDepthDisplay}}
 
 Written consent obtained. The risks and benefits of XRT therapy were discussed in detail. Specifically, the risks of infection, scarring, bleeding, radiation dermatitis, prolonged wound healing, incomplete removal, nerve injury, inability to clear the tumor, and recurrence were addressed. The treatment site was clearly identified and confirmed by the patient. The patient received XRT as outlined above.
@@ -499,8 +604,6 @@ Written consent obtained. The risks and benefits of XRT therapy were discussed i
 Post Care: {{structured.postCare}}
 
 {{structured.treatmentDeliveryStatement}}
-
-{{structured.treatmentComment}}
 
 Plan: Radiation Physics Consultation.
 Location: {{site1.bodyLocation}}
@@ -560,15 +663,14 @@ The following treatment devices and target prescriptions were utilized pending r
 Appropriately healing biopsy site distributed on the {{site1.bodyLocation}}.
 
 Plan: Therapeutic Radiation Simulation.
-Number of Treatment Areas: 1
-Number of Blocks: {{site1.numberOfBlocks}}
-Type of Blocks: Complex
 {{site1.simulationComplicationsLine}}
 
 XRT Simulation Details Site 1:
 Total Fractions: {{site1.totalFractions}}
+Frequency: {{site1.treatmentInterval}}
 Daily dose: {{site1.dailyDose}} cGy
 Total dose: {{site1.totalDose}} cGy
+Energy: {{site1.energyKv}}
 Tx depth: {{site1.treatmentDepthDisplay}}
 Cone size: {{site1.coneSizeDisplay}}
 Cutout flex shield size: {{site1.cutoutSizeDisplay}}
@@ -579,6 +681,7 @@ Note: This plan will be the initial intent for treatment. The final approved pla
 
 Plan: Consultation for Radiotherapy.
 Location: {{site1.bodyLocation}}
+Lesion Size: {{site1.lesionSizeDisplay}}
 
 Review: {{structured.consultReview}}
 
@@ -598,15 +701,14 @@ After counseling, we decided on the following plan: Schedule Radiotherapy
 Appropriately healing biopsy site distributed on the {{site2.bodyLocation}}.
 
 Plan: Therapeutic Radiation Simulation.
-Number of Treatment Areas: 1
-Number of Blocks: {{site2.numberOfBlocks}}
-Type of Blocks: Complex
 {{site2.simulationComplicationsLine}}
 
 XRT Simulation Details Site 2:
 Total Fractions: {{site2.totalFractions}}
+Frequency: {{site2.treatmentInterval}}
 Daily dose: {{site2.dailyDose}} cGy
 Total dose: {{site2.totalDose}} cGy
+Energy: {{site2.energyKv}}
 Tx depth: {{site2.treatmentDepthDisplay}}
 Cone size: {{site2.coneSizeDisplay}}
 Cutout flex shield size: {{site2.cutoutSizeDisplay}}
@@ -617,6 +719,7 @@ Note: This plan will be the initial intent for treatment. The final approved pla
 
 Plan: Consultation for Radiotherapy.
 Location: {{site2.bodyLocation}}
+Lesion Size: {{site2.lesionSizeDisplay}}
 
 Review: {{structured.consultReview}}
 
@@ -706,9 +809,7 @@ Comments: See document named "Radiation Therapy Dose Calcs" attached to patient 
 {{structured.healingDescription}}
 
 Plan: Therapeutic Radiation Simulation.
-Number of Treatment Areas: 1
-Number of Blocks: {{site1.numberOfBlocks}}
-Type of Blocks: Simple
+{{structured.treatmentComment}}
 {{site1.simulationComplicationsLine}}
 
 Plan: Radiation Treatment.
@@ -722,19 +823,15 @@ Total Target Dose: {{site1.totalDose}} cGy
 Treatment Parameters:
 Additional Treatment Devices: {{site1.additionalDevices}}
 Flex Shield (Cutout Used): {{site1.cutoutSizeDisplay}}
-kV: {{site1.energyKv}}
 Dose: {{site1.dailyDose}} cGy
 Cone Size: {{site1.coneSizeDisplay}}
-Machine: {{site1.machine}}
 Treatment Depth: {{site1.treatmentDepthDisplay}}
 
 2. {{site2.diagnosisText}} ({{site2.icd10}})
 Appropriately healing biopsy site distributed on the {{site2.bodyLocation}}.
 
 Plan: Therapeutic Radiation Simulation.
-Number of Treatment Areas: 1
-Number of Blocks: {{site2.numberOfBlocks}}
-Type of Blocks: Simple
+{{structured.treatmentComment}}
 {{site2.simulationComplicationsLine}}
 
 Plan: Radiation Treatment.
@@ -748,10 +845,8 @@ Total Target Dose: {{site2.totalDose}} cGy
 Treatment Parameters:
 Additional Treatment Devices: {{site2.additionalDevices}}
 Flex Shield (Cutout Used): {{site2.cutoutSizeDisplay}}
-kV: {{site2.energyKv}}
 Dose: {{site2.dailyDose}} cGy
 Cone Size: {{site2.coneSizeDisplay}}
-Machine: {{site2.machine}}
 Treatment Depth: {{site2.treatmentDepthDisplay}}
 
 Written consent obtained. The risks and benefits of XRT therapy were discussed in detail. Specifically, the risks of infection, scarring, bleeding, radiation dermatitis, prolonged wound healing, incomplete removal, nerve injury, inability to clear the tumor, and recurrence were addressed. The treatment sites were clearly identified and confirmed by the patient. The patient received XRT as outlined above.
@@ -759,8 +854,6 @@ Written consent obtained. The risks and benefits of XRT therapy were discussed i
 Post Care: {{structured.postCare}}
 
 {{structured.treatmentDeliveryStatement}}
-
-{{structured.treatmentComment}}
 
 {{structured.additionalNotesSection}}
 
@@ -806,9 +899,7 @@ Focused Exam Sites 1 & 2:
 Appropriately healing biopsy site distributed on the {{site1.bodyLocation}}.
 
 Plan: Therapeutic Radiation Simulation.
-Number of Treatment Areas: 1
-Number of Blocks: {{site1.numberOfBlocks}}
-Type of Blocks: Simple
+{{structured.treatmentComment}}
 {{site1.simulationComplicationsLine}}
 
 Plan: Radiation Treatment.
@@ -822,19 +913,15 @@ Total Target Dose: {{site1.totalDose}} cGy
 Treatment Parameters:
 Additional Treatment Devices: {{site1.additionalDevices}}
 Flex Shield (Cutout Used): {{site1.cutoutSizeDisplay}}
-kV: {{site1.energyKv}}
 Dose: {{site1.dailyDose}} cGy
 Cone Size: {{site1.coneSizeDisplay}}
-Machine: {{site1.machine}}
 Treatment Depth: {{site1.treatmentDepthDisplay}}
 
 2. {{site2.diagnosisText}} ({{site2.icd10}})
 Appropriately healing biopsy site distributed on the {{site2.bodyLocation}}.
 
 Plan: Therapeutic Radiation Simulation.
-Number of Treatment Areas: 1
-Number of Blocks: {{site2.numberOfBlocks}}
-Type of Blocks: Simple
+{{structured.treatmentComment}}
 {{site2.simulationComplicationsLine}}
 
 Plan: Radiation Treatment.
@@ -848,10 +935,8 @@ Total Target Dose: {{site2.totalDose}} cGy
 Treatment Parameters:
 Additional Treatment Devices: {{site2.additionalDevices}}
 Flex Shield (Cutout Used): {{site2.cutoutSizeDisplay}}
-kV: {{site2.energyKv}}
 Dose: {{site2.dailyDose}} cGy
 Cone Size: {{site2.coneSizeDisplay}}
-Machine: {{site2.machine}}
 Treatment Depth: {{site2.treatmentDepthDisplay}}
 
 Written consent obtained. The risks and benefits of XRT therapy were discussed in detail. Specifically, the risks of infection, scarring, bleeding, radiation dermatitis, prolonged wound healing, incomplete removal, nerve injury, inability to clear the tumor, and recurrence were addressed. The treatment sites were clearly identified and confirmed by the patient. The patient received XRT as outlined above.
@@ -859,8 +944,6 @@ Written consent obtained. The risks and benefits of XRT therapy were discussed i
 Post Care: {{structured.postCare}}
 
 {{structured.treatmentDeliveryStatement}}
-
-{{structured.treatmentComment}}
 
 {{structured.additionalNotesSection}}
 
@@ -916,9 +999,7 @@ Weight: {{vitals.weight}}
 Appropriately healing biopsy site distributed on the {{site1.bodyLocation}}.
 
 Plan: Therapeutic Radiation Simulation.
-Number of Treatment Areas: 1
-Number of Blocks: {{site1.numberOfBlocks}}
-Type of Blocks: Simple
+{{structured.treatmentComment}}
 {{site1.simulationComplicationsLine}}
 
 Plan: Radiation Treatment.
@@ -932,10 +1013,8 @@ Total Target Dose: {{site1.totalDose}} cGy
 Treatment Parameters:
 Additional Treatment Devices: {{site1.additionalDevices}}
 Flex Shield (Cutout Used): {{site1.cutoutSizeDisplay}}
-kV: {{site1.energyKv}}
 Dose: {{site1.dailyDose}} cGy
 Cone Size: {{site1.coneSizeDisplay}}
-Machine: {{site1.machine}}
 Treatment Depth: {{site1.treatmentDepthDisplay}}
 
 Plan: Radiation Physics Consultation.
@@ -947,9 +1026,7 @@ Physics Consultation: Fraction Number: {{visit.treatmentNumber}} of {{site1.pres
 Appropriately healing biopsy site distributed on the {{site2.bodyLocation}}.
 
 Plan: Therapeutic Radiation Simulation.
-Number of Treatment Areas: 1
-Number of Blocks: {{site2.numberOfBlocks}}
-Type of Blocks: Simple
+{{structured.treatmentComment}}
 {{site2.simulationComplicationsLine}}
 
 Plan: Radiation Treatment.
@@ -963,10 +1040,8 @@ Total Target Dose: {{site2.totalDose}} cGy
 Treatment Parameters:
 Additional Treatment Devices: {{site2.additionalDevices}}
 Flex Shield (Cutout Used): {{site2.cutoutSizeDisplay}}
-kV: {{site2.energyKv}}
 Dose: {{site2.dailyDose}} cGy
 Cone Size: {{site2.coneSizeDisplay}}
-Machine: {{site2.machine}}
 Treatment Depth: {{site2.treatmentDepthDisplay}}
 
 Plan: Radiation Physics Consultation.
@@ -979,8 +1054,6 @@ Written consent obtained. The risks and benefits of XRT therapy were discussed i
 Post Care: {{structured.postCare}}
 
 {{structured.treatmentDeliveryStatement}}
-
-{{structured.treatmentComment}}
 
 {{structured.additionalNotesSection}}
 

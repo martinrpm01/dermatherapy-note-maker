@@ -769,7 +769,8 @@ describe("RadiationNoteService workflow", () => {
     expect(form.sites[0].machine).toBe("Xoft Elekta 1200 SPX");
 
     const draft = service.buildVisitDraft(course.id, "next_treatment");
-    expect(draft.note.generatedText).toContain("Machine: Xoft Elekta 1200 SPX");
+    expect(draft.note.generatedText).not.toContain("Machine:");
+    expect(draft.note.generatedText).toContain("using the Xoft Elekta 1200SPX system");
   });
 
   it("defaults treatment depth text when a site depth is blank", async () => {
@@ -1225,15 +1226,20 @@ describe("RadiationNoteService workflow", () => {
     );
     expect(consultDraft.note.generatedText).toContain("Total time of 45 minutes was spent by the physician and radiation therapist");
     expect(consultDraft.note.generatedText).toContain("The radiation oncologist will provide a recommended treatment plan.");
+    expect(consultDraft.note.generatedText).toContain("Plan: Therapeutic Radiation Simulation.\n");
+    expect(consultDraft.note.generatedText).not.toContain("Number of Treatment Areas:");
+    expect(consultDraft.note.generatedText).not.toContain("Number of Blocks:");
+    expect(consultDraft.note.generatedText).not.toContain("Type of Blocks:");
     expect(consultDraft.note.generatedText).toContain(
-      "Plan: Therapeutic Radiation Simulation.\nNumber of Treatment Areas: 1\nNumber of Blocks: 1\nType of Blocks: Complex"
+      "Plan: Consultation for Radiotherapy.\nLocation: Nasal bridge\nLesion Size: 10mm"
     );
-    expect(consultDraft.note.generatedText).toContain("Plan: Consultation for Radiotherapy.\nLocation: Nasal bridge");
     expect(consultDraft.note.generatedText).toContain(
       "XRT Simulation Details:\nTotal Fractions:"
     );
+    expect(consultDraft.note.generatedText).toContain("Frequency: bi-weekly");
     expect(consultDraft.note.generatedText).toContain("Daily dose:");
     expect(consultDraft.note.generatedText).toContain("Total dose:");
+    expect(consultDraft.note.generatedText).toContain("Energy: 50kV");
     expect(consultDraft.note.generatedText).toContain("Tx depth:");
     expect(consultDraft.note.generatedText).toContain("Cone size:");
     expect(consultDraft.note.generatedText).toContain("Cutout flex shield size:");
@@ -1245,9 +1251,6 @@ describe("RadiationNoteService workflow", () => {
     expect(consultDraft.note.generatedText).not.toContain("ICD10:");
     expect(consultDraft.note.generatedText).not.toContain("Diagnosis:");
     expect(consultDraft.note.generatedText).not.toContain("Treatment Site:");
-    expect(consultDraft.note.generatedText).not.toContain("Frequency:");
-    expect(consultDraft.note.generatedText).not.toContain("Energy:");
-    expect(consultDraft.note.generatedText).not.toContain("Lesion Size:");
     expect(consultDraft.note.generatedText).not.toContain("Notes:");
     expect(consultDraft.note.generatedText).not.toContain("Treatment Start Date:");
     expect(consultDraft.note.generatedText).toContain("Review: An extensive history and exam was performed");
@@ -1311,9 +1314,10 @@ describe("RadiationNoteService workflow", () => {
     expect(firstDraft.note.generatedText).toContain("Follow Up: As previously scheduled.");
     expect(firstDraft.note.generatedText).not.toContain("Post Care:\nAquaphor was applied");
     expect(firstDraft.note.generatedText).not.toContain("Follow Up:\nAs previously scheduled");
-    expect(firstDraft.note.generatedText).toContain(
-      "Plan: Therapeutic Radiation Simulation.\nNumber of Treatment Areas: 1\nNumber of Blocks: 1\nType of Blocks: Simple"
-    );
+    expect(firstDraft.note.generatedText).toContain("Plan: Therapeutic Radiation Simulation.\nA simple simulation was performed");
+    expect(firstDraft.note.generatedText).not.toContain("Number of Treatment Areas:");
+    expect(firstDraft.note.generatedText).not.toContain("Number of Blocks:");
+    expect(firstDraft.note.generatedText).not.toContain("Type of Blocks:");
     expect(firstDraft.note.generatedText).not.toContain("Plan:\nTherapeutic Radiation Simulation.");
     expect(firstDraft.note.generatedText).toContain("Final Approved Prescription:");
     expect(firstDraft.note.generatedText).toContain("Treatment Site: Bridge of nose");
@@ -1323,6 +1327,8 @@ describe("RadiationNoteService workflow", () => {
     expect(firstDraft.note.generatedText).toContain(
       "Treatment was delivered today per the approved prescription, reflecting the final clinical decision. The patient was treated with hypofractionated external beam radiation therapy using the Xoft Elekta 1200SPX system utilizing a 50kV x-ray source, for a biopsy-proven nonmelanoma skin cancer."
     );
+    expect(firstDraft.note.generatedText).not.toContain("\nkV:");
+    expect(firstDraft.note.generatedText).not.toContain("\nMachine:");
     expect(firstDraft.note.generatedText).not.toContain("Treatment was initiated today");
     expect(firstDraft.note.generatedText).toContain(
       'Comments: See document named "Radiation Therapy Dose Calcs" attached to patient chart'
@@ -1604,8 +1610,9 @@ describe("RadiationNoteService workflow", () => {
     const finalOtv = service.buildVisitDraft(finalCourse.id, "next_treatment", undefined, { treatmentNumber: 10 });
     expect(finalOtv.note.noteType).toBe("otv");
     expect(finalOtv.note.generatedText).not.toContain("continue radiation therapy as prescribed");
+    expect(finalOtv.note.generatedText).not.toContain("anticipated acute effects");
     expect(finalOtv.note.generatedText).toContain(
-      "No changes required; ongoing skin care and anticipated acute effects were reviewed."
+      "No changes required; treatment completed as prescribed."
     );
 
     const continuingCourse = service.saveCourse({
@@ -1640,6 +1647,7 @@ describe("RadiationNoteService workflow", () => {
       treatmentNumber: 10
     });
     expect(continuingOtv.note.generatedText).toContain("continue radiation therapy as prescribed");
+    expect(continuingOtv.note.generatedText).toContain("continue skin care");
 
     const mixedCourse = service.saveCourse({
       patientId: patient.id,
@@ -1695,7 +1703,7 @@ describe("RadiationNoteService workflow", () => {
     expect(mixedOtv.note.noteType).toBe("otv");
     expect(mixedOtv.note.generatedText).toContain("Treatment to Left medial malar cheek has reached the prescribed final fraction");
     expect(mixedOtv.note.generatedText).toContain(
-      "the plan to continue radiation therapy as prescribed for Right post auricular skin was reviewed"
+      "continue skin care and continue radiation therapy as prescribed for Right post auricular skin"
     );
   });
 
@@ -2002,21 +2010,24 @@ describe("RadiationNoteService workflow", () => {
     );
     expect(savedConsult.generatedText).not.toContain("Tx site name:");
     expect(savedConsult.generatedText).not.toContain("ICD10:");
-    expect(savedConsult.generatedText).toContain(
-      "Plan: Therapeutic Radiation Simulation.\nNumber of Treatment Areas: 1\nNumber of Blocks: 1\nType of Blocks: Complex"
-    );
-    expect(savedConsult.generatedText).toContain("Plan: Consultation for Radiotherapy.\nLocation: Left cheek");
+    expect(savedConsult.generatedText).toContain("Plan: Therapeutic Radiation Simulation.\n");
+    expect(savedConsult.generatedText).not.toContain("Number of Treatment Areas:");
+    expect(savedConsult.generatedText).not.toContain("Number of Blocks:");
+    expect(savedConsult.generatedText).not.toContain("Type of Blocks:");
+    expect(savedConsult.generatedText).toContain("Plan: Consultation for Radiotherapy.\nLocation: Left cheek\nLesion Size: 8mm");
     expect(savedConsult.generatedText).toContain("XRT Simulation Details Site 1:");
     expect(savedConsult.generatedText).toContain("Total Fractions: 10");
+    expect(savedConsult.generatedText).toContain("Frequency: bi-weekly");
     expect(savedConsult.generatedText).toContain("Daily dose: 400 cGy");
     expect(savedConsult.generatedText).toContain("Total dose: 4000 cGy");
+    expect(savedConsult.generatedText).toContain("Energy: 50kV");
     expect(savedConsult.generatedText).toContain("Tx depth: 3mm");
     expect(savedConsult.generatedText).toContain("Cone size: 20mm");
     expect(savedConsult.generatedText).toContain("Cutout flex shield size: 10mm");
     expect(savedConsult.generatedText).not.toContain("Cutout flex shield size: 10mm, to be used with");
     expect(savedConsult.generatedText).toContain("Additional Tx devices:");
     expect(savedConsult.generatedText).toContain(
-      "Plan: Consultation for Radiotherapy.\nLocation: Right ear"
+      "Plan: Consultation for Radiotherapy.\nLocation: Right ear\nLesion Size: 10mm"
     );
     expect(savedConsult.generatedText).toContain("Follow Up: As previously scheduled for both treatment sites.");
     expect(savedConsult.generatedText).not.toContain("Follow Up: The patient is scheduled to start Radiation Therapy on");
@@ -2024,14 +2035,13 @@ describe("RadiationNoteService workflow", () => {
     expect(savedConsult.generatedText).not.toContain("Consultation and Simulation for Radiotherapy");
     expect(savedConsult.generatedText).not.toContain("Diagnosis:");
     expect(savedConsult.generatedText).not.toContain("Treatment Site:");
-    expect(savedConsult.generatedText).not.toContain("Frequency:");
-    expect(savedConsult.generatedText).not.toContain("Energy:");
-    expect(savedConsult.generatedText).not.toContain("Lesion Size:");
     expect(savedConsult.generatedText).not.toContain("Notes:");
     expect(savedConsult.generatedText).toContain("XRT Simulation Details Site 2:");
     expect(savedConsult.generatedText).toContain("Total Fractions: 12");
+    expect(savedConsult.generatedText).toContain("Frequency: bi-weekly");
     expect(savedConsult.generatedText).toContain("Daily dose: 350 cGy");
     expect(savedConsult.generatedText).toContain("Total dose: 4200 cGy");
+    expect(savedConsult.generatedText).toContain("Energy: 50kV");
     expect(savedConsult.generatedText).toContain("Cutout flex shield size: 12mm");
     expect(savedConsult.generatedText).not.toContain("Cutout flex shield size: 12mm, to be used with");
     expect(savedConsult.generatedText).toContain(
@@ -2293,13 +2303,13 @@ describe("RadiationNoteService workflow", () => {
 
     const treatmentDraft = service.buildVisitDraft(course.id, "next_treatment");
     expect(treatmentDraft.note.structuredFields.siteSnapshots[0].numberOfBlocks).toBe(0);
-    expect(treatmentDraft.note.generatedText).toContain("Number of Blocks: 0");
+    expect(treatmentDraft.note.generatedText).not.toContain("Number of Blocks:");
     expect(treatmentDraft.note.generatedText).toContain("Flex Shield Cutout: Open Cone");
     expect(treatmentDraft.note.generatedText).not.toContain("Open 30mm Cone");
 
     const consultDraft = service.buildVisitDraft(course.id, "consult_sim");
     expect(consultDraft.note.structuredFields.siteSnapshots[0].numberOfBlocks).toBe(1);
-    expect(consultDraft.note.generatedText).toContain("Number of Blocks: 1");
+    expect(consultDraft.note.generatedText).not.toContain("Number of Blocks:");
     expect(consultDraft.note.generatedText).toContain("Cone size: 30mm");
     expect(consultDraft.note.generatedText).toContain("Cutout flex shield size: Open Cone");
 
@@ -2338,7 +2348,7 @@ describe("RadiationNoteService workflow", () => {
 
     const customCutoutDraft = service.buildVisitDraft(course.id, "next_treatment");
     expect(customCutoutDraft.note.structuredFields.siteSnapshots[0].numberOfBlocks).toBe(1);
-    expect(customCutoutDraft.note.generatedText).toContain("Number of Blocks: 1");
+    expect(customCutoutDraft.note.generatedText).not.toContain("Number of Blocks:");
   });
 
   it("uses size-only open cone wording in first-fraction prescription text", async () => {
