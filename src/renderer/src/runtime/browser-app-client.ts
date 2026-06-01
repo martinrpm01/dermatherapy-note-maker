@@ -1811,8 +1811,6 @@ export class BrowserAppClient implements AppClient {
     structuredDataStore.insertGeneratedPdf(visitId, filePath, versionNumber);
     this.removeSupersededGeneratedPdfs(structuredDataStore, binaryAssetStore, existingPdfs, filePath);
 
-    this.triggerPdfDownload(pdfFileName, pdfBytes);
-
     await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
     const persistedPdf = structuredDataStore.fetchGeneratedPdfs(visitId).find((pdf) => pdf.versionNumber === versionNumber);
     if (!persistedPdf) {

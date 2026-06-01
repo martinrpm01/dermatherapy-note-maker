@@ -859,17 +859,24 @@ export function printPatientSchedule(patientName: string, appointments: Schedule
       </head>
       <body>
         <div class="schedule-actions">
-          <button class="schedule-print" type="button" onclick="window.focus(); window.print();">Print</button>
+          <button class="schedule-print" type="button" onclick="requestSchedulePrint();">Print</button>
           <button class="schedule-close" type="button" aria-label="Close schedule" onclick="window.close();">X</button>
         </div>
         <h1>${escapeHtml(patientName)} Treatment Schedule</h1>
         ${monthHtml}
         <script>
+          var schedulePrintRequested = false;
+          function requestSchedulePrint() {
+            if (schedulePrintRequested) {
+              return;
+            }
+            schedulePrintRequested = true;
+            window.focus();
+            window.print();
+          }
           window.addEventListener("load", function () {
             window.focus();
-            window.setTimeout(function () {
-              window.print();
-            }, 500);
+            window.setTimeout(requestSchedulePrint, 500);
           });
         </script>
       </body>
