@@ -2670,6 +2670,39 @@ describe("RadiationNoteService workflow", () => {
     expect(path.basename(consultPdfPath)).toContain("ava-derm-consult-note");
   });
 
+  it("does not append linked course documents to finalized consult note PDFs", async () => {
+    const { patient, course } = await createPatientAndCourse();
+    const consultDraft = service.buildVisitDraft(course.id, "consult_sim");
+    const savedConsult = service.saveVisit(consultDraft.note);
+    const firstPdf = await service.generatePdf(savedConsult.id);
+    const firstPdfPath = assetStore.resolveAssetPath(firstPdf.pdfAsset)!;
+    const firstPageCount = (await PDFDocument.load(fs.readFileSync(firstPdfPath))).getPageCount();
+
+    const linkedDocument = await PDFDocument.create();
+    linkedDocument.addPage([200, 200]);
+    linkedDocument.addPage([200, 200]);
+    const linkedDocumentBytes = await linkedDocument.save();
+    const documentsDir = assetStore.getCourseDocumentsDir(patient.id, course.id);
+    assetStore.ensureDirectory(documentsDir);
+    const linkedDocumentPath = path.join(documentsDir, "linked-sim-worksheet.pdf");
+    assetStore.writeBinaryFile(linkedDocumentPath, linkedDocumentBytes);
+    repository.upsertCourseDocument(
+      course.id,
+      "sim_worksheet",
+      assetStore.createAssetReference(linkedDocumentPath, "course_document")!,
+      "Linked Sim Worksheet",
+      "application/pdf",
+      "linked-sim-worksheet.pdf"
+    );
+
+    const secondPdf = await service.generatePdf(savedConsult.id);
+    const secondPdfPath = assetStore.resolveAssetPath(secondPdf.pdfAsset)!;
+    const secondPageCount = (await PDFDocument.load(fs.readFileSync(secondPdfPath))).getPageCount();
+
+    expect(repository.fetchCourseDocuments(course.id)).toHaveLength(1);
+    expect(secondPageCount).toBe(firstPageCount);
+  });
+
   it("refreshes reopened draft notes after course edits so regenerated text stays current", async () => {
     const { patient, course } = await createPatientAndCourse();
     const originalSite = repository.fetchSites([course.id])[0];

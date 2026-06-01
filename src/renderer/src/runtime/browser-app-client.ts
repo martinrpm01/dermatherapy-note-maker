@@ -1765,7 +1765,6 @@ export class BrowserAppClient implements AppClient {
 
     const photos = structuredDataStore.fetchVisitPhotos(visitId);
     const attachments = structuredDataStore.fetchVisitAttachments(visitId);
-    const linkedCourseDocuments = visit.noteType === "consult_sim" ? structuredDataStore.fetchCourseDocuments(course.id) : [];
     const existingPdfs = structuredDataStore.fetchGeneratedPdfs(visitId);
     const versionNumber = Math.max(0, ...existingPdfs.map((pdf) => pdf.versionNumber)) + 1;
     const pdfBaseName = this.buildPdfBaseName(patient, visit);
@@ -1788,13 +1787,6 @@ export class BrowserAppClient implements AppClient {
             caption: attachment.caption || attachment.originalName,
             mimeType: attachment.mimeType,
             originalName: attachment.originalName
-          })),
-          ...linkedCourseDocuments.map((document) => ({
-            asset: document.fileAsset,
-            assetLabel: `course document ${document.id}`,
-            caption: document.caption || document.originalName,
-            mimeType: document.mimeType,
-            originalName: document.originalName
           }))
         ].map(async (attachment) => ({
           file: await this.readStoredAssetInput(attachment.asset, attachment.assetLabel, attachment.originalName),

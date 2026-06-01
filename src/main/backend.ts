@@ -1456,7 +1456,6 @@ export class RadiationNoteService {
 
     const photos = this.repository.fetchVisitPhotos(visitId);
     const attachments = this.repository.fetchVisitAttachments(visitId);
-    const linkedCourseDocuments = visit.noteType === "consult_sim" ? this.repository.fetchCourseDocuments(course.id) : [];
     const existingPdfs = this.repository.fetchGeneratedPdfs(visitId);
     const versionNumber = Math.max(0, ...existingPdfs.map((pdf) => pdf.versionNumber)) + 1;
     const pdfBaseName = this.buildPdfBaseName(patient, visit);
@@ -1482,12 +1481,6 @@ export class RadiationNoteService {
           caption: attachment.caption || attachment.originalName,
           mimeType: attachment.mimeType,
           originalName: attachment.originalName
-        })),
-        ...linkedCourseDocuments.map((document) => ({
-          file: this.readPdfAssetInput(document.fileAsset, `course document ${document.id}`, document.originalName),
-          caption: document.caption || document.originalName,
-          mimeType: document.mimeType,
-          originalName: document.originalName
         }))
       ],
       logoInput: this.readPdfOptionalPathInput(this.getCurrentNoteLogoPath(), "note logo")
