@@ -316,11 +316,8 @@ export async function buildSignedConsentFormPdfFromTemplateBytes(
   const signDate = formatDisplayDate(input.signing.signDate || input.course.simConsultDate || input.course.startDate || "");
   const dateRects = DATE_FIELDS.map((fieldName) => getFieldRect(form, fieldName));
   DATE_FIELDS.forEach((fieldName) => setText(form, fieldName, ""));
-  setText(
-    form,
-    INITIALS_FIELD,
-    shouldIncludePregnancyInitials(input.patient) ? input.signing.patientInitials.trim().toUpperCase() : ""
-  );
+  const pregnancyInitialsRect = getFieldRect(form, INITIALS_FIELD);
+  setText(form, INITIALS_FIELD, "");
   setCheckbox(form, FORMER_RADIATION_ACKNOWLEDGMENT_FIELD, input.signing.formerRadiationAcknowledged);
   setCheckbox(form, MEDICAL_DEVICES_ACKNOWLEDGMENT_FIELD, input.signing.medicalDevicesAcknowledged);
   const patientPrintedNameRect = getFieldRect(form, PATIENT_PRINTED_NAME_FIELD);
@@ -353,6 +350,15 @@ export async function buildSignedConsentFormPdfFromTemplateBytes(
     minSize: 9,
     align: "center"
   });
+
+  if (shouldIncludePregnancyInitials(input.patient) && input.signing.patientInitialsDataUrl) {
+    await drawSignatureImage(pdfDoc, page, input.signing.patientInitialsDataUrl, pregnancyInitialsRect, {
+      widthScale: 1.05,
+      heightScale: 1.05,
+      offsetX: 0,
+      offsetY: 0
+    });
+  }
 
   await drawSignatureImage(pdfDoc, page, input.signing.patientSignatureDataUrl, patientSignatureRect, {
     widthScale: 1.36,

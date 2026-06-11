@@ -30,6 +30,7 @@ import {
   buildTreatmentDeliveryStatement,
   buildSiteSnapshots,
   cleanupConsultFollowUp,
+  cleanupRemovedDefaultNoteWording,
   createEmptyVitals,
   fillMissingSitePrescribedFractions,
   formatAdditionalDevicesForSite,
@@ -38,13 +39,11 @@ import {
   getAutoNumberOfBlocks,
   getCurrentFraction,
   getDefaultFinalTreatmentNote,
-  getDefaultMipsNote,
   getDefaultOtvNote,
   getDefaultPhysicsComment,
   getMaxSitePrescribedFractions,
   getNextTreatmentNumber,
   getSuggestedNoteType,
-  getStickyMipsDefaults,
   getTemplateKey,
   isLegacyDefaultOtvNote,
   isFinalTreatmentEligible,
@@ -249,12 +248,8 @@ function buildFinalTreatmentSection(enabled: boolean, value?: string) {
   return `${value?.trim() || getDefaultFinalTreatmentNote()}\n`;
 }
 
-function buildMipsSection(enabled: boolean, value?: string) {
-  if (!enabled) {
-    return "";
-  }
-
-  return `Plan: MIPS\n${value?.trim() || getDefaultMipsNote()}\n`;
+function buildMipsSection(_enabled: boolean, _value?: string) {
+  return "";
 }
 
 function injectFinalTreatmentSection(renderedText: string, finalTreatmentSection: string) {
@@ -1095,11 +1090,6 @@ export class RadiationNoteService {
       biopsyDate: course.startDate,
       lastTreatmentDate: mostRecentVisitDate
     });
-    const stickyMipsDefaults = getStickyMipsDefaults(visits, treatmentNumber);
-    if (stickyMipsDefaults) {
-      structuredFields.addMips = stickyMipsDefaults.addMips;
-      structuredFields.mipsNote = stickyMipsDefaults.mipsNote;
-    }
     structuredFields.siteSnapshots = structuredFields.siteSnapshots.map((site) => ({
       ...site,
       biopsyDate: site.biopsyDate || course.startDate || "",
@@ -1299,7 +1289,7 @@ export class RadiationNoteService {
         physicsComment:
           input.structuredFields.physicsComment?.trim() ||
           getDefaultPhysicsComment(input.noteType),
-        mipsNote: input.structuredFields.mipsNote?.trim() || getDefaultMipsNote(),
+        mipsNote: input.structuredFields.mipsNote?.trim() || "",
         supervisedBy:
           input.structuredFields.supervisedBy?.trim() || settings.supervisingPhysician,
         siteSnapshots: refreshVisitSiteSnapshots(
@@ -2298,7 +2288,7 @@ export class RadiationNoteService {
                 ? getDefaultOtvNote(resolvedSiteSnapshots, visit.treatmentNumber)
                 : visit.structuredFields.examComment
               : visit.structuredFields.examComment ?? "",
-          mipsNote: visit.structuredFields.mipsNote?.trim() || getDefaultMipsNote(),
+          mipsNote: visit.structuredFields.mipsNote?.trim() || "",
           supervisedBy:
             visit.structuredFields.supervisedBy?.trim() || settings.supervisingPhysician,
           siteSnapshots: resolvedSiteSnapshots
@@ -2491,19 +2481,21 @@ export class RadiationNoteService {
     });
 
     return stripExamVitalsSection(
-      injectMipsSection(
-        injectFinalTreatmentSection(
-          cleanupConsultFollowUp(
-            injectPhysicsConsultationDetails(renderedText, note.structuredFields.physicsComment, [
-              site1Render.bodyLocation,
-              site2Render.bodyLocation
-            ], note.treatmentNumber),
-            note.noteType,
-            consultFollowUp
+      cleanupRemovedDefaultNoteWording(
+        injectMipsSection(
+          injectFinalTreatmentSection(
+            cleanupConsultFollowUp(
+              injectPhysicsConsultationDetails(renderedText, note.structuredFields.physicsComment, [
+                site1Render.bodyLocation,
+                site2Render.bodyLocation
+              ], note.treatmentNumber),
+              note.noteType,
+              consultFollowUp
+            ),
+            finalTreatmentSection
           ),
-          finalTreatmentSection
-        ),
-        mipsSection
+          mipsSection
+        )
       ),
       note.noteType,
       note.structuredFields.includeExamVitals

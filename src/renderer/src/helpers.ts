@@ -8,12 +8,12 @@ import {
   buildTreatmentDeliveryStatement,
   calculateAgeAtDate,
   cleanupConsultFollowUp,
+  cleanupRemovedDefaultNoteWording,
   formatAdditionalDevicesForSite,
   formatDisplayDate,
   formatVitals,
   getAutoNumberOfBlocks,
   getDefaultFinalTreatmentNote,
-  getDefaultMipsNote,
   getDefaultPhysicsComment,
   getMaxSitePrescribedFractions,
   isFinalTreatmentEligible,
@@ -82,12 +82,8 @@ function buildFinalTreatmentSection(enabled: boolean, value?: string) {
   return `${value?.trim() || getDefaultFinalTreatmentNote()}\n`;
 }
 
-function buildMipsSection(enabled: boolean, value?: string) {
-  if (!enabled) {
-    return "";
-  }
-
-  return `Plan: MIPS\n${value?.trim() || getDefaultMipsNote()}\n`;
+function buildMipsSection(_enabled: boolean, _value?: string) {
+  return "";
 }
 
 function injectFinalTreatmentSection(renderedText: string, finalTreatmentSection: string) {
@@ -416,24 +412,26 @@ export function buildVisitPreviewText(
   });
 
   return stripExamVitalsSection(
-    injectMipsSection(
-      injectFinalTreatmentSection(
-        cleanupConsultFollowUp(
-          injectPhysicsConsultationDetails(
-            renderedText,
-            note.structuredFields.physicsComment?.trim() || getDefaultPhysicsComment(note.noteType),
-            [
-              site1.bodyLocation,
-              site2.bodyLocation
-            ],
-            note.treatmentNumber
+    cleanupRemovedDefaultNoteWording(
+      injectMipsSection(
+        injectFinalTreatmentSection(
+          cleanupConsultFollowUp(
+            injectPhysicsConsultationDetails(
+              renderedText,
+              note.structuredFields.physicsComment?.trim() || getDefaultPhysicsComment(note.noteType),
+              [
+                site1.bodyLocation,
+                site2.bodyLocation
+              ],
+              note.treatmentNumber
+            ),
+            note.noteType,
+            consultFollowUp
           ),
-          note.noteType,
-          consultFollowUp
+          finalTreatmentSection
         ),
-        finalTreatmentSection
-      ),
-      mipsSection
+        mipsSection
+      )
     ),
     note.noteType,
     note.structuredFields.includeExamVitals

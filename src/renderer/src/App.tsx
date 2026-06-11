@@ -476,11 +476,10 @@ function buildDefaultConsentSigningInput(
   course: TreatmentCourseRecord,
   defaultWitnessName: string
 ): ConsentSigningInput {
-  const isFemale = patient.sex.trim().toLowerCase() === "female";
-  const initials = `${patient.firstName.trim().charAt(0)}${patient.lastName.trim().charAt(0)}`.toUpperCase();
   return {
     signDate: course.simConsultDate || new Date().toISOString().slice(0, 10),
-    patientInitials: isFemale ? initials : "",
+    patientInitials: "",
+    patientInitialsDataUrl: "",
     patientPrintedName: `${patient.firstName} ${patient.lastName}`.trim(),
     formerRadiationAcknowledged: false,
     medicalDevicesAcknowledged: false,

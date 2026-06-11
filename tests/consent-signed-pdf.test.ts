@@ -86,6 +86,7 @@ function buildSigning(): ConsentSigningInput {
   return {
     signDate: "2026-04-16",
     patientInitials: "JS",
+    patientInitialsDataUrl: SIGNATURE_DATA_URL,
     patientPrintedName: "John Smith",
     formerRadiationAcknowledged: true,
     medicalDevicesAcknowledged: true,
@@ -118,5 +119,34 @@ describe("signed consent pdf", () => {
     expect(result.fileName).toBe("John Smith - Consent.pdf");
     expect(pdfDoc.getPageCount()).toBeGreaterThan(0);
     expect(form.getFields()).toHaveLength(0);
+  });
+
+  it("uses drawn pregnancy initials instead of typed initials for female consent signing", async () => {
+    const result = await buildSignedConsentFormPdfFromTemplateBytes(templateBytes, {
+      patient: { ...buildPatient(), sex: "Female" },
+      course: buildCourse("one_site"),
+      sites: [
+        buildSite({
+          siteNumber: 1,
+          bodyLocation: "Rt nasal ala",
+          treatmentLocationText: "Rt nasal ala",
+          diagnosisText: "Basal Cell Carcinoma",
+          icd10: "C44.42"
+        })
+      ],
+      signing: {
+        ...buildSigning(),
+        patientInitials: "SHOULD_NOT_RENDER",
+        patientInitialsDataUrl: SIGNATURE_DATA_URL
+      }
+    });
+
+    const pdfDoc = await PDFDocument.load(result.bytes);
+    const form = pdfDoc.getForm();
+    const rawPdf = Buffer.from(result.bytes).toString("latin1");
+
+    expect(result.fileName).toBe("John Smith - Consent.pdf");
+    expect(form.getFields()).toHaveLength(0);
+    expect(rawPdf).not.toContain("SHOULD_NOT_RENDER");
   });
 });

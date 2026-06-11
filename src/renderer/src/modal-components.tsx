@@ -444,7 +444,7 @@ export function ConsentSigningModal(props: {
   const patientStepComplete =
     props.signingInput.signDate.trim().length > 0 &&
     props.signingInput.patientPrintedName.trim().length > 0 &&
-    (!isFemalePatient || props.signingInput.patientInitials.trim().length > 0) &&
+    (!isFemalePatient || Boolean(props.signingInput.patientInitialsDataUrl)) &&
     props.signingInput.formerRadiationAcknowledged &&
     props.signingInput.medicalDevicesAcknowledged &&
     Boolean(props.signingInput.patientSignatureDataUrl);
@@ -552,13 +552,14 @@ export function ConsentSigningModal(props: {
                   <p className="checkbox-option-label" style={{ margin: 0 }}>
                     Females: Regarding Possibility of Pregnancy: This is to certify that, to the best of my knowledge, I am not pregnant, I have been advised that procedures involving x-rays, particularly those involving the pelvis, can be hazardous to an unborn child.
                   </p>
-                  <label>
-                    Initials
-                    <input
-                      value={props.signingInput.patientInitials}
-                      onChange={(event) => props.onChange({ ...props.signingInput, patientInitials: event.target.value.toUpperCase() })}
+                  <div>
+                    <div className="field-label">Initials</div>
+                    <SignaturePad
+                      value={props.signingInput.patientInitialsDataUrl}
+                      onChange={(next) => props.onChange({ ...props.signingInput, patientInitialsDataUrl: next, patientInitials: "" })}
+                      height={88}
                     />
-                  </label>
+                  </div>
                 </div>
               </div>
             ) : null}

@@ -142,17 +142,11 @@ async function createTwoSitePatientAndCourse() {
 const defaultMipsBody =
   "Quality measures have been documented for this encounter in accordance with Merit-based Incentive Payment System (MIPS) requirements.";
 
-function expectMipsImmediatelyBeforeSignature(
-  generatedText: string,
-  signatureHeading: "Supervised by:" | "Treatment Supervised by:",
-  expectedBody = defaultMipsBody
-) {
-  const mipsIndex = generatedText.indexOf("Plan: MIPS");
-  const signatureIndex = generatedText.indexOf(signatureHeading);
-  expect(mipsIndex).toBeGreaterThanOrEqual(0);
-  expect(signatureIndex).toBeGreaterThan(mipsIndex);
+function expectNoMips(generatedText: string) {
+  expect(generatedText).not.toContain("Plan: MIPS");
   expect(generatedText).not.toContain("MIPS:\n");
-  expect(generatedText.slice(mipsIndex, signatureIndex).trim()).toBe(`Plan: MIPS\n${expectedBody}`);
+  expect(generatedText).not.toContain(defaultMipsBody);
+  expect(generatedText).not.toContain("Merit-based Incentive Payment System");
 }
 
 describe("RadiationNoteService workflow", () => {
@@ -1224,7 +1218,8 @@ describe("RadiationNoteService workflow", () => {
     expect(consultDraft.note.generatedText).toContain(
       "The following treatment devices and target prescriptions were utilized pending radiation oncologist and medical physics review:"
     );
-    expect(consultDraft.note.generatedText).toContain("Total time of 45 minutes was spent by the physician and radiation therapist");
+    expect(consultDraft.note.generatedText).toContain("Total time was spent by the physician and radiation therapist");
+    expect(consultDraft.note.generatedText).not.toContain("Total time of 45 minutes");
     expect(consultDraft.note.generatedText).toContain("The radiation oncologist will provide a recommended treatment plan.");
     expect(consultDraft.note.generatedText).toContain("Plan: Therapeutic Radiation Simulation.\n");
     expect(consultDraft.note.generatedText).not.toContain("Number of Treatment Areas:");
@@ -1327,6 +1322,9 @@ describe("RadiationNoteService workflow", () => {
     expect(firstDraft.note.generatedText).toContain(
       "Treatment was delivered today per the approved prescription, reflecting the final clinical decision. The patient was treated with hypofractionated external beam radiation therapy using the Xoft Elekta 1200SPX system utilizing a 50kV x-ray source, for a biopsy-proven nonmelanoma skin cancer."
     );
+    expect(firstDraft.note.generatedText).toContain("The patient received XRT as outlined above.");
+    expect(firstDraft.note.generatedText).not.toContain("Written consent obtained.");
+    expect(firstDraft.note.generatedText).not.toContain("risks and benefits of XRT therapy");
     expect(firstDraft.note.generatedText).not.toContain("\nkV:");
     expect(firstDraft.note.generatedText).not.toContain("\nMachine:");
     expect(firstDraft.note.generatedText).not.toContain("Treatment was initiated today");
@@ -1358,7 +1356,8 @@ describe("RadiationNoteService workflow", () => {
     expect(otvDraft.note.generatedText).toContain(
       "In accordance with the standard of care for radiotherapy treatment"
     );
-    expect(otvDraft.note.generatedText).toContain('See attached Documents within patient chart "Weekly Physics Check".');
+    expect(otvDraft.note.generatedText).toContain('See attached Documents within patient chart "Weekly chart review note".');
+    expect(otvDraft.note.generatedText).not.toContain('"Weekly Physics Check"');
   });
 
   it("migrates saved cutout placeholders to size-only for Sim/Consult and Fraction 1 templates", async () => {
@@ -1728,9 +1727,10 @@ describe("RadiationNoteService workflow", () => {
     }
   });
 
-  it("places checked MIPS immediately before the signature section on visit notes", async () => {
-    const saveWithMips = (draft: ReturnType<RadiationNoteService["buildVisitDraft"]>) => {
+  it("suppresses MIPS output from legacy fields, placeholders, and default literal template blocks", async () => {
+    const saveWithLegacyMips = (draft: ReturnType<RadiationNoteService["buildVisitDraft"]>) => {
       draft.note.structuredFields.addMips = true;
+      draft.note.structuredFields.mipsNote = "Custom sticky MIPS wording.";
       draft.note.generatedText = "";
       draft.note.editedText = "";
       return service.saveVisit(draft.note);
@@ -1738,62 +1738,70 @@ describe("RadiationNoteService workflow", () => {
 
     const { course } = await createPatientAndCourse();
 
-    const savedConsult = saveWithMips(service.buildVisitDraft(course.id, "consult_sim"));
-    expectMipsImmediatelyBeforeSignature(savedConsult.generatedText, "Supervised by:");
+    const consultTemplate = repository.getTemplate("one_site:consult_sim")!;
+    repository.saveTemplate(
+      consultTemplate.id,
+      consultTemplate.templateText.replace("Supervised by:", `MIPS:\n${defaultMipsBody}\n\nSupervised by:`)
+    );
+    const savedConsult = saveWithLegacyMips(service.buildVisitDraft(course.id, "consult_sim"));
+    expectNoMips(savedConsult.generatedText);
+    expect(savedConsult.generatedText).toContain("Supervised by:");
 
-    const savedFirst = saveWithMips(service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 1 }));
-    expectMipsImmediatelyBeforeSignature(savedFirst.generatedText, "Treatment Supervised by:");
-    expect(savedFirst.generatedText.indexOf("Follow Up:")).toBeLessThan(savedFirst.generatedText.indexOf("Plan: MIPS"));
+    const savedFirst = saveWithLegacyMips(service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 1 }));
+    expectNoMips(savedFirst.generatedText);
+    expect(savedFirst.generatedText).toContain("Treatment Supervised by:");
 
     const standardTemplate = repository.getTemplate("one_site:standard_treatment")!;
-    const oldPlacedStandardTemplate = standardTemplate.templateText.replace(
-      "Follow Up: {{structured.followUp}}\n\n{{structured.mipsSection}}\n\nTreatment Supervised by:",
-      "{{structured.mipsSection}}\n\nFollow Up: {{structured.followUp}}\n\nTreatment Supervised by:"
-    );
-    expect(oldPlacedStandardTemplate).not.toBe(standardTemplate.templateText);
-    repository.saveTemplate(standardTemplate.id, oldPlacedStandardTemplate);
-
-    const savedStandard = saveWithMips(service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 2 }));
-    expectMipsImmediatelyBeforeSignature(savedStandard.generatedText, "Treatment Supervised by:");
-    expect(savedStandard.generatedText.indexOf("Follow Up:")).toBeLessThan(
-      savedStandard.generatedText.indexOf("Plan: MIPS")
+    repository.saveTemplate(
+      standardTemplate.id,
+      standardTemplate.templateText.replace(
+        "Treatment Supervised by:",
+        `{{structured.mipsSection}}\n\nPlan: MIPS\n${defaultMipsBody}\n\nTreatment Supervised by:`
+      )
     );
 
-    const savedOtv = saveWithMips(service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 5 }));
-    expectMipsImmediatelyBeforeSignature(savedOtv.generatedText, "Treatment Supervised by:");
-    expect(savedOtv.generatedText.indexOf("Follow Up:")).toBeLessThan(savedOtv.generatedText.indexOf("Plan: MIPS"));
+    const savedStandard = saveWithLegacyMips(service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 2 }));
+    expectNoMips(savedStandard.generatedText);
+    expect(savedStandard.generatedText).toContain("Follow Up:");
+    expect(savedStandard.generatedText).toContain("Treatment Supervised by:");
 
-    const savedFinal = saveWithMips(service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 15 }));
-    expectMipsImmediatelyBeforeSignature(savedFinal.generatedText, "Treatment Supervised by:");
+    const savedOtv = saveWithLegacyMips(service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 5 }));
+    expectNoMips(savedOtv.generatedText);
+    expect(savedOtv.generatedText).toContain("Treatment Supervised by:");
+
+    const savedFinal = saveWithLegacyMips(service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 15 }));
+    expectNoMips(savedFinal.generatedText);
     expect(savedFinal.generatedText.indexOf("Patient successfully completed the prescribed course")).toBeLessThan(
       savedFinal.generatedText.indexOf("Follow Up:")
     );
-    expect(savedFinal.generatedText.indexOf("Follow Up:")).toBeLessThan(savedFinal.generatedText.indexOf("Plan: MIPS"));
 
     const { course: twoSiteCourse } = await createTwoSitePatientAndCourse();
+    const twoSiteStandardTemplate = repository.getTemplate("two_site:standard_treatment")!;
+    repository.saveTemplate(
+      twoSiteStandardTemplate.id,
+      twoSiteStandardTemplate.templateText.replace(
+        "Treatment Supervised by:",
+        `{{structured.mipsSection}}\n\nMIPS:\n${defaultMipsBody}\n\nTreatment Supervised by:`
+      )
+    );
     for (const treatmentNumber of [1, 2, 5]) {
-      const savedTwoSiteTreatment = saveWithMips(
+      const savedTwoSiteTreatment = saveWithLegacyMips(
         service.buildVisitDraft(twoSiteCourse.id, "next_treatment", undefined, { treatmentNumber })
       );
-      expectMipsImmediatelyBeforeSignature(savedTwoSiteTreatment.generatedText, "Treatment Supervised by:");
-      expect(savedTwoSiteTreatment.generatedText.indexOf("Follow Up:")).toBeLessThan(
-        savedTwoSiteTreatment.generatedText.indexOf("Plan: MIPS")
-      );
+      expectNoMips(savedTwoSiteTreatment.generatedText);
+      expect(savedTwoSiteTreatment.generatedText).toContain("Treatment Supervised by:");
     }
 
     const twoSiteFinalDraft = service.buildVisitDraft(twoSiteCourse.id, "next_treatment", undefined, { treatmentNumber: 10 });
     twoSiteFinalDraft.note.structuredFields.finalTreatment = true;
-    const savedTwoSiteFinal = saveWithMips(twoSiteFinalDraft);
-    expectMipsImmediatelyBeforeSignature(savedTwoSiteFinal.generatedText, "Treatment Supervised by:");
+    const savedTwoSiteFinal = saveWithLegacyMips(twoSiteFinalDraft);
+    expectNoMips(savedTwoSiteFinal.generatedText);
     expect(savedTwoSiteFinal.generatedText.indexOf("Patient successfully completed the prescribed course")).toBeLessThan(
       savedTwoSiteFinal.generatedText.indexOf("Follow Up:")
     );
-    expect(savedTwoSiteFinal.generatedText.indexOf("Follow Up:")).toBeLessThan(
-      savedTwoSiteFinal.generatedText.indexOf("Plan: MIPS")
-    );
   });
 
-  it("carries the last saved course MIPS choice into new visit drafts until changed", async () => {
+  it("does not carry legacy MIPS choices into new visit drafts", async () => {
     const { course } = await createPatientAndCourse();
 
     const consultDraft = service.buildVisitDraft(course.id, "consult_sim");
@@ -1801,44 +1809,30 @@ describe("RadiationNoteService workflow", () => {
     consultDraft.note.structuredFields.mipsNote = "Custom sticky MIPS wording.";
     const savedConsult = service.saveVisit(consultDraft.note);
     expect(savedConsult.structuredFields.addMips).toBe(true);
+    expectNoMips(savedConsult.generatedText);
 
     const firstDraft = service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 1 });
-    expect(firstDraft.note.structuredFields.addMips).toBe(true);
-    expect(firstDraft.note.structuredFields.mipsNote).toBe("Custom sticky MIPS wording.");
+    expect(firstDraft.note.structuredFields.addMips).toBe(false);
+    expect(firstDraft.note.structuredFields.mipsNote).toBe("");
+    expectNoMips(firstDraft.note.generatedText);
     const savedFirst = service.saveVisit(firstDraft.note);
 
     const secondDraft = service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 2 });
-    expect(secondDraft.note.structuredFields.addMips).toBe(true);
-    expect(secondDraft.note.structuredFields.mipsNote).toBe("Custom sticky MIPS wording.");
-    secondDraft.note.structuredFields.addMips = false;
+    expect(secondDraft.note.structuredFields.addMips).toBe(false);
+    expect(secondDraft.note.structuredFields.mipsNote).toBe("");
     const savedSecond = service.saveVisit(secondDraft.note);
     expect(savedSecond.structuredFields.addMips).toBe(false);
+    expectNoMips(savedSecond.generatedText);
 
     const reopenedFirst = service.buildVisitDraft(course.id, "next_treatment", savedFirst.id);
-    expect(reopenedFirst.note.structuredFields.addMips).toBe(true);
+    expect(reopenedFirst.note.structuredFields.addMips).toBe(false);
     reopenedFirst.note.structuredFields.additionalNotes = "Older visit edited after MIPS was unchecked later.";
     service.saveVisit(reopenedFirst.note);
 
     const thirdDraft = service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 3 });
     expect(thirdDraft.note.structuredFields.addMips).toBe(false);
-    expect(thirdDraft.note.structuredFields.mipsNote).toBe("Custom sticky MIPS wording.");
-    expect(thirdDraft.note.generatedText).not.toContain("Plan: MIPS");
-  });
-
-  it("carries checked MIPS forward on two-site treatment notes", async () => {
-    const { course } = await createTwoSitePatientAndCourse();
-
-    const firstDraft = service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 1 });
-    firstDraft.note.structuredFields.addMips = true;
-    service.saveVisit(firstDraft.note);
-
-    const standardDraft = service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 2 });
-    expect(standardDraft.note.structuredFields.addMips).toBe(true);
-    expect(standardDraft.note.generatedText).toContain("Plan: MIPS");
-
-    const otvDraft = service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 5 });
-    expect(otvDraft.note.structuredFields.addMips).toBe(true);
-    expect(otvDraft.note.generatedText).toContain("Plan: MIPS");
+    expect(thirdDraft.note.structuredFields.mipsNote).toBe("");
+    expectNoMips(thirdDraft.note.generatedText);
   });
 
   it("only renders final treatment wording on the prescribed final treatment", async () => {
@@ -1871,11 +1865,7 @@ describe("RadiationNoteService workflow", () => {
     expect(savedFinal.generatedText).toContain("Custom final treatment instructions for this course.");
     expect(savedFinal.generatedText).toContain("Treatment was delivered today per the approved prescription");
     expect(savedFinal.generatedText).not.toContain("Patient successfully completed the prescribed course");
-    expectMipsImmediatelyBeforeSignature(
-      savedFinal.generatedText,
-      "Treatment Supervised by:",
-      "Custom MIPS wording for this encounter."
-    );
+    expectNoMips(savedFinal.generatedText);
     expect(savedFinal.generatedText.indexOf("Custom final treatment instructions for this course.")).toBeLessThan(
       savedFinal.generatedText.indexOf("Follow Up:")
     );
@@ -1884,9 +1874,6 @@ describe("RadiationNoteService workflow", () => {
     );
     expect(savedFinal.generatedText.indexOf("Custom final treatment instructions for this course.")).toBeLessThan(
       savedFinal.generatedText.indexOf("Exam Vitals:")
-    );
-    expect(savedFinal.generatedText.indexOf("Follow Up:")).toBeLessThan(
-      savedFinal.generatedText.indexOf("Plan: MIPS")
     );
     expect(savedFinal.generatedText).not.toContain("Quality measures have been documented for this encounter");
   });

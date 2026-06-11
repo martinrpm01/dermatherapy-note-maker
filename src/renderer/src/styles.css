@@ -363,6 +363,13 @@ label select {
   font-size: 1rem;
 }
 
+.field-label {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 .checkbox-label {
   display: flex;
   flex-direction: row;

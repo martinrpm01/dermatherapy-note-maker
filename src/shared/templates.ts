@@ -274,6 +274,7 @@ export const TEMPLATE_PLACEHOLDERS: TemplatePlaceholderDefinition[] = [
   { token: "structured.finalTreatmentSection", description: "Final treatment completion wording." },
   { token: "structured.followUp", description: "Follow-up wording." },
   { token: "structured.consultFollowUp", description: "Consult follow-up wording with optional treatment start date." },
+  { token: "structured.mipsSection", description: "Deprecated MIPS section placeholder; renders empty." },
   { token: "structured.simulationComplications", description: "Simulation complications wording." },
   { token: "structured.treatmentComment", description: "Treatment comment wording." },
   { token: "structured.treatmentDeliveryStatement", description: "Treatment delivery wording for treatment visits." },
@@ -286,7 +287,6 @@ export const TEMPLATE_PLACEHOLDERS: TemplatePlaceholderDefinition[] = [
   { token: "structured.supervisedBy", description: "Supervising clinician or service." },
   { token: "structured.startRadiationDate", description: "Planned treatment start date." },
   { token: "structured.ultrasoundPerformed", description: "Ultrasound wording if applicable." },
-  { token: "structured.mipsSection", description: "MIPS quality measure documentation section (when Add MIPS is checked)." },
   { token: "settings.supervisingPhysician", description: "Configured supervising physician name." },
   { token: "settings.dermatologyOfficeName", description: "Configured dermatology office name." }
 ];
@@ -378,8 +378,6 @@ After counseling, we decided on the following plan: Schedule Radiotherapy
 
 {{structured.ultrasoundPerformed}}
 
-{{structured.mipsSection}}
-
 Supervised by:
 
 
@@ -453,7 +451,7 @@ Dose: {{site1.dailyDose}} cGy
 Cone Size: {{site1.coneSizeDisplay}}
 Treatment Depth: {{site1.treatmentDepthDisplay}}
 
-Written consent obtained. The risks and benefits of XRT therapy were discussed in detail. Specifically, the risks of infection, scarring, bleeding, radiation dermatitis, prolonged wound healing, incomplete removal, nerve injury, inability to clear the tumor, and recurrence were addressed. The treatment site was clearly identified and confirmed by the patient. The patient received XRT as outlined above.
+The patient received XRT as outlined above.
 
 Post Care: {{structured.postCare}}
 
@@ -462,8 +460,6 @@ Post Care: {{structured.postCare}}
 {{structured.additionalNotesSection}}
 
 Follow Up: {{structured.followUp}}
-
-{{structured.mipsSection}}
 
 Treatment Supervised by:
 
@@ -521,7 +517,7 @@ Dose: {{site1.dailyDose}} cGy
 Cone Size: {{site1.coneSizeDisplay}}
 Treatment Depth: {{site1.treatmentDepthDisplay}}
 
-Written consent obtained. The risks and benefits of XRT therapy were discussed in detail. Specifically, the risks of infection, scarring, bleeding, radiation dermatitis, prolonged wound healing, incomplete removal, nerve injury, inability to clear the tumor, and recurrence were addressed. The treatment site was clearly identified and confirmed by the patient. The patient received XRT as outlined above.
+The patient received XRT as outlined above.
 
 Post Care: {{structured.postCare}}
 
@@ -530,8 +526,6 @@ Post Care: {{structured.postCare}}
 {{structured.additionalNotesSection}}
 
 Follow Up: {{structured.followUp}}
-
-{{structured.mipsSection}}
 
 Treatment Supervised by:
 
@@ -599,7 +593,7 @@ Dose: {{site1.dailyDose}} cGy
 Cone Size: {{site1.coneSizeDisplay}}
 Treatment Depth: {{site1.treatmentDepthDisplay}}
 
-Written consent obtained. The risks and benefits of XRT therapy were discussed in detail. Specifically, the risks of infection, scarring, bleeding, radiation dermatitis, prolonged wound healing, incomplete removal, nerve injury, inability to clear the tumor, and recurrence were addressed. The treatment site was clearly identified and confirmed by the patient. The patient received XRT as outlined above.
+The patient received XRT as outlined above.
 
 Post Care: {{structured.postCare}}
 
@@ -613,8 +607,6 @@ Physics Consultation: Fraction Number: {{visit.treatmentNumber}} of {{course.pre
 {{structured.additionalNotesSection}}
 
 Follow Up: {{structured.followUp}}
-
-{{structured.mipsSection}}
 
 Treatment Supervised by:
 
@@ -739,8 +731,6 @@ After counseling, we decided on the following plan: Schedule Radiotherapy
 
 {{structured.ultrasoundPerformed}}
 
-{{structured.mipsSection}}
-
 Supervised by:
 
 
@@ -849,7 +839,7 @@ Dose: {{site2.dailyDose}} cGy
 Cone Size: {{site2.coneSizeDisplay}}
 Treatment Depth: {{site2.treatmentDepthDisplay}}
 
-Written consent obtained. The risks and benefits of XRT therapy were discussed in detail. Specifically, the risks of infection, scarring, bleeding, radiation dermatitis, prolonged wound healing, incomplete removal, nerve injury, inability to clear the tumor, and recurrence were addressed. The treatment sites were clearly identified and confirmed by the patient. The patient received XRT as outlined above.
+The patient received XRT as outlined above.
 
 Post Care: {{structured.postCare}}
 
@@ -858,8 +848,6 @@ Post Care: {{structured.postCare}}
 {{structured.additionalNotesSection}}
 
 Follow Up: {{structured.followUp}}
-
-{{structured.mipsSection}}
 
 Treatment Supervised by:
 
@@ -939,7 +927,7 @@ Dose: {{site2.dailyDose}} cGy
 Cone Size: {{site2.coneSizeDisplay}}
 Treatment Depth: {{site2.treatmentDepthDisplay}}
 
-Written consent obtained. The risks and benefits of XRT therapy were discussed in detail. Specifically, the risks of infection, scarring, bleeding, radiation dermatitis, prolonged wound healing, incomplete removal, nerve injury, inability to clear the tumor, and recurrence were addressed. The treatment sites were clearly identified and confirmed by the patient. The patient received XRT as outlined above.
+The patient received XRT as outlined above.
 
 Post Care: {{structured.postCare}}
 
@@ -948,8 +936,6 @@ Post Care: {{structured.postCare}}
 {{structured.additionalNotesSection}}
 
 Follow Up: {{structured.followUp}}
-
-{{structured.mipsSection}}
 
 Treatment Supervised by:
 
@@ -1049,7 +1035,7 @@ Location: {{site2.bodyLocation}}
 Physics Consultation: Fraction Number: {{visit.treatmentNumber}} of {{site2.prescribedFractions}}
 {{structured.physicsComment}}
 
-Written consent obtained. The risks and benefits of XRT therapy were discussed in detail. Specifically, the risks of infection, scarring, bleeding, radiation dermatitis, prolonged wound healing, incomplete removal, nerve injury, inability to clear the tumor, and recurrence were addressed. The treatment sites were clearly identified and confirmed by the patient. The patient received XRT as outlined above.
+The patient received XRT as outlined above.
 
 Post Care: {{structured.postCare}}
 
@@ -1058,8 +1044,6 @@ Post Care: {{structured.postCare}}
 {{structured.additionalNotesSection}}
 
 Follow Up: {{structured.followUp}}
-
-{{structured.mipsSection}}
 
 Treatment Supervised by:
 

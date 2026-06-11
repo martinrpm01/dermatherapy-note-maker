@@ -5,7 +5,6 @@ import {
   NOTE_TYPE_LABELS,
   formatBloodPressure,
   getDefaultFinalTreatmentNote,
-  getDefaultMipsNote,
   getDefaultOtvNote,
   getDefaultPhysicsComment,
   getDefaultUltrasoundNote,
@@ -652,8 +651,7 @@ const showProjectedFractionsInput = false;
           ) : null}
           {(editor.note.structuredFields.ultrasoundPerformed ||
             editor.note.noteType === "otv" ||
-            editor.note.structuredFields.finalTreatment ||
-            editor.note.structuredFields.addMips) ? (
+            editor.note.structuredFields.finalTreatment) ? (
             <div className="checkbox-note-fields">
               {editor.note.structuredFields.ultrasoundPerformed ? (
                 <label>
@@ -718,30 +716,6 @@ const showProjectedFractionsInput = false;
                             structuredFields: {
                               ...current.note.structuredFields,
                               finalTreatmentNote: event.target.value
-                            }
-                          }
-                        }),
-                        { regenerate: true, overwriteEdited: !props.textDirty }
-                      )
-                    }
-                  />
-                </label>
-              ) : null}
-              {editor.note.structuredFields.addMips ? (
-                <label>
-                  MIPS Note
-                  <textarea
-                    className="checkbox-note-textarea mips-note-textarea"
-                    value={editor.note.structuredFields.mipsNote ?? getDefaultMipsNote()}
-                    onChange={(event) =>
-                      props.onUpdate(
-                        (current) => ({
-                          ...current,
-                          note: {
-                            ...current.note,
-                            structuredFields: {
-                              ...current.note.structuredFields,
-                              mipsNote: event.target.value
                             }
                           }
                         }),
@@ -938,26 +912,6 @@ const showProjectedFractionsInput = false;
                 Final Treatment
               </label>
             )}
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={!!editor.note.structuredFields.addMips}
-                onChange={(event) => props.onUpdate((current) => ({
-                  ...current,
-                  note: {
-                    ...current.note,
-                    structuredFields: {
-                      ...current.note.structuredFields,
-                      addMips: event.target.checked,
-                      mipsNote: event.target.checked
-                        ? current.note.structuredFields.mipsNote?.trim() || getDefaultMipsNote()
-                        : current.note.structuredFields.mipsNote
-                    }
-                  }
-                }), { regenerate: true, overwriteEdited: true })}
-              />
-              MIPS
-            </label>
           </div>
           <div className="site-grid">
             {editor.note.structuredFields.siteSnapshots.map((site) => (

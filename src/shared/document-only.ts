@@ -132,7 +132,8 @@ export function buildDocumentOnlySiteSummary(record: Pick<DocumentOnlyRecord, "c
 export function createDefaultDocumentOnlyConsentSigningInput(detail: DocumentOnlyDetail): ConsentSigningInput {
   return {
     signDate: detail.record.simConsultDate || todayIso(),
-    patientInitials: `${detail.record.firstName.trim().charAt(0)}${detail.record.lastName.trim().charAt(0)}`.toUpperCase(),
+    patientInitials: "",
+    patientInitialsDataUrl: "",
     patientPrintedName: `${detail.record.firstName} ${detail.record.lastName}`.trim(),
     formerRadiationAcknowledged: false,
     medicalDevicesAcknowledged: false,

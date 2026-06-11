@@ -501,6 +501,7 @@ export interface StoredAssetUpload {
 export interface ConsentSigningInput {
   signDate: string;
   patientInitials: string;
+  patientInitialsDataUrl: string;
   patientPrintedName: string;
   formerRadiationAcknowledged: boolean;
   medicalDevicesAcknowledged: boolean;

@@ -745,7 +745,7 @@ export function cleanupConsultFollowUp(renderedText: string, noteType: NoteType,
 
 export function getDefaultPhysicsComment(noteType: NoteType): string {
   return noteType === "otv"
-    ? 'In accordance with the standard of care for radiotherapy treatment, a review of care following every 5th fraction was performed by a medical physicist for the patient. The medical physicist reviewed the treatment documentation and parameters, clinical photos of the treatment set-up, the treatment prescription, any prescription changes, that the dose calculation was correct, that the fractional dose was charted correctly, that elapsed days and treatment days were charted correctly, that the cumulative dose is correct, and that the radiation dose administered to the patient was accurate. The medical physicist also ensured that the radiation therapy equipment was properly calibrated and is functioning effectively to ensure treatment efficacy and continued safe delivery of radiotherapy.\n\nContinued medical physics review following every 5th fraction of therapy is requested by the provider for appropriate radiotherapy management and is deemed medically necessary and a standard of care to meet state and regulatory standards.\n\nSee attached Documents within patient chart "Weekly Physics Check".'
+    ? 'In accordance with the standard of care for radiotherapy treatment, a review of care following every 5th fraction was performed by a medical physicist for the patient. The medical physicist reviewed the treatment documentation and parameters, clinical photos of the treatment set-up, the treatment prescription, any prescription changes, that the dose calculation was correct, that the fractional dose was charted correctly, that elapsed days and treatment days were charted correctly, that the cumulative dose is correct, and that the radiation dose administered to the patient was accurate. The medical physicist also ensured that the radiation therapy equipment was properly calibrated and is functioning effectively to ensure treatment efficacy and continued safe delivery of radiotherapy.\n\nContinued medical physics review following every 5th fraction of therapy is requested by the provider for appropriate radiotherapy management and is deemed medically necessary and a standard of care to meet state and regulatory standards.\n\nSee attached Documents within patient chart "Weekly chart review note".'
     : "";
 }
 
@@ -903,6 +903,28 @@ export function getDefaultMipsNote(): string {
   return "Quality measures have been documented for this encounter in accordance with Merit-based Incentive Payment System (MIPS) requirements.";
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export function cleanupRemovedDefaultNoteWording(renderedText: string): string {
+  const treatmentConsentPattern =
+    /Written consent obtained\. The risks and benefits of XRT therapy were discussed in detail\. Specifically, the risks of infection, scarring, bleeding, radiation dermatitis, prolonged wound healing, incomplete removal, nerve injury, inability to clear the tumor, and recurrence were addressed\. The treatment sites? (?:was|were) clearly identified and confirmed by the patient\. The patient received XRT as outlined above\./g;
+  const mipsPattern = new RegExp(
+    `(?:\\r?\\n){0,2}(?:Plan: MIPS|MIPS:)\\r?\\n${escapeRegExp(getDefaultMipsNote())}(?=\\r?\\n|$)`,
+    "g"
+  );
+
+  return renderedText
+    .replaceAll("Total time of 45 minutes was spent", "Total time was spent")
+    .replaceAll('"Weekly Physics Check"', '"Weekly chart review note"')
+    .replace(treatmentConsentPattern, "The patient received XRT as outlined above.")
+    .replace(mipsPattern, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trimEnd();
+}
+
 export function getDefaultUltrasoundNote(): string {
   return "Ultrasound Performed: An ultrasound of the lesion was performed to assess tumor extent and guide treatment selection. The images were reviewed, and radiation therapy was selected as the treatment plan.";
 }
@@ -949,7 +971,7 @@ export function buildDefaultStructuredFields(
     examComment: noteType === "otv" ? getDefaultOtvNote(siteSnapshots) : "",
     impressionPlanComments:
       noteType === "consult_sim"
-        ? "The patient would like to proceed with radiotherapy and declines traditional surgical removal due to concerns with healing from surgery due to irreversible changes to anatomical structures.\n\nTotal time of 45 minutes was spent by the physician and radiation therapist assessing and managing the patient on the date of the encounter doing the following: preparing to see the patient (eg: review of tests), obtaining and/or reviewing separately obtained history, performing a medically appropriate examination and/or evaluation, counseling and educating the patient/family/caregiver, ordering medications, tests, or procedures, referring and communicating with other health care professionals, documenting clinical information in the electronic or other health record, and care coordination.\n\nThe patient will undergo hypofractionated external beam radiation therapy for the treatment of non-melanoma skin cancer. A simulation was medically necessary to measure the lesion and to determine the appropriate flex shield blocking to ensure adequate coverage of the target lesion while sparing normal tissue. On today's visit, following informed consent, the treatment field was demarcated, and depth measurements were performed for the radiotherapy treatment plan. Multiple clinical setup photographs were taken which will be used for the development of the prescription and treatment plan. The radiation oncologist will provide a recommended treatment plan. Appropriate treatment devices and targeted prescriptions will be utilized pending radiation oncologist and medical physics review."
+        ? "The patient would like to proceed with radiotherapy and declines traditional surgical removal due to concerns with healing from surgery due to irreversible changes to anatomical structures.\n\nTotal time was spent by the physician and radiation therapist assessing and managing the patient on the date of the encounter doing the following: preparing to see the patient (eg: review of tests), obtaining and/or reviewing separately obtained history, performing a medically appropriate examination and/or evaluation, counseling and educating the patient/family/caregiver, ordering medications, tests, or procedures, referring and communicating with other health care professionals, documenting clinical information in the electronic or other health record, and care coordination.\n\nThe patient will undergo hypofractionated external beam radiation therapy for the treatment of non-melanoma skin cancer. A simulation was medically necessary to measure the lesion and to determine the appropriate flex shield blocking to ensure adequate coverage of the target lesion while sparing normal tissue. On today's visit, following informed consent, the treatment field was demarcated, and depth measurements were performed for the radiotherapy treatment plan. Multiple clinical setup photographs were taken which will be used for the development of the prescription and treatment plan. The radiation oncologist will provide a recommended treatment plan. Appropriate treatment devices and targeted prescriptions will be utilized pending radiation oncologist and medical physics review."
         : noteType === "first_fraction"
           ? `Patient will undergo hypofractionated external beam radiation therapy with curative intent for the treatment of ${combinedSiteLabel} as an alternative to surgical resection or topical therapy. Following simulation, a clinical treatment plan was medically necessary to ensure the target skin lesion was covered adequately and nearby healthy adjacent tissues were maximally spared. The patient will be treated to the following prescription, delivered twice weekly to allow normal tissue recovery in between treatments.`
           : "",
@@ -974,7 +996,7 @@ export function buildDefaultStructuredFields(
     startRadiationDate: "",
     ultrasoundPerformed: "",
     addMips: false,
-    mipsNote: getDefaultMipsNote(),
+    mipsNote: "",
     siteSnapshots: normalizedSnapshots
   };
 }

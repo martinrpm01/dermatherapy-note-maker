@@ -27,13 +27,11 @@ import {
   getCurrentFraction,
   getAutoNumberOfBlocks,
   getDefaultFinalTreatmentNote,
-  getDefaultMipsNote,
   getDefaultOtvNote,
   getDefaultPhysicsComment,
   getMaxSitePrescribedFractions,
   getNextTreatmentNumber,
   getSuggestedNoteType,
-  getStickyMipsDefaults,
   getTemplateKey,
   isLegacyDefaultOtvNote,
   isFinalTreatmentEligible,
@@ -459,7 +457,7 @@ export class BrowserAppClient implements AppClient {
         physicsComment:
           visit.structuredFields.physicsComment?.trim() ||
           getDefaultPhysicsComment(visit.noteType),
-        mipsNote: visit.structuredFields.mipsNote?.trim() || getDefaultMipsNote(),
+        mipsNote: visit.structuredFields.mipsNote?.trim() || "",
         supervisedBy:
           visit.structuredFields.supervisedBy?.trim() || settings.supervisingPhysician,
         startRadiationDate:
@@ -1379,11 +1377,6 @@ export class BrowserAppClient implements AppClient {
       biopsyDate: course.startDate,
       lastTreatmentDate: mostRecentVisitDate
     });
-    const stickyMipsDefaults = getStickyMipsDefaults(visits, treatmentNumber);
-    if (stickyMipsDefaults) {
-      structuredFields.addMips = stickyMipsDefaults.addMips;
-      structuredFields.mipsNote = stickyMipsDefaults.mipsNote;
-    }
     structuredFields.siteSnapshots = structuredFields.siteSnapshots.map((site) => ({
       ...site,
       biopsyDate: site.biopsyDate || course.startDate || "",
@@ -1590,7 +1583,7 @@ export class BrowserAppClient implements AppClient {
       physicsComment:
         input.structuredFields.physicsComment?.trim() ||
         getDefaultPhysicsComment(input.noteType),
-      mipsNote: input.structuredFields.mipsNote?.trim() || getDefaultMipsNote(),
+      mipsNote: input.structuredFields.mipsNote?.trim() || "",
       supervisedBy:
         input.structuredFields.supervisedBy?.trim() || settings.supervisingPhysician,
       siteSnapshots: refreshVisitSiteSnapshots(
