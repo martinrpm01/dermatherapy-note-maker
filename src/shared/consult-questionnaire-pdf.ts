@@ -91,6 +91,10 @@ function drawText(page: PdfPage, font: PdfFont, value: string, x: number, y: num
   page.drawText(text, { x, y, size, font, color: TEXT_COLOR });
 }
 
+function drawStaticLabel(page: PdfPage, font: PdfFont, value: string, x: number, y: number) {
+  page.drawText(value, { x, y, size: 11, font, color: FORM_LINE_COLOR });
+}
+
 function drawFormLine(page: PdfPage, x1: number, y: number, x2: number) {
   page.drawLine({
     start: { x: x1, y },
@@ -150,16 +154,18 @@ function drawCenteredOnLine(page: PdfPage, font: PdfFont, value: string, x1: num
   page.drawText(text, { x, y: lineY + 3, size, font, color: TEXT_COLOR });
 }
 
-function drawPatientInfo(page: PdfPage, font: PdfFont, patient: PatientRecord) {
+function drawPatientInfo(page: PdfPage, labelFont: PdfFont, valueFont: PdfFont, patient: PatientRecord) {
   page.drawRectangle({ x: 108, y: 75, width: 260, height: 15, color: WHITE });
   page.drawRectangle({ x: 102, y: 55, width: 266, height: 15, color: WHITE });
+  page.drawRectangle({ x: 34, y: 31, width: 150, height: 22, color: WHITE });
   page.drawRectangle({ x: 119, y: 35, width: 249, height: 15, color: WHITE });
   drawFormLine(page, 108, 76, 368);
   drawFormLine(page, 102, 56, 368);
-  drawFormLine(page, 119, 36, 368);
-  drawText(page, font, patientFullName(patient), 116, 79, 36, 11);
-  drawText(page, font, formatDate(patient.dob), 110, 59, 20, 11);
-  drawText(page, font, patient.mrn, 126, 39, 24, 11);
+  drawFormLine(page, 154, 36, 368);
+  drawStaticLabel(page, labelFont, "Patient MRN/ID:", 36, 39);
+  drawText(page, valueFont, patientFullName(patient), 116, 79, 36, 11);
+  drawText(page, valueFont, formatDate(patient.dob), 110, 59, 20, 11);
+  drawText(page, valueFont, patient.mrn, 160, 39, 24, 11);
 }
 
 function skinSectionAnswer(questionnaire: ConsultQuestionnaireInput): ConsultQuestionnaireItemInput["answer"] {
@@ -256,9 +262,10 @@ export async function buildConsultQuestionnairePdfFromTemplateBytes(
   input: ConsultQuestionnaireBuildInput
 ) {
   const pdfDoc = await PDFDocument.load(templateBytes);
+  const labelFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const page = pdfDoc.getPages()[0];
-  drawPatientInfo(page, font, input.patient);
+  drawPatientInfo(page, labelFont, font, input.patient);
   drawQuestionnaire(page, font, input.questionnaire);
 
   const bytes = await pdfDoc.save();
