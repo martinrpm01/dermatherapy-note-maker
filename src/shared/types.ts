@@ -498,6 +498,10 @@ export interface StoredAssetUpload {
   siteNumber?: 1 | 2;
 }
 
+export type CompletedLesionIdPhotoSource =
+  | { mode: "upload"; upload: StoredAssetUpload }
+  | { mode: "current_patient" };
+
 export interface ConsentSigningInput {
   signDate: string;
   patientInitials: string;
@@ -766,7 +770,10 @@ export interface AppClient {
     input: ConsultQuestionnaireInput
   ) => Promise<DocumentOnlyFileRecord>;
   generateDocumentOnlySimWorksheet: (recordId: string) => Promise<DocumentOnlyFileRecord>;
-  generateDocumentOnlyCompletedLesionForm: (recordId: string) => Promise<DocumentOnlyFileRecord>;
+  generateDocumentOnlyCompletedLesionForm: (
+    recordId: string,
+    idPhotoSource?: CompletedLesionIdPhotoSource | null
+  ) => Promise<DocumentOnlyFileRecord>;
   completeCourse: (courseId: string) => Promise<void>;
   restoreCourse: (courseId: string) => Promise<void>;
   deleteCourse: (courseId: string) => Promise<void>;
@@ -786,7 +793,10 @@ export interface AppClient {
     input: ConsultQuestionnaireInput
   ) => Promise<CourseDocumentRecord>;
   generateCourseSimWorksheet: (courseId: string) => Promise<CourseDocumentRecord>;
-  generateCourseCompletedLesionForm: (courseId: string) => Promise<CourseDocumentRecord>;
+  generateCourseCompletedLesionForm: (
+    courseId: string,
+    idPhotoSource?: CompletedLesionIdPhotoSource | null
+  ) => Promise<CourseDocumentRecord>;
   finalizeConsentForm: (courseId: string, input: ConsentSigningInput) => Promise<CourseDocumentRecord>;
   uploadConsentForm: (courseId: string, upload: StoredAssetUpload) => Promise<CourseDocumentRecord>;
   deleteConsentForm: (courseId: string) => Promise<void>;

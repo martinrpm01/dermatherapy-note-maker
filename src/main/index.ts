@@ -325,8 +325,8 @@ function registerIpc() {
     service.generateDocumentOnlyConsultQuestionnaire(recordId, input)
   );
   ipcMain.handle("documents:generateSimWorksheet", (_, recordId: string) => service.generateDocumentOnlySimWorksheet(recordId));
-  ipcMain.handle("documents:generateCompletedLesionForm", (_, recordId: string) =>
-    service.generateDocumentOnlyCompletedLesionForm(recordId)
+  ipcMain.handle("documents:generateCompletedLesionForm", (_, recordId: string, idPhotoSource) =>
+    service.generateDocumentOnlyCompletedLesionForm(recordId, idPhotoSource)
   );
   ipcMain.handle("course:complete", (_, courseId: string) => service.completeCourse(courseId));
   ipcMain.handle("course:restore", (_, courseId: string) => service.restoreCourse(courseId));
@@ -346,8 +346,8 @@ function registerIpc() {
     service.generateCourseConsultQuestionnaire(courseId, input)
   );
   ipcMain.handle("course:generateSimWorksheet", (_, courseId: string) => service.generateCourseSimWorksheet(courseId));
-  ipcMain.handle("course:generateCompletedLesionForm", (_, courseId: string) =>
-    service.generateCourseCompletedLesionForm(courseId)
+  ipcMain.handle("course:generateCompletedLesionForm", (_, courseId: string, idPhotoSource) =>
+    service.generateCourseCompletedLesionForm(courseId, idPhotoSource)
   );
   ipcMain.handle("course:finalizeConsentForm", (_, courseId: string, input) => service.finalizeConsentForm(courseId, input));
   ipcMain.handle("course:uploadConsentForm", (_, courseId: string, upload) => service.uploadConsentForm(courseId, upload));

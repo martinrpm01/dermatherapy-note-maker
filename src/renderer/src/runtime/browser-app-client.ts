@@ -46,6 +46,7 @@ import type {
   AppClient,
   ArchiveSnapshot,
   AssetReference,
+  CompletedLesionIdPhotoSource,
   DashboardSnapshot,
   DocumentOnlySnapshot,
   PatientRecord,
@@ -302,6 +303,27 @@ export class BrowserAppClient implements AppClient {
     }
 
     return this.readBlobInput(blob, fileName);
+  }
+
+  private async completedLesionPhotoInputFromSource(source?: CompletedLesionIdPhotoSource | null, patient?: PatientRecord) {
+    if (!source) {
+      return null;
+    }
+
+    if (source.mode === "upload") {
+      const response = await fetch(source.upload.dataUrl);
+      return {
+        image: await this.readBlobInput(await response.blob(), source.upload.name)
+      };
+    }
+
+    if (!patient?.facePhoto) {
+      return null;
+    }
+
+    return {
+      image: await this.readStoredAssetInput(patient.facePhoto, "patient face photo")
+    };
   }
 
   private async readPdfLogoInput() {
@@ -2106,7 +2128,7 @@ export class BrowserAppClient implements AppClient {
     return persistedFile;
   }
 
-  async generateDocumentOnlyCompletedLesionForm(recordId: string) {
+  async generateDocumentOnlyCompletedLesionForm(recordId: string, idPhotoSource?: CompletedLesionIdPhotoSource | null) {
     this.assertUnlocked();
     const structuredDataStore = await this.getStructuredDataStore();
     const binaryAssetStore = await this.getBinaryAssetStore();
@@ -2121,6 +2143,7 @@ export class BrowserAppClient implements AppClient {
       patient,
       course,
       sites,
+      idPhotoInput: await this.completedLesionPhotoInputFromSource(idPhotoSource, patient),
       photoInputs: []
     });
 
@@ -2350,7 +2373,7 @@ export class BrowserAppClient implements AppClient {
     return persistedDocument;
   }
 
-  async generateCourseCompletedLesionForm(courseId: string) {
+  async generateCourseCompletedLesionForm(courseId: string, idPhotoSource?: CompletedLesionIdPhotoSource | null) {
     this.assertUnlocked();
     const structuredDataStore = await this.getStructuredDataStore();
     const binaryAssetStore = await this.getBinaryAssetStore();
@@ -2396,6 +2419,7 @@ export class BrowserAppClient implements AppClient {
       patient,
       course,
       sites,
+      idPhotoInput: await this.completedLesionPhotoInputFromSource(idPhotoSource, patient),
       photoInputs: photos
     });
 

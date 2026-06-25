@@ -173,8 +173,11 @@ export class ElectronAppClient implements AppClient {
     return this.api.generateDocumentOnlySimWorksheet(recordId);
   }
 
-  generateDocumentOnlyCompletedLesionForm(recordId: string) {
-    return this.api.generateDocumentOnlyCompletedLesionForm(recordId);
+  generateDocumentOnlyCompletedLesionForm(
+    recordId: string,
+    idPhotoSource?: Parameters<AppClient["generateDocumentOnlyCompletedLesionForm"]>[1]
+  ) {
+    return this.api.generateDocumentOnlyCompletedLesionForm(recordId, idPhotoSource);
   }
 
   completeCourse(courseId: string) {
@@ -229,8 +232,11 @@ export class ElectronAppClient implements AppClient {
     return this.api.generateCourseSimWorksheet(courseId);
   }
 
-  generateCourseCompletedLesionForm(courseId: string) {
-    return this.api.generateCourseCompletedLesionForm(courseId);
+  generateCourseCompletedLesionForm(
+    courseId: string,
+    idPhotoSource?: Parameters<AppClient["generateCourseCompletedLesionForm"]>[1]
+  ) {
+    return this.api.generateCourseCompletedLesionForm(courseId, idPhotoSource);
   }
 
   finalizeConsentForm(courseId: string, input: Parameters<AppClient["finalizeConsentForm"]>[1]) {

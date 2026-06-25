@@ -14,7 +14,7 @@ import { buildVisitPdf } from "./pdf";
 import { buildConsentFormPdf, buildSignedConsentFormPdf, buildUploadedConsentPdf } from "./consent-form";
 import { buildSimWorksheetPdf } from "./sim-worksheet";
 import { buildConsultQuestionnairePdf } from "./consult-questionnaire";
-import { buildCompletedLesionFormPdf } from "../shared/completed-lesion-form-pdf";
+import { buildCompletedLesionFormPdf, type CompletedLesionPhotoInput } from "../shared/completed-lesion-form-pdf";
 import { PatientArchivePreparationService } from "./archive-preparation";
 import { DesktopPatientArchiveExportService } from "./archive-export";
 import { DesktopPatientArchiveReaderService } from "./archive-reader";
@@ -77,6 +77,7 @@ import type {
   BootstrapPayload,
   ConsentSigningInput,
   ConsultQuestionnaireInput,
+  CompletedLesionIdPhotoSource,
   DocumentOnlyInput,
   DocumentOnlySnapshot,
   CourseInput,
@@ -157,6 +158,25 @@ type WipeCapableBinaryAssetStore = BinaryAssetStore & {
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function completedLesionPhotoInputFromUpload(upload?: StoredAssetUpload | null): CompletedLesionPhotoInput | null {
+  if (!upload?.dataUrl) {
+    return null;
+  }
+
+  const match = upload.dataUrl.match(/^data:([^;,]+)?(?:;base64)?,(.*)$/);
+  if (!match) {
+    throw new Error("Could not decode completed lesion form photo.");
+  }
+
+  return {
+    image: {
+      bytes: Uint8Array.from(Buffer.from(match[2], "base64")),
+      fileName: upload.name,
+      mimeType: upload.mimeType || match[1] || "application/octet-stream"
+    }
+  };
 }
 
 function makeId(prefix: string) {
@@ -1753,7 +1773,7 @@ export class RadiationNoteService {
     return persistedFile;
   }
 
-  async generateDocumentOnlyCompletedLesionForm(recordId: string) {
+  async generateDocumentOnlyCompletedLesionForm(recordId: string, idPhotoSource?: CompletedLesionIdPhotoSource | null) {
     this.assertUnlocked();
     const detail = this.repository.loadDocumentOnlyDetails([recordId])[0];
     if (!detail) {
@@ -1766,6 +1786,7 @@ export class RadiationNoteService {
       patient,
       course,
       sites,
+      idPhotoInput: idPhotoSource?.mode === "upload" ? completedLesionPhotoInputFromUpload(idPhotoSource.upload) : null,
       photoInputs: []
     });
 
@@ -1988,7 +2009,7 @@ export class RadiationNoteService {
     return persistedDocument;
   }
 
-  async generateCourseCompletedLesionForm(courseId: string) {
+  async generateCourseCompletedLesionForm(courseId: string, idPhotoSource?: CompletedLesionIdPhotoSource | null) {
     this.assertUnlocked();
     const course = this.repository.fetchCourse(courseId);
     if (!course) {
@@ -2026,6 +2047,12 @@ export class RadiationNoteService {
       patient,
       course,
       sites,
+      idPhotoInput:
+        idPhotoSource?.mode === "upload"
+          ? completedLesionPhotoInputFromUpload(idPhotoSource.upload)
+          : idPhotoSource?.mode === "current_patient" && patient.facePhoto
+            ? { image: this.readPdfAssetInput(patient.facePhoto, "patient face photo") }
+            : null,
       photoInputs: photos
     });
     const documentsDir = this.assetStore.getCourseDocumentsDir(patient.id, course.id);

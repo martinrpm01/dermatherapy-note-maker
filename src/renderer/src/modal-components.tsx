@@ -1879,6 +1879,7 @@ export function CourseConsentModal(props: {
   hasConsultQuestionnaire: boolean;
   hasSimWorksheet: boolean;
   hasCompletedLesionForm: boolean;
+  hasPatientFacePhoto?: boolean;
   showSimWorksheet?: boolean;
   busy: boolean;
   onClose: () => void;
@@ -1891,6 +1892,8 @@ export function CourseConsentModal(props: {
   onGenerateSimWorksheet?: () => void;
   onOpenCompletedLesionForm?: () => void;
   onGenerateCompletedLesionForm?: () => void;
+  onGenerateCompletedLesionFormWithIdPhoto?: () => void;
+  onGenerateCompletedLesionFormWithCurrentPhoto?: () => void;
 }) {
   return (
     <div className="modal-backdrop">
@@ -1951,9 +1954,19 @@ export function CourseConsentModal(props: {
               <>
                 <button onClick={props.onOpenCompletedLesionForm}>Open Completed Form</button>
                 <button onClick={props.onGenerateCompletedLesionForm}>Regenerate Completed Form</button>
+                <button onClick={props.onGenerateCompletedLesionFormWithIdPhoto}>Regenerate With ID Photo</button>
+                {props.hasPatientFacePhoto ? (
+                  <button onClick={props.onGenerateCompletedLesionFormWithCurrentPhoto}>Use Current Photo</button>
+                ) : null}
               </>
             ) : (
-              <button onClick={props.onGenerateCompletedLesionForm}>Generate Completed Form</button>
+              <>
+                <button onClick={props.onGenerateCompletedLesionForm}>Generate Completed Form</button>
+                <button onClick={props.onGenerateCompletedLesionFormWithIdPhoto}>Generate With ID Photo</button>
+                {props.hasPatientFacePhoto ? (
+                  <button onClick={props.onGenerateCompletedLesionFormWithCurrentPhoto}>Use Current Photo</button>
+                ) : null}
+              </>
             )}
           </div>
         </div>

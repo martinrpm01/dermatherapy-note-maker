@@ -5,6 +5,9 @@ import { buildCompletedLesionFormPdf } from "../src/shared/completed-lesion-form
 import type { PatientRecord, TreatmentCourseRecord, TreatmentSiteRecord } from "../src/shared/types";
 
 const now = "2026-06-25T00:00:00.000Z";
+const onePixelPng = Uint8Array.from(
+  Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=", "base64")
+);
 
 function buildPatient(): PatientRecord {
   return {
@@ -86,6 +89,26 @@ describe("completed lesion form pdf", () => {
     expect(pdfDoc.getPageCount()).toBe(1);
     expect(result.fileName).toBe("John Smith - Completed Lesion Form.pdf");
     expect(result.caption).toBe("John Smith - Completed Lesion Form");
+    expect(result.bytes.length).toBeGreaterThan(2_000);
+  });
+
+  it("can include an explicit optional id photo on the completed lesion form", async () => {
+    const result = await buildCompletedLesionFormPdf({
+      patient: buildPatient(),
+      course: buildCourse(),
+      sites: [buildSite()],
+      idPhotoInput: {
+        image: {
+          bytes: onePixelPng,
+          fileName: "id-photo.png",
+          mimeType: "image/png"
+        }
+      },
+      photoInputs: []
+    });
+
+    const pdfDoc = await PDFDocument.load(result.bytes);
+    expect(pdfDoc.getPageCount()).toBe(1);
     expect(result.bytes.length).toBeGreaterThan(2_000);
   });
 });

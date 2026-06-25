@@ -2211,6 +2211,7 @@ export function DocumentOnlyScreen(props: {
   onGenerateConsultQuestionnaire: (recordId: string) => void;
   onGenerateSimWorksheet: (recordId: string) => void;
   onGenerateCompletedLesionForm: (recordId: string) => void;
+  onGenerateCompletedLesionFormWithIdPhoto: (recordId: string) => void;
   onOpenConsent: (asset: AssetReference) => void;
   onOpenConsultQuestionnaire: (asset: AssetReference) => void;
   onOpenSimWorksheet: (asset: AssetReference) => void;
@@ -2345,6 +2346,9 @@ export function DocumentOnlyScreen(props: {
                     <div className="patient-row-actions">
                       <button onClick={() => props.onGenerateCompletedLesionForm(detail.record.id)}>
                         {completedLesionFile ? "Regenerate Completed Form" : "Generate Completed Form"}
+                      </button>
+                      <button onClick={() => props.onGenerateCompletedLesionFormWithIdPhoto(detail.record.id)}>
+                        {completedLesionFile ? "Regenerate With ID Photo" : "Generate With ID Photo"}
                       </button>
                       {completedLesionFile ? (
                         <button onClick={() => props.onOpenCompletedLesionForm(completedLesionFile.fileAsset)}>Open Completed Form</button>

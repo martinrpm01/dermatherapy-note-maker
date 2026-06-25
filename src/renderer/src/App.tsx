@@ -60,6 +60,7 @@ import type {
   AppClient,
   ArchiveSnapshot,
   BootstrapPayload,
+  CompletedLesionIdPhotoSource,
   ConsentSigningInput,
   ConsultQuestionnaireInput,
   CourseInput,
@@ -439,6 +440,45 @@ async function pickConsentUploadFile() {
             ? await fileToCompressedUpload(file, 2400, undefined, "image/jpeg")
             : await fileToUpload(file);
           finish(upload);
+        } catch (error) {
+          input.remove();
+          reject(error);
+        }
+      })();
+    }, { once: true });
+    input.addEventListener("cancel", () => finish(null), { once: true });
+    document.body.appendChild(input);
+    input.click();
+  });
+}
+
+async function pickCompletedLesionIdPhotoFile() {
+  return new Promise<StoredAssetUpload | null>((resolve, reject) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.style.display = "none";
+
+    let settled = false;
+    const finish = (upload: StoredAssetUpload | null) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      input.remove();
+      resolve(upload);
+    };
+
+    input.addEventListener("change", () => {
+      const file = input.files?.[0];
+      if (!file) {
+        finish(null);
+        return;
+      }
+
+      void (async () => {
+        try {
+          finish(await fileToCompressedUpload(file, 1600, undefined, "image/jpeg"));
         } catch (error) {
           input.remove();
           reject(error);
@@ -1547,11 +1587,22 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     }
   }
 
-  async function generateCourseCompletedLesionFormForCourse(patientId: string, courseId: string) {
+  async function generateCourseCompletedLesionFormForCourse(
+    patientId: string,
+    courseId: string,
+    idPhotoSource?: CompletedLesionIdPhotoSource | null
+  ) {
     if (!appClient) return;
     setBusy(true);
     try {
-      await appClient.generateCourseCompletedLesionForm(courseId);
+      if (idPhotoSource?.mode === "current_patient") {
+        const detail = patientDetail?.patient.id === patientId ? patientDetail : await appClient.getPatientDetail(patientId);
+        if (!detail.patient.facePhoto) {
+          showToast("No current patient photo is saved.");
+          return;
+        }
+      }
+      await appClient.generateCourseCompletedLesionForm(courseId, idPhotoSource);
       await loadDashboard();
       await loadPatient(patientId);
       showToast("Completed lesion form generated.");
@@ -1561,6 +1612,21 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function generateCourseCompletedLesionFormWithUploadedIdPhoto(patientId: string, courseId: string) {
+    let upload: StoredAssetUpload | null = null;
+    try {
+      upload = await pickCompletedLesionIdPhotoFile();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not read the ID photo.";
+      showToast(message);
+      return;
+    }
+    if (!upload) {
+      return;
+    }
+    await generateCourseCompletedLesionFormForCourse(patientId, courseId, { mode: "upload", upload });
   }
 
   async function openCourseConsultQuestionnaire(patientId: string, courseId: string) {
@@ -1775,11 +1841,14 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     }
   }
 
-  async function generateDocumentOnlyCompletedLesionForm(recordId: string) {
+  async function generateDocumentOnlyCompletedLesionForm(
+    recordId: string,
+    idPhotoSource?: CompletedLesionIdPhotoSource | null
+  ) {
     if (!appClient) return;
     setBusy(true);
     try {
-      await appClient.generateDocumentOnlyCompletedLesionForm(recordId);
+      await appClient.generateDocumentOnlyCompletedLesionForm(recordId, idPhotoSource);
       await loadDocumentOnly();
       showToast("Completed lesion form generated.");
     } catch (error) {
@@ -1788,6 +1857,21 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function generateDocumentOnlyCompletedLesionFormWithUploadedIdPhoto(recordId: string) {
+    let upload: StoredAssetUpload | null = null;
+    try {
+      upload = await pickCompletedLesionIdPhotoFile();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not read the ID photo.";
+      showToast(message);
+      return;
+    }
+    if (!upload) {
+      return;
+    }
+    await generateDocumentOnlyCompletedLesionForm(recordId, { mode: "upload", upload });
   }
 
   async function saveVisit(generatePdf = false) {
@@ -2546,6 +2630,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
             onGenerateConsultQuestionnaire={(recordId) => void openDocumentOnlyConsultQuestionnaire(recordId)}
             onGenerateSimWorksheet={(recordId) => void openDocumentOnlyWorksheetSetup(recordId)}
             onGenerateCompletedLesionForm={(recordId) => void generateDocumentOnlyCompletedLesionForm(recordId)}
+            onGenerateCompletedLesionFormWithIdPhoto={(recordId) => void generateDocumentOnlyCompletedLesionFormWithUploadedIdPhoto(recordId)}
             onOpenConsent={(asset) => void appClient?.openAsset(asset)}
             onOpenConsultQuestionnaire={(asset) => void appClient?.openAsset(asset)}
             onOpenSimWorksheet={(asset) => void appClient?.openAsset(asset)}
@@ -2752,6 +2837,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
                 hasConsultQuestionnaire={Boolean(consultQuestionnaireDocument)}
                 hasSimWorksheet={Boolean(simWorksheetDocument)}
                 hasCompletedLesionForm={Boolean(completedLesionDocument)}
+                hasPatientFacePhoto={Boolean(patientDetail.patient.facePhoto)}
                 showSimWorksheet={!isConsultForms}
                 busy={busy}
                 onClose={() => setCourseConsentActions(null)}
@@ -2791,6 +2877,16 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
                 onGenerateCompletedLesionForm={() => {
                   setCourseConsentActions(null);
                   void generateCourseCompletedLesionFormForCourse(targetCourse.course.patientId, targetCourse.course.id);
+                }}
+                onGenerateCompletedLesionFormWithIdPhoto={() => {
+                  setCourseConsentActions(null);
+                  void generateCourseCompletedLesionFormWithUploadedIdPhoto(targetCourse.course.patientId, targetCourse.course.id);
+                }}
+                onGenerateCompletedLesionFormWithCurrentPhoto={() => {
+                  setCourseConsentActions(null);
+                  void generateCourseCompletedLesionFormForCourse(targetCourse.course.patientId, targetCourse.course.id, {
+                    mode: "current_patient"
+                  });
                 }}
               />
             );

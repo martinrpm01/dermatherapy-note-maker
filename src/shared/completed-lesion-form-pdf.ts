@@ -15,6 +15,7 @@ export interface CompletedLesionFormBuildInput {
   patient: PatientRecord;
   course: TreatmentCourseRecord;
   sites: TreatmentSiteRecord[];
+  idPhotoInput?: CompletedLesionPhotoInput | null;
   photoInputs?: CompletedLesionPhotoInput[];
 }
 
@@ -148,9 +149,9 @@ async function drawPhotoSlots(
   photoInputs: CompletedLesionPhotoInput[]
 ) {
   const slots = [
-    { x: 50, y: 54, width: 170, height: 124 },
-    { x: 220, y: 54, width: 170, height: 124 },
-    { x: 390, y: 54, width: 170, height: 124 }
+    { x: 50, y: 68, width: 170, height: 110 },
+    { x: 220, y: 68, width: 170, height: 110 },
+    { x: 390, y: 68, width: 170, height: 110 }
   ];
 
   for (let index = 0; index < slots.length; index += 1) {
@@ -167,9 +168,34 @@ async function drawPhotoSlots(
       });
     }
     const label = PHOTO_LABELS[index];
-    const labelWidth = labelFont.widthOfTextAtSize(label, 14);
-    drawLabel(page, labelFont, label, slot.x + (slot.width - labelWidth) / 2, slot.y - 34, 14);
+    const labelWidth = labelFont.widthOfTextAtSize(label, 12);
+    drawLabel(page, labelFont, label, slot.x + (slot.width - labelWidth) / 2, slot.y - 28, 12);
   }
+}
+
+async function drawOptionalIdPhoto(
+  pdfDoc: PDFDocument,
+  page: PdfPage,
+  labelFont: PdfFont,
+  idPhotoInput?: CompletedLesionPhotoInput | null
+) {
+  const image = await embedRasterImage(pdfDoc, idPhotoInput ?? undefined);
+  if (!image) {
+    return;
+  }
+
+  const slot = { x: 448, y: 611, width: 96, height: 88 };
+  drawBox(page, slot.x, slot.y, slot.width, slot.height);
+  const fitted = scaleToCover(image, slot.width - 8, slot.height - 8);
+  page.drawImage(image, {
+    x: slot.x + (slot.width - fitted.width) / 2,
+    y: slot.y + (slot.height - fitted.height) / 2,
+    width: fitted.width,
+    height: fitted.height
+  });
+  const label = "Patient Picture";
+  const labelWidth = labelFont.widthOfTextAtSize(label, 12);
+  drawLabel(page, labelFont, label, slot.x + (slot.width - labelWidth) / 2, slot.y - 16, 12);
 }
 
 async function drawLesionPage(
@@ -181,6 +207,7 @@ async function drawLesionPage(
 ) {
   const page = pdfDoc.addPage(PAGE_SIZE);
   page.drawText("XRT (XOFT) Completed Lesion Form", { x: 60, y: 715, size: 16, font: fonts.title, color: ACCENT });
+  await drawOptionalIdPhoto(pdfDoc, page, fonts.label, input.idPhotoInput);
 
   drawField(page, fonts.label, fonts.value, "Patient Name:", patientFullName(input.patient), 55, 670, 380);
   drawField(page, fonts.label, fonts.value, "Patient DOB:", formatDisplayDate(input.patient.dob), 55, 642, 380);
@@ -233,17 +260,18 @@ export async function buildCompletedLesionFormPdf(input: CompletedLesionFormBuil
   const photoInputs = input.photoInputs ?? [];
 
   for (const site of targetSites) {
-    await drawLesionPage(
-      pdfDoc,
-      { title, label, value },
-      input,
-      site ?? ({
+    const normalizedSite = site ?? ({
         siteNumber: 1,
         bodyLocation: "",
         treatmentLocationText: "",
         diagnosisText: "",
         prescribedFractions: input.course.prescribedFractions
-      } as TreatmentSiteRecord),
+      } as TreatmentSiteRecord);
+    await drawLesionPage(
+      pdfDoc,
+      { title, label, value },
+      input,
+      normalizedSite,
       photoInputs
     );
   }
