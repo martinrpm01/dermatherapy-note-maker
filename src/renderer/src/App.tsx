@@ -1547,6 +1547,22 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     }
   }
 
+  async function generateCourseCompletedLesionFormForCourse(patientId: string, courseId: string) {
+    if (!appClient) return;
+    setBusy(true);
+    try {
+      await appClient.generateCourseCompletedLesionForm(courseId);
+      await loadDashboard();
+      await loadPatient(patientId);
+      showToast("Completed lesion form generated.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not generate the completed lesion form.";
+      showToast(message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function openCourseConsultQuestionnaire(patientId: string, courseId: string) {
     if (!appClient) return;
     const detail = patientDetail?.patient.id === patientId ? patientDetail : await appClient.getPatientDetail(patientId);
@@ -1754,6 +1770,21 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
       setDocumentOnlyWorksheetForm(null);
       await loadDocumentOnly();
       showToast("Sim worksheet generated.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function generateDocumentOnlyCompletedLesionForm(recordId: string) {
+    if (!appClient) return;
+    setBusy(true);
+    try {
+      await appClient.generateDocumentOnlyCompletedLesionForm(recordId);
+      await loadDocumentOnly();
+      showToast("Completed lesion form generated.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not generate the completed lesion form.";
+      showToast(message);
     } finally {
       setBusy(false);
     }
@@ -2193,7 +2224,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
             <button className={screen.name === "dashboard" ? "nav active" : "nav"} onClick={() => setScreen({ name: "dashboard" })}>Active Patients</button>
             <button className={screen.name === "completed" ? "nav active" : "nav"} onClick={() => setScreen({ name: "completed" })}>Completed Patients</button>
             <button className={screen.name === "archive" ? "nav active" : "nav"} onClick={() => setScreen({ name: "archive" })}>Archive</button>
-            <button className={screen.name === "documents" ? "nav active" : "nav"} onClick={() => setScreen({ name: "documents" })}>Consult Form Generator</button>
+            <button className={screen.name === "documents" ? "nav active" : "nav"} onClick={() => setScreen({ name: "documents" })}>Form Generator</button>
             <button className={screen.name === "settings" ? "nav active" : "nav"} onClick={() => setScreen({ name: "settings" })}>Settings</button>
           </nav>
         </aside>
@@ -2514,9 +2545,11 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
             onReviewConsent={(recordId) => void openConsentSigningForDocumentOnly(recordId)}
             onGenerateConsultQuestionnaire={(recordId) => void openDocumentOnlyConsultQuestionnaire(recordId)}
             onGenerateSimWorksheet={(recordId) => void openDocumentOnlyWorksheetSetup(recordId)}
+            onGenerateCompletedLesionForm={(recordId) => void generateDocumentOnlyCompletedLesionForm(recordId)}
             onOpenConsent={(asset) => void appClient?.openAsset(asset)}
             onOpenConsultQuestionnaire={(asset) => void appClient?.openAsset(asset)}
             onOpenSimWorksheet={(asset) => void appClient?.openAsset(asset)}
+            onOpenCompletedLesionForm={(asset) => void appClient?.openAsset(asset)}
           />
         ) : null}
 
@@ -2699,14 +2732,15 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
             const consentDocument = targetCourse.documents.find((document) => document.documentType === "consent_form") ?? null;
             const consultQuestionnaireDocument = targetCourse.documents.find((document) => document.documentType === "consult_questionnaire") ?? null;
             const simWorksheetDocument = targetCourse.documents.find((document) => document.documentType === "sim_worksheet") ?? null;
+            const completedLesionDocument = targetCourse.documents.find((document) => document.documentType === "completed_lesion_form") ?? null;
             const isConsultForms = courseConsentActions.mode === "consult_forms";
             return (
               <CourseConsentModal
                 courseName={targetCourse.course.courseName || "this course"}
-                title={isConsultForms ? "Consult Forms" : "Documents"}
+                title={isConsultForms ? "Forms" : "Documents"}
                 description={
                   isConsultForms
-                    ? `Manage consult forms for ${targetCourse.course.courseName || "this course"}.`
+                    ? `Manage forms for ${targetCourse.course.courseName || "this course"}.`
                     : undefined
                 }
                 footerNote={
@@ -2717,6 +2751,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
                 hasConsentForm={Boolean(consentDocument)}
                 hasConsultQuestionnaire={Boolean(consultQuestionnaireDocument)}
                 hasSimWorksheet={Boolean(simWorksheetDocument)}
+                hasCompletedLesionForm={Boolean(completedLesionDocument)}
                 showSimWorksheet={!isConsultForms}
                 busy={busy}
                 onClose={() => setCourseConsentActions(null)}
@@ -2747,6 +2782,15 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
                 onGenerateSimWorksheet={() => {
                   setCourseConsentActions(null);
                   void generateCourseSimWorksheetForCourse(targetCourse.course.patientId, targetCourse.course.id);
+                }}
+                onOpenCompletedLesionForm={() => {
+                  if (completedLesionDocument) {
+                    void appClient?.openAsset(completedLesionDocument.fileAsset);
+                  }
+                }}
+                onGenerateCompletedLesionForm={() => {
+                  setCourseConsentActions(null);
+                  void generateCourseCompletedLesionFormForCourse(targetCourse.course.patientId, targetCourse.course.id);
                 }}
               />
             );

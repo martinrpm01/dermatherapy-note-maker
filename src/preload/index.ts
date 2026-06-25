@@ -50,6 +50,7 @@ const api: ElectronApi = {
   generateDocumentOnlyConsultQuestionnaire: (recordId, input) =>
     ipcRenderer.invoke("documents:generateConsultQuestionnaire", recordId, input),
   generateDocumentOnlySimWorksheet: (recordId) => ipcRenderer.invoke("documents:generateSimWorksheet", recordId),
+  generateDocumentOnlyCompletedLesionForm: (recordId) => ipcRenderer.invoke("documents:generateCompletedLesionForm", recordId),
   completeCourse: (courseId) => ipcRenderer.invoke("course:complete", courseId),
   restoreCourse: (courseId) => ipcRenderer.invoke("course:restore", courseId),
   deleteCourse: (courseId) => ipcRenderer.invoke("course:delete", courseId),
@@ -64,6 +65,7 @@ const api: ElectronApi = {
   generateCourseConsultQuestionnaire: (courseId, input) =>
     ipcRenderer.invoke("course:generateConsultQuestionnaire", courseId, input),
   generateCourseSimWorksheet: (courseId) => ipcRenderer.invoke("course:generateSimWorksheet", courseId),
+  generateCourseCompletedLesionForm: (courseId) => ipcRenderer.invoke("course:generateCompletedLesionForm", courseId),
   finalizeConsentForm: (courseId, input) => ipcRenderer.invoke("course:finalizeConsentForm", courseId, input),
   uploadConsentForm: (courseId, upload) => ipcRenderer.invoke("course:uploadConsentForm", courseId, upload),
   deleteConsentForm: (courseId) => ipcRenderer.invoke("course:deleteConsentForm", courseId),

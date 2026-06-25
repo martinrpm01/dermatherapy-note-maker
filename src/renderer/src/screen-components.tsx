@@ -2177,7 +2177,7 @@ export function DashboardScreen(props: {
                       </div>
                       <div className="patient-row-actions">
                         <button onClick={() => props.onEditPendingCourse(patientId, row.courseId, "intake")}>Edit Intake</button>
-                        <button onClick={() => props.onOpenConsultForms(patientId, row.courseId)}>Consult Forms</button>
+                        <button onClick={() => props.onOpenConsultForms(patientId, row.courseId)}>Forms</button>
                         <CourseScheduleMenu
                           hasSchedule={scheduledCourseIds.has(row.courseId)}
                           onOpenSchedule={() => props.onScheduleCourse(row.courseId)}
@@ -2210,9 +2210,11 @@ export function DocumentOnlyScreen(props: {
   onReviewConsent: (recordId: string) => void;
   onGenerateConsultQuestionnaire: (recordId: string) => void;
   onGenerateSimWorksheet: (recordId: string) => void;
+  onGenerateCompletedLesionForm: (recordId: string) => void;
   onOpenConsent: (asset: AssetReference) => void;
   onOpenConsultQuestionnaire: (asset: AssetReference) => void;
   onOpenSimWorksheet: (asset: AssetReference) => void;
+  onOpenCompletedLesionForm: (asset: AssetReference) => void;
 }) {
   const records = (props.snapshot?.records ?? []).filter((detail) =>
     matchesSearch(
@@ -2228,8 +2230,8 @@ export function DocumentOnlyScreen(props: {
       <section className="panel">
         <div className="section-header">
           <div>
-            <h2>Consult Form Generator</h2>
-            <p>Generate the consult questionnaire, consent form, and sim worksheet from one patient-info record.</p>
+            <h2>Form Generator</h2>
+            <p>Generate the consult questionnaire, consent form, sim worksheet, and completed lesion form from one patient-info record.</p>
           </div>
           <button className="primary" onClick={props.onAddRecord}>Add Patient Info</button>
         </div>
@@ -2244,8 +2246,8 @@ export function DocumentOnlyScreen(props: {
 
       {!records.length ? (
         <section className="panel empty-state">
-          <h3>No Consult Forms Yet</h3>
-          <p>Create a patient-info record to generate consult forms in one place.</p>
+          <h3>No Forms Yet</h3>
+          <p>Create a patient-info record to generate forms in one place.</p>
         </section>
       ) : (
         <section className="panel">
@@ -2254,6 +2256,7 @@ export function DocumentOnlyScreen(props: {
               const consentFile = detail.files.find((file) => file.fileType === "consent_form") ?? null;
               const questionnaireFile = detail.files.find((file) => file.fileType === "consult_questionnaire") ?? null;
               const worksheetFile = detail.files.find((file) => file.fileType === "sim_worksheet") ?? null;
+              const completedLesionFile = detail.files.find((file) => file.fileType === "completed_lesion_form") ?? null;
               return (
                 <article className="patient-row-card patient-row-grouped" key={detail.record.id}>
                   <div className="patient-row-grouped-header">
@@ -2328,6 +2331,23 @@ export function DocumentOnlyScreen(props: {
                       </button>
                       {worksheetFile ? (
                         <button onClick={() => props.onOpenSimWorksheet(worksheetFile.fileAsset)}>Open Sim Worksheet</button>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="patient-row-grouped-course-row">
+                    <div>
+                      <div className="strong" style={{ fontSize: "0.92rem" }}>Completed Lesion Form</div>
+                      <div className="muted" style={{ fontSize: "0.85rem" }}>
+                        {completedLesionFile ? "Completed lesion form is ready for this record." : "Generate after treatment completion details are ready."}
+                      </div>
+                    </div>
+                    <div className="patient-row-actions">
+                      <button onClick={() => props.onGenerateCompletedLesionForm(detail.record.id)}>
+                        {completedLesionFile ? "Regenerate Completed Form" : "Generate Completed Form"}
+                      </button>
+                      {completedLesionFile ? (
+                        <button onClick={() => props.onOpenCompletedLesionForm(completedLesionFile.fileAsset)}>Open Completed Form</button>
                       ) : null}
                     </div>
                   </div>
@@ -2458,7 +2478,7 @@ export function PatientScreen(props: {
                   <div className="button-row">
                     <button onClick={() => props.onEditCourse(courseDetail.course.id)}>Edit Intake</button>
                     <button onClick={() => props.onOpenConsultForms(courseDetail.course.patientId, courseDetail.course.id)}>
-                      Consult Forms
+                      Forms
                     </button>
                     <CourseScheduleMenu
                       hasSchedule={scheduledCourseIds.has(courseDetail.course.id)}

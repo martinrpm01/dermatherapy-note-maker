@@ -69,6 +69,7 @@ import {
 } from "../../../shared/consent-form-pdf";
 import { buildConsultQuestionnairePdfFromTemplateBytes } from "../../../shared/consult-questionnaire-pdf";
 import { buildSimWorksheetPdfFromTemplateBytes } from "../../../shared/sim-worksheet-pdf";
+import { buildCompletedLesionFormPdf } from "../../../shared/completed-lesion-form-pdf";
 import { validateTemplate } from "../../../shared/template-engine";
 import { buildDocumentOnlySyntheticContext } from "../../../shared/document-only";
 import { BrowserBinaryAssetStore } from "../storage/browser-binary-asset-store";
@@ -2105,6 +2106,53 @@ export class BrowserAppClient implements AppClient {
     return persistedFile;
   }
 
+  async generateDocumentOnlyCompletedLesionForm(recordId: string) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    const detail = structuredDataStore.loadDocumentOnlyDetails([recordId])[0];
+    if (!detail) {
+      throw new Error("Document record not found.");
+    }
+
+    const { patient, course, sites } = buildDocumentOnlySyntheticContext(detail);
+    const existingFile = detail.files.find((file) => file.fileType === "completed_lesion_form") ?? null;
+    const completedForm = await buildCompletedLesionFormPdf({
+      patient,
+      course,
+      sites,
+      photoInputs: []
+    });
+
+    const filePath = binaryAssetStore.saveUpload(
+      {
+        name: completedForm.fileName,
+        mimeType: "application/pdf",
+        dataUrl: await this.bytesToDataUrl(completedForm.bytes, "application/pdf")
+      },
+      binaryAssetStore.getDocumentOnlyFilesDir(recordId),
+      completedForm.caption
+    );
+
+    const persistedFile = structuredDataStore.upsertDocumentOnlyFile(
+      recordId,
+      "completed_lesion_form",
+      filePath,
+      completedForm.caption,
+      "application/pdf",
+      completedForm.fileName
+    );
+
+    const previousPath = existingFile ? this.getStoredAssetPath(binaryAssetStore, existingFile.fileAsset) : null;
+    if (previousPath && previousPath !== filePath) {
+      this.deleteStoredFiles(binaryAssetStore, [previousPath]);
+    }
+
+    this.triggerPdfDownload(completedForm.fileName, completedForm.bytes);
+    await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
+    return persistedFile;
+  }
+
   async generateConsentForm(courseId: string) {
     this.assertUnlocked();
     const structuredDataStore = await this.getStructuredDataStore();
@@ -2298,6 +2346,84 @@ export class BrowserAppClient implements AppClient {
     }
 
     this.triggerPdfDownload(worksheet.fileName, worksheet.bytes);
+    await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
+    return persistedDocument;
+  }
+
+  async generateCourseCompletedLesionForm(courseId: string) {
+    this.assertUnlocked();
+    const structuredDataStore = await this.getStructuredDataStore();
+    const binaryAssetStore = await this.getBinaryAssetStore();
+    const course = structuredDataStore.fetchCourse(courseId);
+    if (!course) {
+      throw new Error("Course not found.");
+    }
+
+    const patient = structuredDataStore.fetchPatient(course.patientId);
+    if (!patient) {
+      throw new Error("Patient not found.");
+    }
+
+    const sites = structuredDataStore.fetchSites([course.id]);
+    const existingDocument = structuredDataStore
+      .fetchCourseDocuments(course.id)
+      .find((document) => document.documentType === "completed_lesion_form") ?? null;
+    const courseVisitBundles = structuredDataStore
+      .fetchVisitsByCourseIds([course.id])
+      .slice()
+      .sort((left, right) => {
+        const dateCompare = left.note.visitDate.localeCompare(right.note.visitDate);
+        return dateCompare || left.note.createdAt.localeCompare(right.note.createdAt);
+      });
+    const photos = await Promise.all(
+      courseVisitBundles
+        .flatMap((bundle) =>
+          bundle.photos
+            .slice()
+            .sort((left, right) => left.sortOrder - right.sortOrder)
+            .map((photo) => ({
+              photoId: photo.id,
+              asset: photo.imageAsset
+            }))
+        )
+        .slice(0, 3)
+        .map(async (photo) => ({
+          image: await this.readStoredAssetInput(photo.asset, `visit photo ${photo.photoId}`)
+        }))
+    );
+
+    const completedForm = await buildCompletedLesionFormPdf({
+      patient,
+      course,
+      sites,
+      photoInputs: photos
+    });
+
+    const filePath = binaryAssetStore.saveUpload(
+      {
+        name: completedForm.fileName,
+        mimeType: "application/pdf",
+        dataUrl: await this.bytesToDataUrl(completedForm.bytes, "application/pdf")
+      },
+      binaryAssetStore.getCourseDocumentsDir(patient.id, course.id),
+      completedForm.caption
+    );
+
+    const persistedDocument = structuredDataStore.upsertCourseDocument(
+      course.id,
+      "completed_lesion_form",
+      filePath,
+      completedForm.caption,
+      "application/pdf",
+      completedForm.fileName
+    );
+
+    const previousPath = existingDocument ? this.getStoredAssetPath(binaryAssetStore, existingDocument.fileAsset) : null;
+    if (previousPath && previousPath !== filePath) {
+      this.deleteStoredFiles(binaryAssetStore, [previousPath]);
+    }
+
+    this.triggerPdfDownload(completedForm.fileName, completedForm.bytes);
     await Promise.all([structuredDataStore.flush(), binaryAssetStore.flush()]);
     return persistedDocument;
   }

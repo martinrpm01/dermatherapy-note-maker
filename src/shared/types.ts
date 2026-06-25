@@ -23,8 +23,8 @@ export type AssetKind =
   | "generated_pdf"
   | "course_document"
   | "settings_logo";
-export type CourseDocumentType = "consent_form" | "consult_questionnaire" | "sim_worksheet";
-export type DocumentOnlyFileType = "consent_form" | "consult_questionnaire" | "sim_worksheet";
+export type CourseDocumentType = "consent_form" | "consult_questionnaire" | "sim_worksheet" | "completed_lesion_form";
+export type DocumentOnlyFileType = "consent_form" | "consult_questionnaire" | "sim_worksheet" | "completed_lesion_form";
 
 export interface AssetReference {
   assetId: string;
@@ -766,6 +766,7 @@ export interface AppClient {
     input: ConsultQuestionnaireInput
   ) => Promise<DocumentOnlyFileRecord>;
   generateDocumentOnlySimWorksheet: (recordId: string) => Promise<DocumentOnlyFileRecord>;
+  generateDocumentOnlyCompletedLesionForm: (recordId: string) => Promise<DocumentOnlyFileRecord>;
   completeCourse: (courseId: string) => Promise<void>;
   restoreCourse: (courseId: string) => Promise<void>;
   deleteCourse: (courseId: string) => Promise<void>;
@@ -785,6 +786,7 @@ export interface AppClient {
     input: ConsultQuestionnaireInput
   ) => Promise<CourseDocumentRecord>;
   generateCourseSimWorksheet: (courseId: string) => Promise<CourseDocumentRecord>;
+  generateCourseCompletedLesionForm: (courseId: string) => Promise<CourseDocumentRecord>;
   finalizeConsentForm: (courseId: string, input: ConsentSigningInput) => Promise<CourseDocumentRecord>;
   uploadConsentForm: (courseId: string, upload: StoredAssetUpload) => Promise<CourseDocumentRecord>;
   deleteConsentForm: (courseId: string) => Promise<void>;

@@ -14,6 +14,7 @@ import { buildVisitPdf } from "./pdf";
 import { buildConsentFormPdf, buildSignedConsentFormPdf, buildUploadedConsentPdf } from "./consent-form";
 import { buildSimWorksheetPdf } from "./sim-worksheet";
 import { buildConsultQuestionnairePdf } from "./consult-questionnaire";
+import { buildCompletedLesionFormPdf } from "../shared/completed-lesion-form-pdf";
 import { PatientArchivePreparationService } from "./archive-preparation";
 import { DesktopPatientArchiveExportService } from "./archive-export";
 import { DesktopPatientArchiveReaderService } from "./archive-reader";
@@ -1752,6 +1753,44 @@ export class RadiationNoteService {
     return persistedFile;
   }
 
+  async generateDocumentOnlyCompletedLesionForm(recordId: string) {
+    this.assertUnlocked();
+    const detail = this.repository.loadDocumentOnlyDetails([recordId])[0];
+    if (!detail) {
+      throw new Error("Document record not found.");
+    }
+
+    const { patient, course, sites } = buildDocumentOnlySyntheticContext(detail);
+    const existingFile = detail.files.find((file) => file.fileType === "completed_lesion_form") ?? null;
+    const completedForm = await buildCompletedLesionFormPdf({
+      patient,
+      course,
+      sites,
+      photoInputs: []
+    });
+
+    const documentsDir = this.assetStore.getDocumentOnlyFilesDir(recordId);
+    this.assetStore.ensureDirectory(documentsDir);
+    const outputPath = path.join(documentsDir, completedForm.fileName);
+    this.assetStore.writeBinaryFile(outputPath, completedForm.bytes);
+
+    const persistedFile = this.repository.upsertDocumentOnlyFile(
+      recordId,
+      "completed_lesion_form",
+      this.assetStore.createAssetReference(outputPath, "course_document")!,
+      completedForm.caption,
+      "application/pdf",
+      completedForm.fileName
+    );
+
+    const previousPath = existingFile ? this.resolveAssetPath(existingFile.fileAsset) : null;
+    if (previousPath && previousPath !== outputPath) {
+      this.assetStore.deleteFile(previousPath);
+    }
+
+    return persistedFile;
+  }
+
   async generateConsentForm(courseId: string) {
     this.assertUnlocked();
     const course = this.repository.fetchCourse(courseId);
@@ -1944,6 +1983,68 @@ export class RadiationNoteService {
           throw error;
         }
       }
+    }
+
+    return persistedDocument;
+  }
+
+  async generateCourseCompletedLesionForm(courseId: string) {
+    this.assertUnlocked();
+    const course = this.repository.fetchCourse(courseId);
+    if (!course) {
+      throw new Error("Course not found.");
+    }
+
+    const patient = this.repository.fetchPatient(course.patientId);
+    if (!patient) {
+      throw new Error("Patient not found.");
+    }
+
+    const sites = this.repository.fetchSites([course.id]);
+    const existingDocument = this.repository
+      .fetchCourseDocuments(course.id)
+      .find((document) => document.documentType === "completed_lesion_form") ?? null;
+    const courseVisitBundles = this.repository
+      .fetchVisitsByCourseIds([course.id])
+      .slice()
+      .sort((left, right) => {
+        const dateCompare = left.note.visitDate.localeCompare(right.note.visitDate);
+        return dateCompare || left.note.createdAt.localeCompare(right.note.createdAt);
+      });
+    const photos = courseVisitBundles
+      .flatMap((bundle) =>
+        bundle.photos
+          .slice()
+          .sort((left, right) => left.sortOrder - right.sortOrder)
+          .map((photo) => ({
+            image: this.readPdfAssetInput(photo.imageAsset, `visit photo ${photo.id}`)
+          }))
+      )
+      .slice(0, 3);
+
+    const completedForm = await buildCompletedLesionFormPdf({
+      patient,
+      course,
+      sites,
+      photoInputs: photos
+    });
+    const documentsDir = this.assetStore.getCourseDocumentsDir(patient.id, course.id);
+    this.assetStore.ensureDirectory(documentsDir);
+    const outputPath = path.join(documentsDir, completedForm.fileName);
+    this.assetStore.writeBinaryFile(outputPath, completedForm.bytes);
+
+    const persistedDocument = (this.repository as AssetAwareStructuredDataStore).upsertCourseDocument(
+      course.id,
+      "completed_lesion_form",
+      this.assetStore.createAssetReference(outputPath, "course_document")!,
+      completedForm.caption,
+      "application/pdf",
+      completedForm.fileName
+    );
+
+    const previousPath = existingDocument ? this.resolveAssetPath(existingDocument.fileAsset) : null;
+    if (previousPath && previousPath !== outputPath) {
+      this.assetStore.deleteFile(previousPath);
     }
 
     return persistedDocument;

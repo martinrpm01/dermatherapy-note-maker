@@ -1878,6 +1878,7 @@ export function CourseConsentModal(props: {
   hasConsentForm: boolean;
   hasConsultQuestionnaire: boolean;
   hasSimWorksheet: boolean;
+  hasCompletedLesionForm: boolean;
   showSimWorksheet?: boolean;
   busy: boolean;
   onClose: () => void;
@@ -1888,6 +1889,8 @@ export function CourseConsentModal(props: {
   onGenerateConsultQuestionnaire?: () => void;
   onOpenSimWorksheet?: () => void;
   onGenerateSimWorksheet?: () => void;
+  onOpenCompletedLesionForm?: () => void;
+  onGenerateCompletedLesionForm?: () => void;
 }) {
   return (
     <div className="modal-backdrop">
@@ -1941,6 +1944,19 @@ export function CourseConsentModal(props: {
             </div>
           </div>
         )}
+        <div className="subpanel">
+          <h4 style={{ marginBottom: "0.6rem" }}>Completed Lesion Form</h4>
+          <div className="button-row">
+            {props.hasCompletedLesionForm ? (
+              <>
+                <button onClick={props.onOpenCompletedLesionForm}>Open Completed Form</button>
+                <button onClick={props.onGenerateCompletedLesionForm}>Regenerate Completed Form</button>
+              </>
+            ) : (
+              <button onClick={props.onGenerateCompletedLesionForm}>Generate Completed Form</button>
+            )}
+          </div>
+        </div>
         {props.footerNote ? (
           <div className="subpanel" style={{ marginBottom: 0 }}>
             <p className="muted" style={{ margin: 0, fontSize: "0.9rem" }}>
