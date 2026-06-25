@@ -148,9 +148,9 @@ async function drawPhotoSlots(
   photoInputs: CompletedLesionPhotoInput[]
 ) {
   const slots = [
-    { x: 50, y: 66, width: 170, height: 142 },
-    { x: 220, y: 66, width: 170, height: 142 },
-    { x: 390, y: 66, width: 170, height: 142 }
+    { x: 50, y: 54, width: 170, height: 124 },
+    { x: 220, y: 54, width: 170, height: 124 },
+    { x: 390, y: 54, width: 170, height: 124 }
   ];
 
   for (let index = 0; index < slots.length; index += 1) {
