@@ -2550,6 +2550,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
               setCourseCompletionNeedsFacePhoto(false);
               setCourseCompletionFacePhotoUpload(null);
             }}
+            onOpenCourseDocuments={(patientId, courseId) => void openCourseConsentActions(patientId, courseId, "documents")}
             onOpenVisit={(courseId, existingVisitId) => setScreen({ name: "visit", courseId, mode: "next_treatment", existingVisitId })}
             onOpenPdf={(asset) => void appClient?.openAsset(asset)}
             onExportArchive={(patientId) => void exportPatientArchive(patientId)}

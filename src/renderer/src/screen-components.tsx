@@ -2643,6 +2643,7 @@ export function CompletedScreen(props: {
   onSearchChange: (value: string) => void;
   onOpenPatient: (patientId: string) => void;
   onAddCourse: (patientId: string) => void;
+  onOpenCourseDocuments: (patientId: string, courseId: string) => void;
   onOpenVisit: (courseId: string, existingVisitId: string) => void;
   onOpenPdf: (asset: AssetReference) => void;
   onExportArchive: (patientId: string) => void;
@@ -2977,6 +2978,7 @@ export function CompletedScreen(props: {
                     </div>
                   </div>
                   <div className="patient-row-actions">
+                    <button onClick={() => props.onOpenCourseDocuments(detail.patient.id, courseDetail.course.id)}>Documents</button>
                     {courseDetail.visits.slice(-1).map((v) => (
                       <button key={v.note.id} onClick={() => props.onOpenVisit(courseDetail.course.id, v.note.id)}>Last Note</button>
                     ))}
