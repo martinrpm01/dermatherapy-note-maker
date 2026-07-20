@@ -502,6 +502,29 @@ export type CompletedLesionIdPhotoSource =
   | { mode: "upload"; upload: StoredAssetUpload }
   | { mode: "current_patient" };
 
+export interface CompletedLesionSiteInput {
+  siteNumber: number;
+  lesionSite: string;
+  diagnosis: string;
+  prescribedFractions: string;
+  treatmentSummary: string;
+}
+
+export interface CompletedLesionFormInput {
+  simConsultDate: string;
+  finalTreatmentDate: string;
+  compliantWithPlan: string;
+  nonComplianceExplanation: string;
+  recommendationScore: string;
+  chooseAgainScore: string;
+  sites: CompletedLesionSiteInput[];
+}
+
+export interface CompletedLesionGenerationOptions {
+  idPhotoSource?: CompletedLesionIdPhotoSource | null;
+  formInput?: CompletedLesionFormInput | null;
+}
+
 export interface ConsentSigningInput {
   signDate: string;
   patientInitials: string;
@@ -772,7 +795,7 @@ export interface AppClient {
   generateDocumentOnlySimWorksheet: (recordId: string) => Promise<DocumentOnlyFileRecord>;
   generateDocumentOnlyCompletedLesionForm: (
     recordId: string,
-    idPhotoSource?: CompletedLesionIdPhotoSource | null
+    options?: CompletedLesionGenerationOptions | null
   ) => Promise<DocumentOnlyFileRecord>;
   completeCourse: (courseId: string) => Promise<void>;
   restoreCourse: (courseId: string) => Promise<void>;
@@ -795,7 +818,7 @@ export interface AppClient {
   generateCourseSimWorksheet: (courseId: string) => Promise<CourseDocumentRecord>;
   generateCourseCompletedLesionForm: (
     courseId: string,
-    idPhotoSource?: CompletedLesionIdPhotoSource | null
+    options?: CompletedLesionGenerationOptions | null
   ) => Promise<CourseDocumentRecord>;
   finalizeConsentForm: (courseId: string, input: ConsentSigningInput) => Promise<CourseDocumentRecord>;
   uploadConsentForm: (courseId: string, upload: StoredAssetUpload) => Promise<CourseDocumentRecord>;

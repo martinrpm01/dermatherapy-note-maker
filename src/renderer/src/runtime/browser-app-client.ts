@@ -46,6 +46,7 @@ import type {
   AppClient,
   ArchiveSnapshot,
   AssetReference,
+  CompletedLesionGenerationOptions,
   CompletedLesionIdPhotoSource,
   DashboardSnapshot,
   DocumentOnlySnapshot,
@@ -2128,7 +2129,7 @@ export class BrowserAppClient implements AppClient {
     return persistedFile;
   }
 
-  async generateDocumentOnlyCompletedLesionForm(recordId: string, idPhotoSource?: CompletedLesionIdPhotoSource | null) {
+  async generateDocumentOnlyCompletedLesionForm(recordId: string, options?: CompletedLesionGenerationOptions | null) {
     this.assertUnlocked();
     const structuredDataStore = await this.getStructuredDataStore();
     const binaryAssetStore = await this.getBinaryAssetStore();
@@ -2143,7 +2144,8 @@ export class BrowserAppClient implements AppClient {
       patient,
       course,
       sites,
-      idPhotoInput: await this.completedLesionPhotoInputFromSource(idPhotoSource, patient),
+      formInput: options?.formInput ?? null,
+      idPhotoInput: await this.completedLesionPhotoInputFromSource(options?.idPhotoSource, patient),
       photoInputs: []
     });
 
@@ -2373,7 +2375,7 @@ export class BrowserAppClient implements AppClient {
     return persistedDocument;
   }
 
-  async generateCourseCompletedLesionForm(courseId: string, idPhotoSource?: CompletedLesionIdPhotoSource | null) {
+  async generateCourseCompletedLesionForm(courseId: string, options?: CompletedLesionGenerationOptions | null) {
     this.assertUnlocked();
     const structuredDataStore = await this.getStructuredDataStore();
     const binaryAssetStore = await this.getBinaryAssetStore();
@@ -2419,7 +2421,8 @@ export class BrowserAppClient implements AppClient {
       patient,
       course,
       sites,
-      idPhotoInput: await this.completedLesionPhotoInputFromSource(idPhotoSource, patient),
+      formInput: options?.formInput ?? null,
+      idPhotoInput: await this.completedLesionPhotoInputFromSource(options?.idPhotoSource, patient),
       photoInputs: photos
     });
 

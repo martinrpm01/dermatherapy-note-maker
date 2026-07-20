@@ -1,7 +1,7 @@
 import { PDFDocument, PDFImage, StandardFonts, rgb } from "pdf-lib";
 
 import { formatDisplayDate } from "./note-rules";
-import type { PatientRecord, TreatmentCourseRecord, TreatmentSiteRecord } from "./types";
+import type { CompletedLesionFormInput, PatientRecord, TreatmentCourseRecord, TreatmentSiteRecord } from "./types";
 
 export interface CompletedLesionPhotoInput {
   image: {
@@ -15,6 +15,7 @@ export interface CompletedLesionFormBuildInput {
   patient: PatientRecord;
   course: TreatmentCourseRecord;
   sites: TreatmentSiteRecord[];
+  formInput?: CompletedLesionFormInput | null;
   idPhotoInput?: CompletedLesionPhotoInput | null;
   photoInputs?: CompletedLesionPhotoInput[];
 }
@@ -47,6 +48,53 @@ function siteFractions(course: TreatmentCourseRecord, site: TreatmentSiteRecord)
     : course.prescribedFractions && course.prescribedFractions > 0
       ? course.prescribedFractions
       : null;
+}
+
+function defaultSiteSummary(course: TreatmentCourseRecord, site: TreatmentSiteRecord) {
+  const fractions = siteFractions(course, site);
+  const summaryParts = [
+    site.diagnosisText ? `Completed XRT for ${site.diagnosisText}` : "Completed XRT",
+    site.treatmentLocationText || site.bodyLocation ? `at ${site.treatmentLocationText || site.bodyLocation}` : "",
+    fractions ? `Prescribed course: ${fractions} fractions.` : ""
+  ].filter(Boolean);
+  return summaryParts.join(" ");
+}
+
+export function createDefaultCompletedLesionFormInput(
+  course: TreatmentCourseRecord,
+  sites: TreatmentSiteRecord[]
+): CompletedLesionFormInput {
+  const sortedSites = sites.slice().sort((left, right) => left.siteNumber - right.siteNumber);
+  const targetSites = sortedSites.length
+    ? sortedSites
+    : [
+        {
+          siteNumber: 1,
+          bodyLocation: "",
+          treatmentLocationText: "",
+          diagnosisText: "",
+          prescribedFractions: course.prescribedFractions
+        } as TreatmentSiteRecord
+      ];
+  return {
+    simConsultDate: course.simConsultDate || course.startDate || "",
+    finalTreatmentDate: course.endDate || "",
+    compliantWithPlan: "YES",
+    nonComplianceExplanation: "",
+    recommendationScore: "5",
+    chooseAgainScore: "5",
+    sites: targetSites.map((site) => ({
+      siteNumber: site.siteNumber,
+      lesionSite: site.treatmentLocationText || site.bodyLocation,
+      diagnosis: site.diagnosisText,
+      prescribedFractions: `${siteFractions(course, site) ?? ""}`,
+      treatmentSummary: defaultSiteSummary(course, site)
+    }))
+  };
+}
+
+function findSiteInput(input: CompletedLesionFormBuildInput, site: TreatmentSiteRecord) {
+  return input.formInput?.sites.find((item) => item.siteNumber === site.siteNumber) ?? null;
 }
 
 function wrapText(text: string, font: PdfFont, size: number, maxWidth: number) {
@@ -211,41 +259,43 @@ async function drawLesionPage(
 
   drawField(page, fonts.label, fonts.value, "Patient Name:", patientFullName(input.patient), 55, 670, 380);
   drawField(page, fonts.label, fonts.value, "Patient DOB:", formatDisplayDate(input.patient.dob), 55, 642, 380);
-  drawField(page, fonts.label, fonts.value, "Lesion Site (location):", site.treatmentLocationText || site.bodyLocation, 55, 614, 380);
+  const siteInput = findSiteInput(input, site);
+  drawField(page, fonts.label, fonts.value, "Lesion Site (location):", siteInput?.lesionSite ?? site.treatmentLocationText ?? site.bodyLocation, 55, 614, 380);
 
-  drawField(page, fonts.label, fonts.value, "Diagnosis:", site.diagnosisText, 55, 574, 275);
+  drawField(page, fonts.label, fonts.value, "Diagnosis:", siteInput?.diagnosis ?? site.diagnosisText, 55, 574, 275);
   const fractions = siteFractions(input.course, site);
-  drawField(page, fonts.label, fonts.value, "Prescribed Fractions:", fractions ? `${fractions} Fractions` : "", 335, 574, 220);
+  const prescribedFractions = siteInput?.prescribedFractions.trim()
+    ? `${siteInput.prescribedFractions.trim()}${/fraction/i.test(siteInput.prescribedFractions) ? "" : " Fractions"}`
+    : fractions
+      ? `${fractions} Fractions`
+      : "";
+  drawField(page, fonts.label, fonts.value, "Prescribed Fractions:", prescribedFractions, 335, 574, 220);
   drawLabel(page, fonts.label, "Date of SIM/Consult:", 55, 545, 13);
   drawBox(page, 222, 538, 95, 22);
-  drawText(page, fonts.value, formatDisplayDate(input.course.simConsultDate || input.course.startDate), 228, 544, 11);
+  drawText(page, fonts.value, formatDisplayDate(input.formInput?.simConsultDate || input.course.simConsultDate || input.course.startDate), 228, 544, 11);
   drawLabel(page, fonts.label, "Date of Final Treatment:", 335, 545, 13);
   drawBox(page, 510, 538, 55, 22);
-  drawText(page, fonts.value, formatDisplayDate(input.course.endDate || ""), 516, 544, 9);
+  drawText(page, fonts.value, formatDisplayDate(input.formInput?.finalTreatmentDate || input.course.endDate || ""), 516, 544, 9);
 
-  drawField(page, fonts.label, fonts.value, "Was Patient Compliant with plan of care?", "YES", 55, 500, 350);
+  drawField(page, fonts.label, fonts.value, "Was Patient Compliant with plan of care?", input.formInput?.compliantWithPlan || "YES", 55, 500, 350);
   drawText(page, fonts.label, "If \"NO\" briefly explain below.", 405, 510, 12);
   drawBox(page, 55, 442, 500, 50);
+  drawWrappedBoxText(page, fonts.value, input.formInput?.nonComplianceExplanation ?? "", 55, 442, 500, 50);
 
   drawLabel(page, fonts.label, "Treatment Summary:", 55, 426, 14);
   drawBox(page, 55, 365, 500, 58);
-  const summaryParts = [
-    site.diagnosisText ? `Completed XRT for ${site.diagnosisText}` : "Completed XRT",
-    site.treatmentLocationText || site.bodyLocation ? `at ${site.treatmentLocationText || site.bodyLocation}` : "",
-    fractions ? `Prescribed course: ${fractions} fractions.` : ""
-  ].filter(Boolean);
-  drawWrappedBoxText(page, fonts.value, summaryParts.join(" "), 55, 365, 500, 58);
+  drawWrappedBoxText(page, fonts.value, siteInput?.treatmentSummary || defaultSiteSummary(input.course, site), 55, 365, 500, 58);
 
   drawLabel(page, fonts.label, "On a scale of 0-5 (0=Would not recommend 5=highly recommend)", 55, 342, 12);
   drawLabel(page, fonts.label, "would the patient recommend this XRT as a treatment option to others?", 55, 318, 13);
   drawBox(page, 490, 309, 55, 24);
-  drawText(page, fonts.value, "5", 497, 316, 11);
+  drawText(page, fonts.value, input.formInput?.recommendationScore || "5", 497, 316, 11);
 
   drawLabel(page, fonts.label, "On a scale of 0-5 (0=Would not choose XRT again, 5= Yes would definitely choose XRT again)", 55, 292, 11);
   drawLabel(page, fonts.label, "Would this patient choose XRT again if treatment of a new lesion would be", 55, 269, 12);
   drawLabel(page, fonts.label, "necessary?", 55, 251, 12);
   drawBox(page, 125, 241, 55, 24);
-  drawText(page, fonts.value, "5", 132, 248, 11);
+  drawText(page, fonts.value, input.formInput?.chooseAgainScore || "5", 132, 248, 11);
 
   await drawPhotoSlots(pdfDoc, page, fonts.label, photoInputs);
 }

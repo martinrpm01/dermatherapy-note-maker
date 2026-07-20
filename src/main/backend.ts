@@ -77,7 +77,7 @@ import type {
   BootstrapPayload,
   ConsentSigningInput,
   ConsultQuestionnaireInput,
-  CompletedLesionIdPhotoSource,
+  CompletedLesionGenerationOptions,
   DocumentOnlyInput,
   DocumentOnlySnapshot,
   CourseInput,
@@ -177,6 +177,10 @@ function completedLesionPhotoInputFromUpload(upload?: StoredAssetUpload | null):
       mimeType: upload.mimeType || match[1] || "application/octet-stream"
     }
   };
+}
+
+function completedLesionIdPhotoSourceFromOptions(options?: CompletedLesionGenerationOptions | null) {
+  return options?.idPhotoSource ?? null;
 }
 
 function makeId(prefix: string) {
@@ -1773,7 +1777,7 @@ export class RadiationNoteService {
     return persistedFile;
   }
 
-  async generateDocumentOnlyCompletedLesionForm(recordId: string, idPhotoSource?: CompletedLesionIdPhotoSource | null) {
+  async generateDocumentOnlyCompletedLesionForm(recordId: string, options?: CompletedLesionGenerationOptions | null) {
     this.assertUnlocked();
     const detail = this.repository.loadDocumentOnlyDetails([recordId])[0];
     if (!detail) {
@@ -1782,11 +1786,16 @@ export class RadiationNoteService {
 
     const { patient, course, sites } = buildDocumentOnlySyntheticContext(detail);
     const existingFile = detail.files.find((file) => file.fileType === "completed_lesion_form") ?? null;
+    const idPhotoSource = completedLesionIdPhotoSourceFromOptions(options);
     const completedForm = await buildCompletedLesionFormPdf({
       patient,
       course,
       sites,
-      idPhotoInput: idPhotoSource?.mode === "upload" ? completedLesionPhotoInputFromUpload(idPhotoSource.upload) : null,
+      formInput: options?.formInput ?? null,
+      idPhotoInput:
+        idPhotoSource?.mode === "upload"
+          ? completedLesionPhotoInputFromUpload(idPhotoSource.upload)
+          : null,
       photoInputs: []
     });
 
@@ -2009,7 +2018,7 @@ export class RadiationNoteService {
     return persistedDocument;
   }
 
-  async generateCourseCompletedLesionForm(courseId: string, idPhotoSource?: CompletedLesionIdPhotoSource | null) {
+  async generateCourseCompletedLesionForm(courseId: string, options?: CompletedLesionGenerationOptions | null) {
     this.assertUnlocked();
     const course = this.repository.fetchCourse(courseId);
     if (!course) {
@@ -2043,10 +2052,12 @@ export class RadiationNoteService {
       )
       .slice(0, 3);
 
+    const idPhotoSource = completedLesionIdPhotoSourceFromOptions(options);
     const completedForm = await buildCompletedLesionFormPdf({
       patient,
       course,
       sites,
+      formInput: options?.formInput ?? null,
       idPhotoInput:
         idPhotoSource?.mode === "upload"
           ? completedLesionPhotoInputFromUpload(idPhotoSource.upload)

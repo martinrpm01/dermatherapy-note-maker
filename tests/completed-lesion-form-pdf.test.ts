@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { PDFDocument } from "pdf-lib";
 
-import { buildCompletedLesionFormPdf } from "../src/shared/completed-lesion-form-pdf";
+import { buildCompletedLesionFormPdf, createDefaultCompletedLesionFormInput } from "../src/shared/completed-lesion-form-pdf";
 import type { PatientRecord, TreatmentCourseRecord, TreatmentSiteRecord } from "../src/shared/types";
 
 const now = "2026-06-25T00:00:00.000Z";
@@ -104,6 +104,37 @@ describe("completed lesion form pdf", () => {
           mimeType: "image/png"
         }
       },
+      photoInputs: []
+    });
+
+    const pdfDoc = await PDFDocument.load(result.bytes);
+    expect(pdfDoc.getPageCount()).toBe(1);
+    expect(result.bytes.length).toBeGreaterThan(2_000);
+  });
+
+  it("accepts edited completed lesion form field values before generating", async () => {
+    const course = buildCourse();
+    const site = buildSite();
+    const formInput = createDefaultCompletedLesionFormInput(course, [site]);
+    formInput.simConsultDate = "2026-04-18";
+    formInput.finalTreatmentDate = "2026-05-22";
+    formInput.compliantWithPlan = "NO";
+    formInput.nonComplianceExplanation = "Patient missed one visit due to transportation.";
+    formInput.recommendationScore = "4";
+    formInput.chooseAgainScore = "3";
+    formInput.sites[0] = {
+      ...formInput.sites[0],
+      lesionSite: "Edited left cheek lesion",
+      diagnosis: "Squamous Cell Carcinoma",
+      prescribedFractions: "12",
+      treatmentSummary: "Edited summary entered by the therapist before PDF generation."
+    };
+
+    const result = await buildCompletedLesionFormPdf({
+      patient: buildPatient(),
+      course,
+      sites: [site],
+      formInput,
       photoInputs: []
     });
 

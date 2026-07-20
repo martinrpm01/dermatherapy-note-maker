@@ -50,8 +50,8 @@ const api: ElectronApi = {
   generateDocumentOnlyConsultQuestionnaire: (recordId, input) =>
     ipcRenderer.invoke("documents:generateConsultQuestionnaire", recordId, input),
   generateDocumentOnlySimWorksheet: (recordId) => ipcRenderer.invoke("documents:generateSimWorksheet", recordId),
-  generateDocumentOnlyCompletedLesionForm: (recordId, idPhotoSource) =>
-    ipcRenderer.invoke("documents:generateCompletedLesionForm", recordId, idPhotoSource),
+  generateDocumentOnlyCompletedLesionForm: (recordId, options) =>
+    ipcRenderer.invoke("documents:generateCompletedLesionForm", recordId, options),
   completeCourse: (courseId) => ipcRenderer.invoke("course:complete", courseId),
   restoreCourse: (courseId) => ipcRenderer.invoke("course:restore", courseId),
   deleteCourse: (courseId) => ipcRenderer.invoke("course:delete", courseId),
@@ -66,8 +66,8 @@ const api: ElectronApi = {
   generateCourseConsultQuestionnaire: (courseId, input) =>
     ipcRenderer.invoke("course:generateConsultQuestionnaire", courseId, input),
   generateCourseSimWorksheet: (courseId) => ipcRenderer.invoke("course:generateSimWorksheet", courseId),
-  generateCourseCompletedLesionForm: (courseId, idPhotoSource) =>
-    ipcRenderer.invoke("course:generateCompletedLesionForm", courseId, idPhotoSource),
+  generateCourseCompletedLesionForm: (courseId, options) =>
+    ipcRenderer.invoke("course:generateCompletedLesionForm", courseId, options),
   finalizeConsentForm: (courseId, input) => ipcRenderer.invoke("course:finalizeConsentForm", courseId, input),
   uploadConsentForm: (courseId, upload) => ipcRenderer.invoke("course:uploadConsentForm", courseId, upload),
   deleteConsentForm: (courseId) => ipcRenderer.invoke("course:deleteConsentForm", courseId),

@@ -20,6 +20,7 @@ import {
   parseWorksheetSelection
 } from "../../shared/note-rules";
 import type {
+  CompletedLesionFormInput,
   ConsultQuestionnaireInput,
   ConsentSigningInput,
   CourseInput,
@@ -1016,6 +1017,123 @@ export function ConsultQuestionnaireModal(props: {
           <button onClick={props.onClose}>Cancel</button>
           <button className="primary" disabled={props.busy} onClick={props.onSave}>
             Save Questionnaire PDF
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function CompletedLesionFormModal(props: {
+  title: string;
+  input: CompletedLesionFormInput;
+  busy: boolean;
+  onChange: (next: CompletedLesionFormInput) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const formInput = props.input;
+
+  function updateSite(index: number, patch: Partial<CompletedLesionFormInput["sites"][number]>) {
+    props.onChange({
+      ...formInput,
+      sites: formInput.sites.map((site, siteIndex) => (siteIndex === index ? { ...site, ...patch } : site))
+    });
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal-card wide">
+        <h3>Completed Lesion Form</h3>
+        {props.title ? <p className="muted">{props.title}</p> : null}
+        <div className="form-grid course-top-grid">
+          <label>
+            Date of SIM/Consult
+            <CalendarDateInput
+              value={formInput.simConsultDate}
+              onChange={(next) => props.onChange({ ...formInput, simConsultDate: next })}
+            />
+          </label>
+          <label>
+            Date of Final Treatment
+            <CalendarDateInput
+              value={formInput.finalTreatmentDate}
+              onChange={(next) => props.onChange({ ...formInput, finalTreatmentDate: next })}
+            />
+          </label>
+          <label>
+            Compliant with plan of care
+            <select
+              value={formInput.compliantWithPlan}
+              onChange={(event) => props.onChange({ ...formInput, compliantWithPlan: event.target.value })}
+            >
+              <option value="YES">YES</option>
+              <option value="NO">NO</option>
+            </select>
+          </label>
+          <label>
+            Recommend score
+            <input
+              value={formInput.recommendationScore}
+              onChange={(event) => props.onChange({ ...formInput, recommendationScore: event.target.value })}
+            />
+          </label>
+          <label>
+            Choose again score
+            <input
+              value={formInput.chooseAgainScore}
+              onChange={(event) => props.onChange({ ...formInput, chooseAgainScore: event.target.value })}
+            />
+          </label>
+        </div>
+        <label>
+          If NO, briefly explain
+          <textarea
+            rows={3}
+            value={formInput.nonComplianceExplanation}
+            onChange={(event) => props.onChange({ ...formInput, nonComplianceExplanation: event.target.value })}
+          />
+        </label>
+        <div className="site-grid">
+          {formInput.sites.map((site, index) => (
+            <div className="subpanel compact-course-subpanel" key={site.siteNumber}>
+              <div className="section-header compact">
+                <div>
+                  <h4 style={{ marginBottom: "0.25rem" }}>Lesion {site.siteNumber}</h4>
+                </div>
+              </div>
+              <div className="form-grid course-top-grid">
+                <label>
+                  Lesion Site
+                  <input value={site.lesionSite} onChange={(event) => updateSite(index, { lesionSite: event.target.value })} />
+                </label>
+                <label>
+                  Diagnosis
+                  <input value={site.diagnosis} onChange={(event) => updateSite(index, { diagnosis: event.target.value })} />
+                </label>
+                <label>
+                  Prescribed Fractions
+                  <input
+                    value={site.prescribedFractions}
+                    onChange={(event) => updateSite(index, { prescribedFractions: event.target.value })}
+                  />
+                </label>
+              </div>
+              <label>
+                Treatment Summary
+                <textarea
+                  rows={3}
+                  value={site.treatmentSummary}
+                  onChange={(event) => updateSite(index, { treatmentSummary: event.target.value })}
+                />
+              </label>
+            </div>
+          ))}
+        </div>
+        <div className="button-row">
+          <button onClick={props.onClose}>Cancel</button>
+          <button className="primary" disabled={props.busy} onClick={props.onSave}>
+            Generate Completed Form
           </button>
         </div>
       </div>

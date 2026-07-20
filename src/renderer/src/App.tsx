@@ -8,6 +8,7 @@ import {
   buildDocumentOnlySyntheticContext
 } from "../../shared/document-only";
 import { createDefaultConsultQuestionnaireInput } from "../../shared/consult-questionnaire-pdf";
+import { createDefaultCompletedLesionFormInput } from "../../shared/completed-lesion-form-pdf";
 import {
   buildVisitPreviewText,
   createCourseFormFromDetail,
@@ -36,6 +37,7 @@ import {
 import {
   ConsentSigningModal,
   ConsultQuestionnaireModal,
+  CompletedLesionFormModal,
   CourseConsentModal,
   DocumentOnlyRecordModal,
   DocumentOnlyWorksheetModal,
@@ -61,6 +63,7 @@ import type {
   ArchiveSnapshot,
   BootstrapPayload,
   CompletedLesionIdPhotoSource,
+  CompletedLesionFormInput,
   ConsentSigningInput,
   ConsultQuestionnaireInput,
   CourseInput,
@@ -131,6 +134,23 @@ type ConsultQuestionnaireState =
       recordId: string;
       title: string;
       input: ConsultQuestionnaireInput;
+    };
+
+type CompletedLesionFormState =
+  | {
+      kind: "course";
+      patientId: string;
+      courseId: string;
+      title: string;
+      input: CompletedLesionFormInput;
+      idPhotoSource?: CompletedLesionIdPhotoSource | null;
+    }
+  | {
+      kind: "document-only";
+      recordId: string;
+      title: string;
+      input: CompletedLesionFormInput;
+      idPhotoSource?: CompletedLesionIdPhotoSource | null;
     };
 
 type CourseConsentActionsState = {
@@ -558,6 +578,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
   const [courseCompletionNeedsFacePhoto, setCourseCompletionNeedsFacePhoto] = useState(false);
   const [consentSigning, setConsentSigning] = useState<CourseConsentSigningState | DocumentOnlyConsentSigningState | null>(null);
   const [consultQuestionnaire, setConsultQuestionnaire] = useState<ConsultQuestionnaireState | null>(null);
+  const [completedLesionForm, setCompletedLesionForm] = useState<CompletedLesionFormState | null>(null);
   const [courseConsentActions, setCourseConsentActions] = useState<CourseConsentActionsState | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [templateDraft, setTemplateDraft] = useState("");
@@ -642,6 +663,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     setCourseCompletionFacePhotoUpload(null);
     setCourseCompletionNeedsFacePhoto(false);
     setConsentSigning(null);
+    setCompletedLesionForm(null);
     setCourseConsentActions(null);
     setTextDirty(false);
     setArchiveExportResult(null);
@@ -1593,18 +1615,44 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     idPhotoSource?: CompletedLesionIdPhotoSource | null
   ) {
     if (!appClient) return;
+    const detail = patientDetail?.patient.id === patientId ? patientDetail : await appClient.getPatientDetail(patientId);
+    const targetCourse = detail.courses.find((courseDetail) => courseDetail.course.id === courseId);
+    if (!targetCourse) {
+      return;
+    }
+    if (idPhotoSource?.mode === "current_patient" && !detail.patient.facePhoto) {
+      showToast("No current patient photo is saved.");
+      return;
+    }
+    setCompletedLesionForm({
+      kind: "course",
+      patientId,
+      courseId,
+      title: `${detail.patient.lastName}, ${detail.patient.firstName} - ${targetCourse.course.courseName || "Completed lesion form"}`,
+      input: createDefaultCompletedLesionFormInput(targetCourse.course, targetCourse.sites),
+      idPhotoSource
+    });
+  }
+
+  async function saveCompletedLesionForm() {
+    if (!completedLesionForm || !appClient) return;
     setBusy(true);
     try {
-      if (idPhotoSource?.mode === "current_patient") {
-        const detail = patientDetail?.patient.id === patientId ? patientDetail : await appClient.getPatientDetail(patientId);
-        if (!detail.patient.facePhoto) {
-          showToast("No current patient photo is saved.");
-          return;
-        }
+      if (completedLesionForm.kind === "course") {
+        await appClient.generateCourseCompletedLesionForm(completedLesionForm.courseId, {
+          idPhotoSource: completedLesionForm.idPhotoSource,
+          formInput: completedLesionForm.input
+        });
+        await loadDashboard();
+        await loadPatient(completedLesionForm.patientId);
+      } else {
+        await appClient.generateDocumentOnlyCompletedLesionForm(completedLesionForm.recordId, {
+          idPhotoSource: completedLesionForm.idPhotoSource,
+          formInput: completedLesionForm.input
+        });
+        await loadDocumentOnly();
       }
-      await appClient.generateCourseCompletedLesionForm(courseId, idPhotoSource);
-      await loadDashboard();
-      await loadPatient(patientId);
+      setCompletedLesionForm(null);
       showToast("Completed lesion form generated.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not generate the completed lesion form.";
@@ -1846,17 +1894,19 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     idPhotoSource?: CompletedLesionIdPhotoSource | null
   ) {
     if (!appClient) return;
-    setBusy(true);
-    try {
-      await appClient.generateDocumentOnlyCompletedLesionForm(recordId, idPhotoSource);
-      await loadDocumentOnly();
-      showToast("Completed lesion form generated.");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not generate the completed lesion form.";
-      showToast(message);
-    } finally {
-      setBusy(false);
+    const snapshot = documentOnlySnapshot ?? (await appClient.getDocumentOnlySnapshot());
+    const detail = snapshot.records.find((record) => record.record.id === recordId);
+    if (!detail) {
+      return;
     }
+    const synthetic = buildDocumentOnlySyntheticContext(detail);
+    setCompletedLesionForm({
+      kind: "document-only",
+      recordId,
+      title: `${detail.record.lastName}, ${detail.record.firstName} - Completed lesion form`,
+      input: createDefaultCompletedLesionFormInput(synthetic.course, synthetic.sites),
+      idPhotoSource
+    });
   }
 
   async function generateDocumentOnlyCompletedLesionFormWithUploadedIdPhoto(recordId: string) {
@@ -2808,6 +2858,16 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
               onChange={(next) => setConsultQuestionnaire((current) => (current ? { ...current, input: next } : current))}
               onClose={() => setConsultQuestionnaire(null)}
               onSave={() => void saveConsultQuestionnaire()}
+            />
+          ) : null}
+          {completedLesionForm ? (
+            <CompletedLesionFormModal
+              title={completedLesionForm.title}
+              input={completedLesionForm.input}
+              busy={busy}
+              onChange={(next) => setCompletedLesionForm((current) => (current ? { ...current, input: next } : current))}
+              onClose={() => setCompletedLesionForm(null)}
+              onSave={() => void saveCompletedLesionForm()}
             />
           ) : null}
           {courseConsentActions && patientDetail?.patient.id === courseConsentActions.patientId ? (() => {

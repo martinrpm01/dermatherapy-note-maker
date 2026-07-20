@@ -175,9 +175,9 @@ export class ElectronAppClient implements AppClient {
 
   generateDocumentOnlyCompletedLesionForm(
     recordId: string,
-    idPhotoSource?: Parameters<AppClient["generateDocumentOnlyCompletedLesionForm"]>[1]
+    options?: Parameters<AppClient["generateDocumentOnlyCompletedLesionForm"]>[1]
   ) {
-    return this.api.generateDocumentOnlyCompletedLesionForm(recordId, idPhotoSource);
+    return this.api.generateDocumentOnlyCompletedLesionForm(recordId, options);
   }
 
   completeCourse(courseId: string) {
@@ -234,9 +234,9 @@ export class ElectronAppClient implements AppClient {
 
   generateCourseCompletedLesionForm(
     courseId: string,
-    idPhotoSource?: Parameters<AppClient["generateCourseCompletedLesionForm"]>[1]
+    options?: Parameters<AppClient["generateCourseCompletedLesionForm"]>[1]
   ) {
-    return this.api.generateCourseCompletedLesionForm(courseId, idPhotoSource);
+    return this.api.generateCourseCompletedLesionForm(courseId, options);
   }
 
   finalizeConsentForm(courseId: string, input: Parameters<AppClient["finalizeConsentForm"]>[1]) {
