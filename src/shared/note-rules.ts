@@ -10,7 +10,7 @@ export const NOTE_TYPE_LABELS: Record<NoteType, string> = {
   consult_sim: "Sim / Consult",
   first_fraction: "First Fraction",
   standard_treatment: "Standard Treatment",
-  otv: "OTV + Physics"
+  otv: "OTV"
 };
 
 export const MAX_TREATMENT_NUMBER = 15;
@@ -749,6 +749,44 @@ export function getDefaultPhysicsComment(noteType: NoteType): string {
     : "";
 }
 
+export function shouldIncludePhysicsNote(
+  noteType: NoteType,
+  includePhysicsNote: boolean | undefined
+): boolean {
+  return includePhysicsNote ?? noteType === "otv";
+}
+
+export function buildPhysicsConsultationSection(
+  includePhysicsNote: boolean,
+  physicsComment: string,
+  siteSnapshots: SiteSnapshot[],
+  treatmentNumber: number | null
+): string {
+  if (!includePhysicsNote) {
+    return "";
+  }
+
+  const comment = physicsComment.trim() || getDefaultPhysicsComment("otv");
+  const endFraction = treatmentNumber && treatmentNumber > 0 ? Math.trunc(treatmentNumber) : null;
+  const fractionRange = endFraction
+    ? `${Math.max(1, endFraction - 4)} to ${endFraction}`
+    : "";
+
+  return siteSnapshots
+    .filter((site) => site.bodyLocation.trim())
+    .map((site) =>
+      [
+        "Plan: Radiation Physics Consultation.",
+        `Location: ${site.bodyLocation.trim()}`,
+        `Physics Consultation: Fraction Number: ${fractionRange}`,
+        comment
+      ]
+        .filter(Boolean)
+        .join("\n")
+    )
+    .join("\n\n");
+}
+
 function resolveOtvCurrentFraction(site: SiteSnapshot, treatmentNumber?: number | null) {
   if (typeof treatmentNumber === "number" && treatmentNumber > 0) {
     return Math.trunc(treatmentNumber);
@@ -982,6 +1020,7 @@ export function buildDefaultStructuredFields(
         : "As previously scheduled.",
     simulationComplications: buildSimulationComplicationText(siteSnapshots[0]?.additionalDevices || ""),
     treatmentComment: DEFAULT_TREATMENT_COMMENT,
+    includePhysicsNote: noteType === "otv",
     physicsComment: getDefaultPhysicsComment(noteType),
     consultReview:
       "An extensive history and exam was performed with attention to the tumor size, anatomic location, duration and histologic growth pattern and the patient's overall medical status and co-morbidities.",

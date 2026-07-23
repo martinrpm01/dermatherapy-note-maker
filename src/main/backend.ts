@@ -23,6 +23,7 @@ import {
   applyAutomaticDoseValuesToSiteSnapshot,
   applyAutoNumberOfBlocks,
   buildDefaultStructuredFields,
+  buildPhysicsConsultationSection,
   buildShieldSummary,
   buildSimulationComplicationLine,
   buildSimulationComplicationText,
@@ -57,6 +58,7 @@ import {
   normalizeInlineSectionText,
   normalizePostCareText,
   normalizeTreatmentComment,
+  shouldIncludePhysicsNote,
   stripExamVitalsSection
 } from "../shared/note-rules";
 import {
@@ -1313,7 +1315,13 @@ export class RadiationNoteService {
             : input.structuredFields.examComment ?? "",
         physicsComment:
           input.structuredFields.physicsComment?.trim() ||
-          getDefaultPhysicsComment(input.noteType),
+          (shouldIncludePhysicsNote(input.noteType, input.structuredFields.includePhysicsNote)
+            ? getDefaultPhysicsComment("otv")
+            : ""),
+        includePhysicsNote: shouldIncludePhysicsNote(
+          input.noteType,
+          input.structuredFields.includePhysicsNote
+        ),
         mipsNote: input.structuredFields.mipsNote?.trim() || "",
         supervisedBy:
           input.structuredFields.supervisedBy?.trim() || settings.supervisingPhysician,
@@ -2420,7 +2428,13 @@ export class RadiationNoteService {
               : visit.structuredFields.startRadiationDate ?? "",
           physicsComment:
             visit.structuredFields.physicsComment?.trim() ||
-            getDefaultPhysicsComment(visit.noteType),
+            (shouldIncludePhysicsNote(visit.noteType, visit.structuredFields.includePhysicsNote)
+              ? getDefaultPhysicsComment("otv")
+              : ""),
+          includePhysicsNote: shouldIncludePhysicsNote(
+            visit.noteType,
+            visit.structuredFields.includePhysicsNote
+          ),
           examComment:
             visit.noteType === "otv"
               ? !visit.structuredFields.examComment?.trim() || isLegacyDefaultOtvNote(visit.structuredFields.examComment)
@@ -2575,6 +2589,12 @@ export class RadiationNoteService {
     );
     const mipsSection = buildMipsSection(note.structuredFields.addMips, note.structuredFields.mipsNote);
     const treatmentDeliveryStatement = buildTreatmentDeliveryStatement(note.noteType, normalizedSites);
+    const physicsSection = buildPhysicsConsultationSection(
+      shouldIncludePhysicsNote(note.noteType, note.structuredFields.includePhysicsNote),
+      note.structuredFields.physicsComment,
+      normalizedSites,
+      note.treatmentNumber
+    );
     const startRadiationDate = formatDisplayDate(note.structuredFields.startRadiationDate);
     const consultFollowUp = buildConsultFollowUp(startRadiationDate, note.structuredFields.followUp);
 
@@ -2611,6 +2631,7 @@ export class RadiationNoteService {
         postCare: normalizePostCareText(note.structuredFields.postCare),
         treatmentComment: normalizeTreatmentComment(note.structuredFields.treatmentComment),
         treatmentDeliveryStatement,
+        physicsSection,
         ultrasoundPerformed: normalizeInlineSectionText(note.structuredFields.ultrasoundPerformed),
         startRadiationDate,
         consultFollowUp,

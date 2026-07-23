@@ -38,6 +38,7 @@ import {
   normalizeVacLokAreaValue,
   normalizeOptionValue,
   refreshVisitSiteSnapshots,
+  shouldIncludePhysicsNote,
   normalizeWorksheetDeviceDetailsForSite,
   normalizeVacLokPlacement,
   normalizeCutoutSizeLabel
@@ -480,7 +481,13 @@ export class BrowserAppClient implements AppClient {
             : visit.structuredFields.examComment ?? "",
         physicsComment:
           visit.structuredFields.physicsComment?.trim() ||
-          getDefaultPhysicsComment(visit.noteType),
+          (shouldIncludePhysicsNote(visit.noteType, visit.structuredFields.includePhysicsNote)
+            ? getDefaultPhysicsComment("otv")
+            : ""),
+        includePhysicsNote: shouldIncludePhysicsNote(
+          visit.noteType,
+          visit.structuredFields.includePhysicsNote
+        ),
         mipsNote: visit.structuredFields.mipsNote?.trim() || "",
         supervisedBy:
           visit.structuredFields.supervisedBy?.trim() || settings.supervisingPhysician,
@@ -1606,7 +1613,13 @@ export class BrowserAppClient implements AppClient {
           : input.structuredFields.examComment ?? "",
       physicsComment:
         input.structuredFields.physicsComment?.trim() ||
-        getDefaultPhysicsComment(input.noteType),
+        (shouldIncludePhysicsNote(input.noteType, input.structuredFields.includePhysicsNote)
+          ? getDefaultPhysicsComment("otv")
+          : ""),
+      includePhysicsNote: shouldIncludePhysicsNote(
+        input.noteType,
+        input.structuredFields.includePhysicsNote
+      ),
       mipsNote: input.structuredFields.mipsNote?.trim() || "",
       supervisedBy:
         input.structuredFields.supervisedBy?.trim() || settings.supervisingPhysician,

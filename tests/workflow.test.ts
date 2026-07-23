@@ -1360,6 +1360,38 @@ describe("RadiationNoteService workflow", () => {
     expect(otvDraft.note.generatedText).not.toContain('"Weekly Physics Check"');
   });
 
+  it("keeps physics and OTV notes independently selectable on every fifth treatment", async () => {
+    const { course } = await createPatientAndCourse();
+
+    const physicsOnlyDraft = service.buildVisitDraft(course.id, "next_treatment", undefined, {
+      treatmentNumber: 5
+    });
+    physicsOnlyDraft.note.noteType = "standard_treatment";
+    physicsOnlyDraft.note.structuredFields.includePhysicsNote = true;
+    const physicsOnly = service.saveVisit(physicsOnlyDraft.note);
+
+    expect(physicsOnly.generatedText).toContain("Plan: Radiation Physics Consultation.");
+    expect(physicsOnly.generatedText).toContain("Physics Consultation: Fraction Number: 1 to 5");
+    expect(physicsOnly.generatedText).toContain(
+      "In accordance with the standard of care for radiotherapy treatment"
+    );
+    expect(physicsOnly.generatedText).not.toContain("Exam Comment:");
+
+    const otvOnlyDraft = service.buildVisitDraft(course.id, "next_treatment", undefined, {
+      treatmentNumber: 10
+    });
+    otvOnlyDraft.note.noteType = "otv";
+    otvOnlyDraft.note.structuredFields.includePhysicsNote = false;
+    otvOnlyDraft.note.structuredFields.examComment = "Doctor completed the OTV today.";
+    const otvOnly = service.saveVisit(otvOnlyDraft.note);
+
+    expect(otvOnly.generatedText).toContain("Exam Comment:\nDoctor completed the OTV today.");
+    expect(otvOnly.generatedText).not.toContain("Plan: Radiation Physics Consultation.");
+    expect(otvOnly.generatedText).not.toContain(
+      "In accordance with the standard of care for radiotherapy treatment"
+    );
+  });
+
   it("migrates saved cutout placeholders to size-only for Sim/Consult and Fraction 1 templates", async () => {
     const oneSiteTemplate = repository.getTemplate("one_site:consult_sim")!;
     const twoSiteTemplate = repository.getTemplate("two_site:consult_sim")!;

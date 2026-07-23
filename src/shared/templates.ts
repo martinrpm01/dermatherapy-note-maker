@@ -105,6 +105,32 @@ function addConsultPlanLine(text: string, siteNumber: 1 | 2) {
     );
 }
 
+function normalizePhysicsSectionPlaceholder(text: string) {
+  const legacyPhysicsBlock =
+    /Plan: Radiation Physics Consultation\.\r?\nLocation: \{\{site[12]\.bodyLocation\}\}\r?\nPhysics Consultation: Fraction Number: \{\{visit\.treatmentNumber\}\} of \{\{(?:course|site[12])\.prescribedFractions\}\}\r?\n\{\{structured\.physicsComment\}\}\r?\n?/g;
+  let normalized = text.replace(legacyPhysicsBlock, "");
+
+  if (
+    normalized.includes("Plan: Radiation Treatment.") &&
+    !normalized.includes("{{structured.physicsSection}}")
+  ) {
+    const additionalNotesToken = "{{structured.additionalNotesSection}}";
+    if (normalized.includes(additionalNotesToken)) {
+      normalized = normalized.replace(
+        additionalNotesToken,
+        `{{structured.physicsSection}}\n\n${additionalNotesToken}`
+      );
+    } else {
+      normalized = normalized.replace(
+        "Follow Up:",
+        "{{structured.physicsSection}}\n\nFollow Up:"
+      );
+    }
+  }
+
+  return normalized;
+}
+
 export function normalizeTemplateTextForRendering(text: string) {
   let normalized = text
     .replaceAll(
@@ -145,6 +171,7 @@ export function normalizeTemplateTextForRendering(text: string) {
   );
   normalized = addConsultPlanLine(normalized, 1);
   normalized = addConsultPlanLine(normalized, 2);
+  normalized = normalizePhysicsSectionPlaceholder(normalized);
 
   normalized = insertFinalTreatmentSectionBefore(
     normalized,
@@ -278,6 +305,7 @@ export const TEMPLATE_PLACEHOLDERS: TemplatePlaceholderDefinition[] = [
   { token: "structured.simulationComplications", description: "Simulation complications wording." },
   { token: "structured.treatmentComment", description: "Treatment comment wording." },
   { token: "structured.treatmentDeliveryStatement", description: "Treatment delivery wording for treatment visits." },
+  { token: "structured.physicsSection", description: "Conditional physics consultation section." },
   { token: "structured.physicsComment", description: "Physics consultation wording." },
   { token: "structured.consultReview", description: "Consult review wording." },
   { token: "structured.treatmentOptions", description: "Treatment options wording." },
@@ -457,6 +485,8 @@ Post Care: {{structured.postCare}}
 
 {{structured.treatmentDeliveryStatement}}
 
+{{structured.physicsSection}}
+
 {{structured.additionalNotesSection}}
 
 Follow Up: {{structured.followUp}}
@@ -522,6 +552,8 @@ The patient received XRT as outlined above.
 Post Care: {{structured.postCare}}
 
 {{structured.treatmentDeliveryStatement}}
+
+{{structured.physicsSection}}
 
 {{structured.additionalNotesSection}}
 
@@ -599,10 +631,7 @@ Post Care: {{structured.postCare}}
 
 {{structured.treatmentDeliveryStatement}}
 
-Plan: Radiation Physics Consultation.
-Location: {{site1.bodyLocation}}
-Physics Consultation: Fraction Number: {{visit.treatmentNumber}} of {{course.prescribedFractions}}
-{{structured.physicsComment}}
+{{structured.physicsSection}}
 
 {{structured.additionalNotesSection}}
 
@@ -845,6 +874,8 @@ Post Care: {{structured.postCare}}
 
 {{structured.treatmentDeliveryStatement}}
 
+{{structured.physicsSection}}
+
 {{structured.additionalNotesSection}}
 
 Follow Up: {{structured.followUp}}
@@ -933,6 +964,8 @@ Post Care: {{structured.postCare}}
 
 {{structured.treatmentDeliveryStatement}}
 
+{{structured.physicsSection}}
+
 {{structured.additionalNotesSection}}
 
 Follow Up: {{structured.followUp}}
@@ -1003,11 +1036,6 @@ Dose: {{site1.dailyDose}} cGy
 Cone Size: {{site1.coneSizeDisplay}}
 Treatment Depth: {{site1.treatmentDepthDisplay}}
 
-Plan: Radiation Physics Consultation.
-Location: {{site1.bodyLocation}}
-Physics Consultation: Fraction Number: {{visit.treatmentNumber}} of {{site1.prescribedFractions}}
-{{structured.physicsComment}}
-
 2. {{site2.diagnosisText}} ({{site2.icd10}})
 Appropriately healing biopsy site distributed on the {{site2.bodyLocation}}.
 
@@ -1030,16 +1058,13 @@ Dose: {{site2.dailyDose}} cGy
 Cone Size: {{site2.coneSizeDisplay}}
 Treatment Depth: {{site2.treatmentDepthDisplay}}
 
-Plan: Radiation Physics Consultation.
-Location: {{site2.bodyLocation}}
-Physics Consultation: Fraction Number: {{visit.treatmentNumber}} of {{site2.prescribedFractions}}
-{{structured.physicsComment}}
-
 The patient received XRT as outlined above.
 
 Post Care: {{structured.postCare}}
 
 {{structured.treatmentDeliveryStatement}}
+
+{{structured.physicsSection}}
 
 {{structured.additionalNotesSection}}
 

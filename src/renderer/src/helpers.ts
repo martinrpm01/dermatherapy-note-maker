@@ -1,6 +1,7 @@
 import {
   applyAutomaticDoseValuesToSiteSnapshot,
   applyAutoNumberOfBlocks,
+  buildPhysicsConsultationSection,
   buildShieldSummary,
   buildSimulationComplicationLine,
   buildSimulationComplicationText,
@@ -24,6 +25,7 @@ import {
   normalizeInlineSectionText,
   normalizePostCareText,
   normalizeTreatmentComment,
+  shouldIncludePhysicsNote,
   stripExamVitalsSection
 } from "../../shared/note-rules";
 import { renderTemplate } from "../../shared/template-engine";
@@ -365,6 +367,12 @@ export function buildVisitPreviewText(
   );
   const mipsSection = buildMipsSection(!!note.structuredFields.addMips, note.structuredFields.mipsNote);
   const treatmentDeliveryStatement = buildTreatmentDeliveryStatement(note.noteType, normalizedSites);
+  const physicsSection = buildPhysicsConsultationSection(
+    shouldIncludePhysicsNote(note.noteType, note.structuredFields.includePhysicsNote),
+    note.structuredFields.physicsComment,
+    normalizedSites,
+    note.treatmentNumber
+  );
   const startRadiationDate = formatDisplayDate(note.structuredFields.startRadiationDate);
   const consultFollowUp = buildConsultFollowUp(startRadiationDate, note.structuredFields.followUp);
 
@@ -403,6 +411,7 @@ export function buildVisitPreviewText(
       postCare: normalizePostCareText(note.structuredFields.postCare),
       treatmentComment: normalizeTreatmentComment(note.structuredFields.treatmentComment),
       treatmentDeliveryStatement,
+      physicsSection,
       ultrasoundPerformed: normalizeInlineSectionText(note.structuredFields.ultrasoundPerformed),
       startRadiationDate,
       consultFollowUp,

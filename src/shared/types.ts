@@ -346,6 +346,7 @@ export interface VisitStructuredFields {
   followUp: string;
   simulationComplications: string;
   treatmentComment: string;
+  includePhysicsNote?: boolean;
   physicsComment: string;
   consultReview: string;
   treatmentOptions: string;

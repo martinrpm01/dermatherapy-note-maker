@@ -14,6 +14,7 @@ import {
   isFinalTreatmentEligible,
   isOtvTreatmentNumber,
   normalizePostCareText,
+  shouldIncludePhysicsNote,
 } from "../../shared/note-rules";
 import { useResolvedAssetUrl } from "./asset-url";
 import { BloodPressureInput, CalendarDateInput, HeartRateInput, NumericInput, OxygenSaturationInput, PulseInput, VisitDateInput, WeightInput } from "./screen-components";
@@ -100,6 +101,10 @@ export function VisitEditorScreen(props: {
     );
 const showProjectedFractionsInput = false;
   const otvEligible = editor.note.noteType !== "consult_sim" && isOtvTreatmentNumber(editor.note.treatmentNumber);
+  const physicsNoteEnabled = shouldIncludePhysicsNote(
+    editor.note.noteType,
+    editor.note.structuredFields.includePhysicsNote
+  );
   const isTwoLesionLayout = editor.note.structuredFields.siteSnapshots.length > 1;
   const sortedSiteSnapshots = [...editor.note.structuredFields.siteSnapshots].sort(
     (left, right) => left.siteNumber - right.siteNumber
@@ -233,6 +238,7 @@ const showProjectedFractionsInput = false;
                           treatmentNumber: null,
                           structuredFields: {
                             ...current.note.structuredFields,
+                            includePhysicsNote: false,
                             siteSnapshots: current.note.structuredFields.siteSnapshots.map((site) => ({
                               ...site,
                               cumulativeDose: 0
@@ -243,6 +249,7 @@ const showProjectedFractionsInput = false;
                     }
 
                     const nextTreatmentNumber = current.note.treatmentNumber ?? 1;
+                    const nextNoteType = getSuggestedNoteType(nextTreatmentNumber);
                     const projectedFractions =
                       getMaxSitePrescribedFractions(current.note.structuredFields.siteSnapshots) ??
                       current.note.structuredFields.projectedFractionsInput ??
@@ -259,9 +266,15 @@ const showProjectedFractionsInput = false;
                       note: {
                         ...current.note,
                         treatmentNumber: nextTreatmentNumber,
-                        noteType: getSuggestedNoteType(nextTreatmentNumber),
+                        noteType: nextNoteType,
                         structuredFields: {
                           ...current.note.structuredFields,
+                          includePhysicsNote: nextNoteType === "otv",
+                          physicsComment:
+                            nextNoteType === "otv"
+                              ? current.note.structuredFields.physicsComment?.trim() ||
+                                getDefaultPhysicsComment("otv")
+                              : current.note.structuredFields.physicsComment,
                           prescribedFractionsInput:
                             nextTreatmentNumber === 1 && projectedFractions && projectedFractions > 0
                               ? projectedFractions
@@ -303,6 +316,7 @@ const showProjectedFractionsInput = false;
                         noteType: nextNoteType,
                         structuredFields: {
                         ...current.note.structuredFields,
+                          includePhysicsNote: nextNoteType === "otv",
                           finalTreatment:
                             isFinalTreatmentEligible(num, nextFinalTreatmentFraction) ||
                             (current.note.structuredFields.finalTreatment &&
@@ -314,6 +328,11 @@ const showProjectedFractionsInput = false;
                                 ? getDefaultOtvNote(nextSiteSnapshots, num)
                                 : current.note.structuredFields.examComment
                               : current.note.structuredFields.examComment,
+                          physicsComment:
+                            nextNoteType === "otv"
+                              ? current.note.structuredFields.physicsComment?.trim() ||
+                                getDefaultPhysicsComment("otv")
+                              : current.note.structuredFields.physicsComment,
                           siteSnapshots: nextSiteSnapshots
                         }
                       }
@@ -651,6 +670,7 @@ const showProjectedFractionsInput = false;
           ) : null}
           {(editor.note.structuredFields.ultrasoundPerformed ||
             editor.note.noteType === "otv" ||
+            physicsNoteEnabled ||
             editor.note.structuredFields.finalTreatment) ? (
             <div className="checkbox-note-fields">
               {editor.note.structuredFields.ultrasoundPerformed ? (
@@ -692,6 +712,30 @@ const showProjectedFractionsInput = false;
                             structuredFields: {
                               ...current.note.structuredFields,
                               examComment: event.target.value
+                            }
+                          }
+                        }),
+                        { regenerate: true, overwriteEdited: !props.textDirty }
+                      )
+                    }
+                  />
+                </label>
+              ) : null}
+              {physicsNoteEnabled ? (
+                <label>
+                  Physics Note
+                  <textarea
+                    className="checkbox-note-textarea physics-note-textarea"
+                    value={editor.note.structuredFields.physicsComment ?? ""}
+                    onChange={(event) =>
+                      props.onUpdate(
+                        (current) => ({
+                          ...current,
+                          note: {
+                            ...current.note,
+                            structuredFields: {
+                              ...current.note.structuredFields,
+                              physicsComment: event.target.value
                             }
                           }
                         }),
@@ -868,6 +912,10 @@ const showProjectedFractionsInput = false;
                           noteType: event.target.checked ? "otv" : "standard_treatment",
                           structuredFields: {
                             ...current.note.structuredFields,
+                            includePhysicsNote: shouldIncludePhysicsNote(
+                              current.note.noteType,
+                              current.note.structuredFields.includePhysicsNote
+                            ),
                             examComment: event.target.checked
                               ? !current.note.structuredFields.examComment?.trim() ||
                                 isLegacyDefaultOtvNote(current.note.structuredFields.examComment)
@@ -877,9 +925,6 @@ const showProjectedFractionsInput = false;
                                   )
                                 : current.note.structuredFields.examComment
                               : current.note.structuredFields.examComment,
-                            physicsComment: event.target.checked
-                              ? current.note.structuredFields.physicsComment?.trim() || getDefaultPhysicsComment("otv")
-                              : current.note.structuredFields.physicsComment
                           }
                         }
                       }),
@@ -888,6 +933,34 @@ const showProjectedFractionsInput = false;
                   }
                 />
                 OTV
+              </label>
+            ) : null}
+            {otvEligible ? (
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={physicsNoteEnabled}
+                  onChange={(event) =>
+                    props.onUpdate(
+                      (current) => ({
+                        ...current,
+                        note: {
+                          ...current.note,
+                          structuredFields: {
+                            ...current.note.structuredFields,
+                            includePhysicsNote: event.target.checked,
+                            physicsComment: event.target.checked
+                              ? current.note.structuredFields.physicsComment?.trim() ||
+                                getDefaultPhysicsComment("otv")
+                              : current.note.structuredFields.physicsComment
+                          }
+                        }
+                      }),
+                      { regenerate: true, overwriteEdited: true }
+                    )
+                  }
+                />
+                Physics Note
               </label>
             ) : null}
             {finalTreatmentEligible && (

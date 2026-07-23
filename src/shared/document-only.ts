@@ -273,6 +273,7 @@ function buildStructuredFields(detail: DocumentOnlyDetail, syntheticSites: Treat
     followUp: "",
     simulationComplications: "",
     treatmentComment: "",
+    includePhysicsNote: false,
     physicsComment: "",
     consultReview: "",
     treatmentOptions: "",
