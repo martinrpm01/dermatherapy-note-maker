@@ -600,6 +600,7 @@ const showProjectedFractionsInput = false;
               const POST_CARE_OPTIONS = [
                 { label: "Aquaphor", value: "Aquaphor was applied to the treated area." },
                 { label: "CeraVe", value: "CeraVe was applied to the treated area." },
+                { label: "Mupirocin", value: "Mupirocin was applied to the treated area." },
                 { label: "Vaseline/Petrolatum", value: "Petrolatum was applied to the treated area." },
                 { label: "No ointment", value: "No ointment was applied to the treated area." }
               ];

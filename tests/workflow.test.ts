@@ -1910,7 +1910,7 @@ describe("RadiationNoteService workflow", () => {
     expect(savedFinal.generatedText).not.toContain("Quality measures have been documented for this encounter");
   });
 
-  it("renders separate post-care ointment choices including CeraVe and Petrolatum", async () => {
+  it("renders separate post-care ointment choices including CeraVe, Mupirocin, and Petrolatum", async () => {
     const { course } = await createPatientAndCourse();
 
     const firstDraft = service.buildVisitDraft(course.id, "next_treatment");
@@ -1919,13 +1919,18 @@ describe("RadiationNoteService workflow", () => {
     expect(savedCeraVe.generatedText).toContain("CeraVe was applied to the treated area.");
 
     const secondDraft = service.buildVisitDraft(course.id, "next_treatment");
-    secondDraft.note.structuredFields.postCare = "Petrolatum was applied to the treated area.";
-    const savedPetrolatum = service.saveVisit(secondDraft.note);
-    expect(savedPetrolatum.generatedText).toContain("Petrolatum was applied to the treated area.");
+    secondDraft.note.structuredFields.postCare = "Mupirocin was applied to the treated area.";
+    const savedMupirocin = service.saveVisit(secondDraft.note);
+    expect(savedMupirocin.generatedText).toContain("Mupirocin was applied to the treated area.");
 
     const thirdDraft = service.buildVisitDraft(course.id, "next_treatment");
-    thirdDraft.note.structuredFields.postCare = "Vaseline was applied to the treated area.";
-    const savedLegacyVaseline = service.saveVisit(thirdDraft.note);
+    thirdDraft.note.structuredFields.postCare = "Petrolatum was applied to the treated area.";
+    const savedPetrolatum = service.saveVisit(thirdDraft.note);
+    expect(savedPetrolatum.generatedText).toContain("Petrolatum was applied to the treated area.");
+
+    const fourthDraft = service.buildVisitDraft(course.id, "next_treatment");
+    fourthDraft.note.structuredFields.postCare = "Vaseline was applied to the treated area.";
+    const savedLegacyVaseline = service.saveVisit(fourthDraft.note);
     expect(savedLegacyVaseline.generatedText).toContain("Petrolatum was applied to the treated area.");
     expect(savedLegacyVaseline.generatedText).not.toContain("Vaseline was applied to the treated area.");
   });
