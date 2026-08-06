@@ -503,6 +503,14 @@ export type CompletedLesionIdPhotoSource =
   | { mode: "upload"; upload: StoredAssetUpload }
   | { mode: "current_patient" };
 
+export type CompletedLesionPhotoStage = "sim_consult" | "mid_treatment" | "follow_up";
+
+export interface CompletedLesionPhotoUpload {
+  siteNumber: 1 | 2;
+  stage: CompletedLesionPhotoStage;
+  upload: StoredAssetUpload;
+}
+
 export interface CompletedLesionSiteInput {
   siteNumber: number;
   lesionSite: string;
@@ -524,6 +532,7 @@ export interface CompletedLesionFormInput {
 export interface CompletedLesionGenerationOptions {
   idPhotoSource?: CompletedLesionIdPhotoSource | null;
   formInput?: CompletedLesionFormInput | null;
+  photoUploads?: CompletedLesionPhotoUpload[];
 }
 
 export interface ConsentSigningInput {

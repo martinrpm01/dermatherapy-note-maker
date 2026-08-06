@@ -20,7 +20,10 @@ import {
   parseWorksheetSelection
 } from "../../shared/note-rules";
 import type {
+  CompletedLesionIdPhotoSource,
   CompletedLesionFormInput,
+  CompletedLesionPhotoStage,
+  CompletedLesionPhotoUpload,
   ConsultQuestionnaireInput,
   ConsentSigningInput,
   CourseInput,
@@ -55,6 +58,11 @@ const DIAGNOSIS_OPTIONS = [
   "Squamous Cell Carcinoma",
   "Squamous Cell Carcinoma in-situ"
 ] as const;
+const COMPLETED_LESION_PHOTO_SLOTS: Array<{ stage: CompletedLesionPhotoStage; label: string }> = [
+  { stage: "sim_consult", label: "Day of SIM/Consult" },
+  { stage: "mid_treatment", label: "Mid XRT Treatment" },
+  { stage: "follow_up", label: "6-8 Week Follow-up" }
+];
 
 type QuestionnaireItemKey =
   | "medicalDevices"
@@ -1027,8 +1035,15 @@ export function ConsultQuestionnaireModal(props: {
 export function CompletedLesionFormModal(props: {
   title: string;
   input: CompletedLesionFormInput;
+  idPhotoSource?: CompletedLesionIdPhotoSource | null;
+  facePhotoPreviewUrl?: string | null;
+  photoUploads: CompletedLesionPhotoUpload[];
   busy: boolean;
   onChange: (next: CompletedLesionFormInput) => void;
+  onSelectFacePhoto: () => void;
+  onRemoveFacePhoto: () => void;
+  onSelectTreatmentPhoto: (siteNumber: 1 | 2, stage: CompletedLesionPhotoStage) => void;
+  onRemoveTreatmentPhoto: (siteNumber: 1 | 2, stage: CompletedLesionPhotoStage) => void;
   onClose: () => void;
   onSave: () => void;
 }) {
@@ -1046,6 +1061,24 @@ export function CompletedLesionFormModal(props: {
       <div className="modal-card wide">
         <h3>Completed Lesion Form</h3>
         {props.title ? <p className="muted">{props.title}</p> : null}
+        {props.idPhotoSource ? (
+          <section className="completed-lesion-face-photo-section">
+            <div className="completed-lesion-face-photo-preview">
+              {props.facePhotoPreviewUrl ? (
+                <img src={props.facePhotoPreviewUrl} alt="Selected face photo" />
+              ) : (
+                <span>Face photo selected</span>
+              )}
+            </div>
+            <div>
+              <h4>Face Photo</h4>
+              <div className="button-row compact">
+                <button type="button" onClick={props.onSelectFacePhoto}>Select Face Photo</button>
+                <button type="button" onClick={props.onRemoveFacePhoto}>Remove</button>
+              </div>
+            </div>
+          </section>
+        ) : null}
         <div className="form-grid course-top-grid">
           <label>
             Date of SIM/Consult
@@ -1127,6 +1160,39 @@ export function CompletedLesionFormModal(props: {
                   onChange={(event) => updateSite(index, { treatmentSummary: event.target.value })}
                 />
               </label>
+              <div className="completed-lesion-treatment-photos">
+                <h5>Treatment Photos</h5>
+                <div className="completed-lesion-photo-grid">
+                  {COMPLETED_LESION_PHOTO_SLOTS.map((slot) => {
+                    const siteNumber: 1 | 2 = site.siteNumber === 2 ? 2 : 1;
+                    const selectedPhoto = props.photoUploads.find(
+                      (photo) => photo.siteNumber === siteNumber && photo.stage === slot.stage
+                    );
+                    return (
+                      <div className="completed-lesion-photo-slot" key={slot.stage}>
+                        <strong>{slot.label}</strong>
+                        <div className="completed-lesion-photo-preview">
+                          {selectedPhoto ? (
+                            <img src={selectedPhoto.upload.dataUrl} alt={`${slot.label} treatment`} />
+                          ) : (
+                            <span>No photo selected</span>
+                          )}
+                        </div>
+                        <div className="button-row compact">
+                          <button type="button" onClick={() => props.onSelectTreatmentPhoto(siteNumber, slot.stage)}>
+                            {selectedPhoto ? "Replace" : "Select Photo"}
+                          </button>
+                          {selectedPhoto ? (
+                            <button type="button" onClick={() => props.onRemoveTreatmentPhoto(siteNumber, slot.stage)}>
+                              Remove
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           ))}
         </div>
@@ -2071,18 +2137,18 @@ export function CourseConsentModal(props: {
             {props.hasCompletedLesionForm ? (
               <>
                 <button onClick={props.onOpenCompletedLesionForm}>Open Completed Form</button>
-                <button onClick={props.onGenerateCompletedLesionForm}>Regenerate Completed Form</button>
-                <button onClick={props.onGenerateCompletedLesionFormWithIdPhoto}>Regenerate With ID Photo</button>
+                <button onClick={props.onGenerateCompletedLesionForm}>Regenerate Without Face Photo</button>
+                <button onClick={props.onGenerateCompletedLesionFormWithIdPhoto}>Regenerate With Face Photo</button>
                 {props.hasPatientFacePhoto ? (
-                  <button onClick={props.onGenerateCompletedLesionFormWithCurrentPhoto}>Use Current Photo</button>
+                  <button onClick={props.onGenerateCompletedLesionFormWithCurrentPhoto}>Regenerate With Saved Face Photo</button>
                 ) : null}
               </>
             ) : (
               <>
-                <button onClick={props.onGenerateCompletedLesionForm}>Generate Completed Form</button>
-                <button onClick={props.onGenerateCompletedLesionFormWithIdPhoto}>Generate With ID Photo</button>
+                <button onClick={props.onGenerateCompletedLesionForm}>Generate Without Face Photo</button>
+                <button onClick={props.onGenerateCompletedLesionFormWithIdPhoto}>Generate With Face Photo</button>
                 {props.hasPatientFacePhoto ? (
-                  <button onClick={props.onGenerateCompletedLesionFormWithCurrentPhoto}>Use Current Photo</button>
+                  <button onClick={props.onGenerateCompletedLesionFormWithCurrentPhoto}>Generate With Saved Face Photo</button>
                 ) : null}
               </>
             )}

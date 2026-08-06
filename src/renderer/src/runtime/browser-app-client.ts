@@ -53,6 +53,7 @@ import type {
   DocumentOnlySnapshot,
   PatientRecord,
   SettingsPayload,
+  StoredAssetUpload,
   VisitDraftOptions,
   VisitEditorState,
   VisitInput,
@@ -72,7 +73,7 @@ import {
 } from "../../../shared/consent-form-pdf";
 import { buildConsultQuestionnairePdfFromTemplateBytes } from "../../../shared/consult-questionnaire-pdf";
 import { buildSimWorksheetPdfFromTemplateBytes } from "../../../shared/sim-worksheet-pdf";
-import { buildCompletedLesionFormPdf } from "../../../shared/completed-lesion-form-pdf";
+import { buildCompletedLesionFormPdf, type CompletedLesionPhotoInput } from "../../../shared/completed-lesion-form-pdf";
 import { validateTemplate } from "../../../shared/template-engine";
 import { buildDocumentOnlySyntheticContext } from "../../../shared/document-only";
 import { BrowserBinaryAssetStore } from "../storage/browser-binary-asset-store";
@@ -81,6 +82,8 @@ import { checkBrowserRefreshUpdate } from "../refresh-pulse";
 import consentFormTemplateUrl from "../../../../assets/templates/radiation-therapy-consent-form.pdf";
 import consultQuestionnaireTemplateUrl from "../../../../assets/templates/radiation-therapy-consult-questionnaire.pdf";
 import simWorksheetTemplateUrl from "../../../../assets/templates/radiation-therapy-sim-worksheet.pdf";
+
+const COMPLETED_LESION_PHOTO_STAGES = ["sim_consult", "mid_treatment", "follow_up"] as const;
 
 export interface BrowserArchiveClientDependencies {
   exportPatientArchive?: (patientId: string) => Promise<BrowserArchiveExportPayload>;
@@ -307,16 +310,24 @@ export class BrowserAppClient implements AppClient {
     return this.readBlobInput(blob, fileName);
   }
 
+  private async completedLesionPhotoInputFromUpload(
+    upload: StoredAssetUpload,
+    metadata?: Pick<CompletedLesionPhotoInput, "siteNumber" | "stage">
+  ): Promise<CompletedLesionPhotoInput> {
+    const response = await fetch(upload.dataUrl);
+    return {
+      ...metadata,
+      image: await this.readBlobInput(await response.blob(), upload.name)
+    };
+  }
+
   private async completedLesionPhotoInputFromSource(source?: CompletedLesionIdPhotoSource | null, patient?: PatientRecord) {
     if (!source) {
       return null;
     }
 
     if (source.mode === "upload") {
-      const response = await fetch(source.upload.dataUrl);
-      return {
-        image: await this.readBlobInput(await response.blob(), source.upload.name)
-      };
+      return this.completedLesionPhotoInputFromUpload(source.upload);
     }
 
     if (!patient?.facePhoto) {
@@ -2153,13 +2164,16 @@ export class BrowserAppClient implements AppClient {
 
     const { patient, course, sites } = buildDocumentOnlySyntheticContext(detail);
     const existingFile = detail.files.find((file) => file.fileType === "completed_lesion_form") ?? null;
+    const photoInputs = await Promise.all(
+      (options?.photoUploads ?? []).map((photo) => this.completedLesionPhotoInputFromUpload(photo.upload, photo))
+    );
     const completedForm = await buildCompletedLesionFormPdf({
       patient,
       course,
       sites,
       formInput: options?.formInput ?? null,
       idPhotoInput: await this.completedLesionPhotoInputFromSource(options?.idPhotoSource, patient),
-      photoInputs: []
+      photoInputs
     });
 
     const filePath = binaryAssetStore.saveUpload(
@@ -2413,21 +2427,25 @@ export class BrowserAppClient implements AppClient {
         const dateCompare = left.note.visitDate.localeCompare(right.note.visitDate);
         return dateCompare || left.note.createdAt.localeCompare(right.note.createdAt);
       });
-    const photos = await Promise.all(
-      courseVisitBundles
-        .flatMap((bundle) =>
-          bundle.photos
-            .slice()
-            .sort((left, right) => left.sortOrder - right.sortOrder)
-            .map((photo) => ({
-              photoId: photo.id,
-              asset: photo.imageAsset
-            }))
-        )
-        .slice(0, 3)
-        .map(async (photo) => ({
-          image: await this.readStoredAssetInput(photo.asset, `visit photo ${photo.photoId}`)
-        }))
+    const photos: CompletedLesionPhotoInput[] = [];
+    const photoCountBySite = new Map<number, number>();
+    for (const bundle of courseVisitBundles) {
+      for (const photo of bundle.photos.slice().sort((left, right) => left.sortOrder - right.sortOrder)) {
+        const siteNumber = photo.siteNumber ?? sites[0]?.siteNumber ?? 1;
+        const stageIndex = photoCountBySite.get(siteNumber) ?? 0;
+        if (stageIndex >= COMPLETED_LESION_PHOTO_STAGES.length) {
+          continue;
+        }
+        photos.push({
+          siteNumber,
+          stage: COMPLETED_LESION_PHOTO_STAGES[stageIndex],
+          image: await this.readStoredAssetInput(photo.imageAsset, `visit photo ${photo.id}`)
+        });
+        photoCountBySite.set(siteNumber, stageIndex + 1);
+      }
+    }
+    const selectedPhotos = await Promise.all(
+      (options?.photoUploads ?? []).map((photo) => this.completedLesionPhotoInputFromUpload(photo.upload, photo))
     );
 
     const completedForm = await buildCompletedLesionFormPdf({
@@ -2436,7 +2454,7 @@ export class BrowserAppClient implements AppClient {
       sites,
       formInput: options?.formInput ?? null,
       idPhotoInput: await this.completedLesionPhotoInputFromSource(options?.idPhotoSource, patient),
-      photoInputs: photos
+      photoInputs: [...photos, ...selectedPhotos]
     });
 
     const filePath = binaryAssetStore.saveUpload(

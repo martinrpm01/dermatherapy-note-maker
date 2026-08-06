@@ -162,7 +162,12 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function completedLesionPhotoInputFromUpload(upload?: StoredAssetUpload | null): CompletedLesionPhotoInput | null {
+const COMPLETED_LESION_PHOTO_STAGES = ["sim_consult", "mid_treatment", "follow_up"] as const;
+
+function completedLesionPhotoInputFromUpload(
+  upload?: StoredAssetUpload | null,
+  metadata?: Pick<CompletedLesionPhotoInput, "siteNumber" | "stage">
+): CompletedLesionPhotoInput | null {
   if (!upload?.dataUrl) {
     return null;
   }
@@ -173,6 +178,7 @@ function completedLesionPhotoInputFromUpload(upload?: StoredAssetUpload | null):
   }
 
   return {
+    ...metadata,
     image: {
       bytes: Uint8Array.from(Buffer.from(match[2], "base64")),
       fileName: upload.name,
@@ -1795,6 +1801,9 @@ export class RadiationNoteService {
     const { patient, course, sites } = buildDocumentOnlySyntheticContext(detail);
     const existingFile = detail.files.find((file) => file.fileType === "completed_lesion_form") ?? null;
     const idPhotoSource = completedLesionIdPhotoSourceFromOptions(options);
+    const photoInputs = (options?.photoUploads ?? [])
+      .map((photo) => completedLesionPhotoInputFromUpload(photo.upload, photo))
+      .filter((photo): photo is CompletedLesionPhotoInput => Boolean(photo));
     const completedForm = await buildCompletedLesionFormPdf({
       patient,
       course,
@@ -1804,7 +1813,7 @@ export class RadiationNoteService {
         idPhotoSource?.mode === "upload"
           ? completedLesionPhotoInputFromUpload(idPhotoSource.upload)
           : null,
-      photoInputs: []
+      photoInputs
     });
 
     const documentsDir = this.assetStore.getDocumentOnlyFilesDir(recordId);
@@ -2049,16 +2058,27 @@ export class RadiationNoteService {
         const dateCompare = left.note.visitDate.localeCompare(right.note.visitDate);
         return dateCompare || left.note.createdAt.localeCompare(right.note.createdAt);
       });
-    const photos = courseVisitBundles
-      .flatMap((bundle) =>
-        bundle.photos
-          .slice()
-          .sort((left, right) => left.sortOrder - right.sortOrder)
-          .map((photo) => ({
-            image: this.readPdfAssetInput(photo.imageAsset, `visit photo ${photo.id}`)
-          }))
-      )
-      .slice(0, 3);
+    const photos: CompletedLesionPhotoInput[] = [];
+    const photoCountBySite = new Map<number, number>();
+    for (const bundle of courseVisitBundles) {
+      for (const photo of bundle.photos.slice().sort((left, right) => left.sortOrder - right.sortOrder)) {
+        const siteNumber = photo.siteNumber ?? sites[0]?.siteNumber ?? 1;
+        const stageIndex = photoCountBySite.get(siteNumber) ?? 0;
+        if (stageIndex >= COMPLETED_LESION_PHOTO_STAGES.length) {
+          continue;
+        }
+        photos.push({
+          siteNumber,
+          stage: COMPLETED_LESION_PHOTO_STAGES[stageIndex],
+          image: this.readPdfAssetInput(photo.imageAsset, `visit photo ${photo.id}`)
+        });
+        photoCountBySite.set(siteNumber, stageIndex + 1);
+      }
+    }
+
+    const selectedPhotos = (options?.photoUploads ?? [])
+      .map((photo) => completedLesionPhotoInputFromUpload(photo.upload, photo))
+      .filter((photo): photo is CompletedLesionPhotoInput => Boolean(photo));
 
     const idPhotoSource = completedLesionIdPhotoSourceFromOptions(options);
     const completedForm = await buildCompletedLesionFormPdf({
@@ -2072,7 +2092,7 @@ export class RadiationNoteService {
           : idPhotoSource?.mode === "current_patient" && patient.facePhoto
             ? { image: this.readPdfAssetInput(patient.facePhoto, "patient face photo") }
             : null,
-      photoInputs: photos
+      photoInputs: [...photos, ...selectedPhotos]
     });
     const documentsDir = this.assetStore.getCourseDocumentsDir(patient.id, course.id);
     this.assetStore.ensureDirectory(documentsDir);

@@ -1,7 +1,13 @@
 import { PDFDocument, PDFImage, StandardFonts, rgb } from "pdf-lib";
 
 import { formatDisplayDate } from "./note-rules";
-import type { CompletedLesionFormInput, PatientRecord, TreatmentCourseRecord, TreatmentSiteRecord } from "./types";
+import type {
+  CompletedLesionFormInput,
+  CompletedLesionPhotoStage,
+  PatientRecord,
+  TreatmentCourseRecord,
+  TreatmentSiteRecord
+} from "./types";
 
 export interface CompletedLesionPhotoInput {
   image: {
@@ -9,6 +15,8 @@ export interface CompletedLesionPhotoInput {
     fileName?: string;
     mimeType?: string;
   };
+  siteNumber?: number;
+  stage?: CompletedLesionPhotoStage;
 }
 
 export interface CompletedLesionFormBuildInput {
@@ -29,6 +37,7 @@ const ACCENT = rgb(0.22, 0.32, 0.42);
 const LINE = rgb(0, 0, 0);
 const WHITE = rgb(1, 1, 1);
 const PHOTO_LABELS = ["Day of SIM/Consult", "Mid XRT Treatment", "6-8 Week Follow-up"];
+const PHOTO_STAGES: CompletedLesionPhotoStage[] = ["sim_consult", "mid_treatment", "follow_up"];
 
 function sanitizePdfName(value: string) {
   return value.replace(/[<>:"/\\|?*]+/g, "-").replace(/\s+/g, " ").trim();
@@ -194,7 +203,7 @@ async function drawPhotoSlots(
   pdfDoc: PDFDocument,
   page: PdfPage,
   labelFont: PdfFont,
-  photoInputs: CompletedLesionPhotoInput[]
+  photoInputs: Array<CompletedLesionPhotoInput | undefined>
 ) {
   const slots = [
     { x: 50, y: 68, width: 170, height: 110 },
@@ -219,6 +228,20 @@ async function drawPhotoSlots(
     const labelWidth = labelFont.widthOfTextAtSize(label, 12);
     drawLabel(page, labelFont, label, slot.x + (slot.width - labelWidth) / 2, slot.y - 28, 12);
   }
+}
+
+function resolvePhotoInputsForSite(photoInputs: CompletedLesionPhotoInput[], siteNumber: number) {
+  const stagedInputs = photoInputs.filter((photo) => photo.siteNumber === siteNumber && photo.stage);
+  if (stagedInputs.length) {
+    return PHOTO_STAGES.map((stage) => stagedInputs.slice().reverse().find((photo) => photo.stage === stage));
+  }
+
+  const siteInputs = photoInputs.filter((photo) => photo.siteNumber === siteNumber);
+  if (siteInputs.length) {
+    return siteInputs.slice(0, PHOTO_STAGES.length);
+  }
+
+  return photoInputs.filter((photo) => photo.siteNumber === undefined).slice(0, PHOTO_STAGES.length);
 }
 
 async function drawOptionalIdPhoto(
@@ -322,7 +345,7 @@ export async function buildCompletedLesionFormPdf(input: CompletedLesionFormBuil
       { title, label, value },
       input,
       normalizedSite,
-      photoInputs
+      resolvePhotoInputsForSite(photoInputs, normalizedSite.siteNumber)
     );
   }
 

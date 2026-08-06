@@ -64,6 +64,8 @@ import type {
   BootstrapPayload,
   CompletedLesionIdPhotoSource,
   CompletedLesionFormInput,
+  CompletedLesionPhotoStage,
+  CompletedLesionPhotoUpload,
   ConsentSigningInput,
   ConsultQuestionnaireInput,
   CourseInput,
@@ -144,6 +146,7 @@ type CompletedLesionFormState =
       title: string;
       input: CompletedLesionFormInput;
       idPhotoSource?: CompletedLesionIdPhotoSource | null;
+      photoUploads: CompletedLesionPhotoUpload[];
     }
   | {
       kind: "document-only";
@@ -151,6 +154,7 @@ type CompletedLesionFormState =
       title: string;
       input: CompletedLesionFormInput;
       idPhotoSource?: CompletedLesionIdPhotoSource | null;
+      photoUploads: CompletedLesionPhotoUpload[];
     };
 
 type CourseConsentActionsState = {
@@ -472,7 +476,7 @@ async function pickConsentUploadFile() {
   });
 }
 
-async function pickCompletedLesionIdPhotoFile() {
+async function pickCompletedLesionPhotoFile() {
   return new Promise<StoredAssetUpload | null>((resolve, reject) => {
     const input = document.createElement("input");
     input.type = "file";
@@ -832,6 +836,13 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
       showToast("Could not crop that logo.");
     }
   }
+  const completedLesionSavedFacePhoto =
+    completedLesionForm?.kind === "course" &&
+    completedLesionForm.idPhotoSource?.mode === "current_patient" &&
+    patientDetail?.patient.id === completedLesionForm.patientId
+      ? patientDetail.patient.facePhoto
+      : null;
+  const completedLesionSavedFacePhotoSrc = useResolvedAssetUrl(appClient, completedLesionSavedFacePhoto);
   const resolvedNoteLogoSrc = useResolvedAssetUrl(appClient, boot?.settings.dermatologyOfficeLogoAsset);
   const authGateActive = Boolean(pendingRecoveryCode) || browserRecoveryFlow !== "auth";
 
@@ -1630,7 +1641,8 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
       courseId,
       title: `${detail.patient.lastName}, ${detail.patient.firstName} - ${targetCourse.course.courseName || "Completed lesion form"}`,
       input: createDefaultCompletedLesionFormInput(targetCourse.course, targetCourse.sites),
-      idPhotoSource
+      idPhotoSource,
+      photoUploads: []
     });
   }
 
@@ -1641,14 +1653,16 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
       if (completedLesionForm.kind === "course") {
         await appClient.generateCourseCompletedLesionForm(completedLesionForm.courseId, {
           idPhotoSource: completedLesionForm.idPhotoSource,
-          formInput: completedLesionForm.input
+          formInput: completedLesionForm.input,
+          photoUploads: completedLesionForm.photoUploads
         });
         await loadDashboard();
         await loadPatient(completedLesionForm.patientId);
       } else {
         await appClient.generateDocumentOnlyCompletedLesionForm(completedLesionForm.recordId, {
           idPhotoSource: completedLesionForm.idPhotoSource,
-          formInput: completedLesionForm.input
+          formInput: completedLesionForm.input,
+          photoUploads: completedLesionForm.photoUploads
         });
         await loadDocumentOnly();
       }
@@ -1665,9 +1679,9 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
   async function generateCourseCompletedLesionFormWithUploadedIdPhoto(patientId: string, courseId: string) {
     let upload: StoredAssetUpload | null = null;
     try {
-      upload = await pickCompletedLesionIdPhotoFile();
+      upload = await pickCompletedLesionPhotoFile();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not read the ID photo.";
+      const message = error instanceof Error ? error.message : "Could not read the face photo.";
       showToast(message);
       return;
     }
@@ -1675,6 +1689,46 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
       return;
     }
     await generateCourseCompletedLesionFormForCourse(patientId, courseId, { mode: "upload", upload });
+  }
+
+  async function selectCompletedLesionFacePhoto() {
+    try {
+      const upload = await pickCompletedLesionPhotoFile();
+      if (upload) {
+        setCompletedLesionForm((current) => (current ? { ...current, idPhotoSource: { mode: "upload", upload } } : current));
+      }
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Could not read the face photo.");
+    }
+  }
+
+  async function selectCompletedLesionTreatmentPhoto(siteNumber: 1 | 2, stage: CompletedLesionPhotoStage) {
+    try {
+      const upload = await pickCompletedLesionPhotoFile();
+      if (!upload) return;
+      setCompletedLesionForm((current) => {
+        if (!current) return current;
+        const remaining = current.photoUploads.filter(
+          (photo) => photo.siteNumber !== siteNumber || photo.stage !== stage
+        );
+        return { ...current, photoUploads: [...remaining, { siteNumber, stage, upload }] };
+      });
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Could not read the treatment photo.");
+    }
+  }
+
+  function removeCompletedLesionTreatmentPhoto(siteNumber: 1 | 2, stage: CompletedLesionPhotoStage) {
+    setCompletedLesionForm((current) =>
+      current
+        ? {
+            ...current,
+            photoUploads: current.photoUploads.filter(
+              (photo) => photo.siteNumber !== siteNumber || photo.stage !== stage
+            )
+          }
+        : current
+    );
   }
 
   async function openCourseConsultQuestionnaire(patientId: string, courseId: string) {
@@ -1905,16 +1959,17 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
       recordId,
       title: `${detail.record.lastName}, ${detail.record.firstName} - Completed lesion form`,
       input: createDefaultCompletedLesionFormInput(synthetic.course, synthetic.sites),
-      idPhotoSource
+      idPhotoSource,
+      photoUploads: []
     });
   }
 
   async function generateDocumentOnlyCompletedLesionFormWithUploadedIdPhoto(recordId: string) {
     let upload: StoredAssetUpload | null = null;
     try {
-      upload = await pickCompletedLesionIdPhotoFile();
+      upload = await pickCompletedLesionPhotoFile();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not read the ID photo.";
+      const message = error instanceof Error ? error.message : "Could not read the face photo.";
       showToast(message);
       return;
     }
@@ -2864,8 +2919,23 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
             <CompletedLesionFormModal
               title={completedLesionForm.title}
               input={completedLesionForm.input}
+              idPhotoSource={completedLesionForm.idPhotoSource}
+              facePhotoPreviewUrl={
+                completedLesionForm.idPhotoSource?.mode === "upload"
+                  ? completedLesionForm.idPhotoSource.upload.dataUrl
+                  : completedLesionSavedFacePhotoSrc
+              }
+              photoUploads={completedLesionForm.photoUploads}
               busy={busy}
               onChange={(next) => setCompletedLesionForm((current) => (current ? { ...current, input: next } : current))}
+              onSelectFacePhoto={() => void selectCompletedLesionFacePhoto()}
+              onRemoveFacePhoto={() =>
+                setCompletedLesionForm((current) => (current ? { ...current, idPhotoSource: null } : current))
+              }
+              onSelectTreatmentPhoto={(siteNumber, stage) =>
+                void selectCompletedLesionTreatmentPhoto(siteNumber, stage)
+              }
+              onRemoveTreatmentPhoto={removeCompletedLesionTreatmentPhoto}
               onClose={() => setCompletedLesionForm(null)}
               onSave={() => void saveCompletedLesionForm()}
             />

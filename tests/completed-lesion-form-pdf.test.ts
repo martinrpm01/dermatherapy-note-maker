@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PDFDocument } from "pdf-lib";
+import { PDFDict, PDFDocument, PDFName } from "pdf-lib";
 
 import { buildCompletedLesionFormPdf, createDefaultCompletedLesionFormInput } from "../src/shared/completed-lesion-form-pdf";
 import type { PatientRecord, TreatmentCourseRecord, TreatmentSiteRecord } from "../src/shared/types";
@@ -141,5 +141,37 @@ describe("completed lesion form pdf", () => {
     const pdfDoc = await PDFDocument.load(result.bytes);
     expect(pdfDoc.getPageCount()).toBe(1);
     expect(result.bytes.length).toBeGreaterThan(2_000);
+  });
+
+  it("keeps each lesion's three selected treatment photos on its own page", async () => {
+    const firstSite = buildSite();
+    const secondSite = {
+      ...buildSite(),
+      id: "site-2",
+      siteNumber: 2 as const,
+      bodyLocation: "Left cheek",
+      treatmentLocationText: "Left cheek"
+    };
+    const photoInputs = ([1, 2] as const).flatMap((siteNumber) =>
+      (["sim_consult", "mid_treatment", "follow_up"] as const).map((stage) => ({
+        siteNumber,
+        stage,
+        image: { bytes: onePixelPng, fileName: `${siteNumber}-${stage}.png`, mimeType: "image/png" }
+      }))
+    );
+
+    const result = await buildCompletedLesionFormPdf({
+      patient: buildPatient(),
+      course: { ...buildCourse(), courseType: "two_site" },
+      sites: [firstSite, secondSite],
+      photoInputs
+    });
+
+    const pdfDoc = await PDFDocument.load(result.bytes);
+    expect(pdfDoc.getPageCount()).toBe(2);
+    for (const page of pdfDoc.getPages()) {
+      const xObjects = page.node.Resources().lookup(PDFName.of("XObject"), PDFDict);
+      expect(xObjects.keys()).toHaveLength(3);
+    }
   });
 });

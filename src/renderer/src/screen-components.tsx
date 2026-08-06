@@ -2345,10 +2345,10 @@ export function DocumentOnlyScreen(props: {
                     </div>
                     <div className="patient-row-actions">
                       <button onClick={() => props.onGenerateCompletedLesionForm(detail.record.id)}>
-                        {completedLesionFile ? "Regenerate Completed Form" : "Generate Completed Form"}
+                        {completedLesionFile ? "Regenerate Without Face Photo" : "Generate Without Face Photo"}
                       </button>
                       <button onClick={() => props.onGenerateCompletedLesionFormWithIdPhoto(detail.record.id)}>
-                        {completedLesionFile ? "Regenerate With ID Photo" : "Generate With ID Photo"}
+                        {completedLesionFile ? "Regenerate With Face Photo" : "Generate With Face Photo"}
                       </button>
                       {completedLesionFile ? (
                         <button onClick={() => props.onOpenCompletedLesionForm(completedLesionFile.fileAsset)}>Open Completed Form</button>
