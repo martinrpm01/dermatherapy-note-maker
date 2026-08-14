@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import type { AppClient, SettingsPayload, VisitEditorState } from "../../shared/types";
 import {
   applyAutomaticDoseValuesToSiteSnapshot,
+  buildDefaultStructuredFields,
   NOTE_TYPE_LABELS,
   formatBloodPressure,
   getDefaultFinalTreatmentNote,
+  getDefaultFollowUpUltrasoundNote,
   getDefaultOtvNote,
   getDefaultPhysicsComment,
   getDefaultUltrasoundNote,
@@ -13,6 +15,7 @@ import {
   isLegacyDefaultOtvNote,
   isFinalTreatmentEligible,
   isOtvTreatmentNumber,
+  isTreatmentNoteType,
   normalizePostCareText,
   shouldIncludePhysicsNote,
 } from "../../shared/note-rules";
@@ -74,6 +77,8 @@ export function VisitEditorScreen(props: {
   textDirty: boolean;
   onSaveDraft: () => void;
   onSaveAndGeneratePdf: () => void;
+  onOpenCompletedLesionForm: () => void;
+  onSaveAndOpenCompletedLesionForm: () => void;
   onOpenPatient: () => void;
   onResetNoteText: () => void;
   onRemoveExistingPhoto: (photoId: string) => void;
@@ -92,15 +97,17 @@ export function VisitEditorScreen(props: {
   const [activePanel, setActivePanel] = useState<"details" | "preview">("details");
   const [projectedFractionModes, setProjectedFractionModes] = useState<Record<number, string>>({});
   const editor = props.visitEditor;
+  const isFollowUp = editor.note.noteType === "follow_up";
+  const isTreatmentVisit = isTreatmentNoteType(editor.note.noteType);
   const showPrescribedFractionsInput =
-    editor.note.noteType !== "consult_sim" &&
+    isTreatmentVisit &&
     (
       editor.note.treatmentNumber === 1 ||
       editor.course.prescribedFractions <= 0 ||
       (editor.note.structuredFields.prescribedFractionsInput ?? 0) > 0
     );
 const showProjectedFractionsInput = false;
-  const otvEligible = editor.note.noteType !== "consult_sim" && isOtvTreatmentNumber(editor.note.treatmentNumber);
+  const otvEligible = isTreatmentVisit && isOtvTreatmentNumber(editor.note.treatmentNumber);
   const physicsNoteEnabled = shouldIncludePhysicsNote(
     editor.note.noteType,
     editor.note.structuredFields.includePhysicsNote
@@ -114,7 +121,7 @@ const showProjectedFractionsInput = false;
       ? editor.course.prescribedFractions
       : getMaxSitePrescribedFractions(editor.note.structuredFields.siteSnapshots);
   const finalTreatmentEligible =
-    editor.note.noteType !== "consult_sim" &&
+    isTreatmentVisit &&
     isFinalTreatmentEligible(editor.note.treatmentNumber, finalTreatmentFraction);
   const physicianOptionValues = Array.from(
     new Map(
@@ -190,7 +197,7 @@ const showProjectedFractionsInput = false;
             {editor.course.courseName} · {editor.course.courseType === "one_site" ? "1-lesion" : "2-lesion"} course
           </p>
           <p>Visit Type: {NOTE_TYPE_LABELS[editor.note.noteType]}</p>
-          {editor.course.prescribedFractions > 0 && editor.note.noteType !== "consult_sim" ? (
+          {editor.course.prescribedFractions > 0 && isTreatmentVisit ? (
             <p>{`Fraction ${Math.max(editor.note.treatmentNumber ?? 0, 0)} / ${editor.course.prescribedFractions}`}</p>
           ) : null}
         </div>
@@ -208,9 +215,17 @@ const showProjectedFractionsInput = false;
             Note Preview
           </button>
           <button onClick={props.onSaveDraft}>Save Draft</button>
-          <button className="primary" onClick={props.onSaveAndGeneratePdf}>
-                  Finalize
-          </button>
+          {isFollowUp ? (
+            <>
+              <button onClick={props.onOpenCompletedLesionForm}>Completed Lesion Form</button>
+              <button onClick={props.onSaveAndGeneratePdf}>Finalize Note Only</button>
+              <button className="primary" onClick={props.onSaveAndOpenCompletedLesionForm}>
+                Finalize Note + Form
+              </button>
+            </>
+          ) : (
+            <button className="primary" onClick={props.onSaveAndGeneratePdf}>Finalize</button>
+          )}
         </div>
       </div>
       <div className={`${activePanel === "preview" ? "editor-layout preview-mode" : "editor-layout"}${isTwoLesionLayout ? " two-lesion-editor" : ""}`}>
@@ -225,10 +240,32 @@ const showProjectedFractionsInput = false;
             <label>
               Visit Type
               <select
-                value={editor.note.noteType === "consult_sim" ? "consult_sim" : "treatment"}
+                value={isFollowUp ? "follow_up" : editor.note.noteType === "consult_sim" ? "consult_sim" : "treatment"}
+                disabled={isFollowUp}
                 onChange={(event) => {
                   const nextMode = event.target.value;
                   props.onUpdate((current) => {
+                    if (nextMode === "follow_up") {
+                      const currentFields = current.note.structuredFields;
+                      return {
+                        ...current,
+                        note: {
+                          ...current.note,
+                          noteType: "follow_up",
+                          treatmentNumber: null,
+                          structuredFields: buildDefaultStructuredFields(
+                            "follow_up",
+                            currentFields.siteSnapshots,
+                            currentFields.supervisedBy,
+                            {
+                              biopsyDate: currentFields.biopsyDate,
+                              lastTreatmentDate: currentFields.lastTreatmentDate || current.note.visitDate
+                            }
+                          )
+                        }
+                      };
+                    }
+
                     if (nextMode === "consult_sim") {
                       return {
                         ...current,
@@ -288,9 +325,10 @@ const showProjectedFractionsInput = false;
               >
                 <option value="consult_sim">Sim / Consult</option>
                 <option value="treatment">Treatment</option>
+                <option value="follow_up">Follow-up</option>
               </select>
             </label>
-            {editor.note.noteType !== "consult_sim" && (
+            {isTreatmentVisit && (
               <label>
                 Treatment Number
                 <NumericInput value={editor.note.treatmentNumber ?? ""} onChange={(value) => {
@@ -517,7 +555,7 @@ const showProjectedFractionsInput = false;
                   ];
                 })
               : null}
-            {editor.note.noteType !== "consult_sim"
+            {isTreatmentVisit
               ? sortedSiteSnapshots.flatMap((site, index) =>
                   getPrescribedFractionsSelection(site) === "other"
                     ? [
@@ -596,7 +634,7 @@ const showProjectedFractionsInput = false;
                 ))}
               </select>
             </label>
-            {editor.note.noteType !== "consult_sim" && (() => {
+            {isTreatmentVisit && (() => {
               const POST_CARE_OPTIONS = [
                 { label: "Aquaphor", value: "Aquaphor was applied to the treated area." },
                 { label: "CeraVe", value: "CeraVe was applied to the treated area." },
@@ -772,6 +810,65 @@ const showProjectedFractionsInput = false;
               ) : null}
             </div>
           ) : null}
+          {isFollowUp ? (
+            <div className="follow-up-clinical-fields">
+              <h4>Follow-up Clinical Documentation</h4>
+              <div className="form-grid">
+                <label>
+                  Chief Complaint
+                  <textarea
+                    value={editor.note.structuredFields.chiefComplaint}
+                    onChange={(event) => props.onUpdate((current) => ({
+                      ...current,
+                      note: {
+                        ...current.note,
+                        structuredFields: { ...current.note.structuredFields, chiefComplaint: event.target.value }
+                      }
+                    }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                  />
+                </label>
+                <label>
+                  Exam
+                  <textarea
+                    value={editor.note.structuredFields.focusedExam}
+                    onChange={(event) => props.onUpdate((current) => ({
+                      ...current,
+                      note: {
+                        ...current.note,
+                        structuredFields: { ...current.note.structuredFields, focusedExam: event.target.value }
+                      }
+                    }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                  />
+                </label>
+                <label>
+                  Healing / Recurrence Assessment
+                  <textarea
+                    value={editor.note.structuredFields.healingDescription}
+                    onChange={(event) => props.onUpdate((current) => ({
+                      ...current,
+                      note: {
+                        ...current.note,
+                        structuredFields: { ...current.note.structuredFields, healingDescription: event.target.value }
+                      }
+                    }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                  />
+                </label>
+                <label>
+                  Counseling / Plan
+                  <textarea
+                    value={editor.note.structuredFields.impressionPlanComments}
+                    onChange={(event) => props.onUpdate((current) => ({
+                      ...current,
+                      note: {
+                        ...current.note,
+                        structuredFields: { ...current.note.structuredFields, impressionPlanComments: event.target.value }
+                      }
+                    }), { regenerate: true, overwriteEdited: !props.textDirty })}
+                  />
+                </label>
+              </div>
+            </div>
+          ) : null}
           <label>
             Additional Notes
             <textarea
@@ -878,7 +975,7 @@ const showProjectedFractionsInput = false;
         </div>
         <div className={`panel summary-panel${isTwoLesionLayout ? " compact-summary-panel" : ""}`}>
           <div className="summary-checkboxes">
-            {editor.note.noteType === "consult_sim" && (
+            {(editor.note.noteType === "consult_sim" || isFollowUp) && (
               <label className="checkbox-label">
                 <input
                   type="checkbox"
@@ -890,13 +987,14 @@ const showProjectedFractionsInput = false;
                       structuredFields: {
                         ...current.note.structuredFields,
                         ultrasoundPerformed: event.target.checked
-                          ? current.note.structuredFields.ultrasoundPerformed?.trim() || getDefaultUltrasoundNote()
+                          ? current.note.structuredFields.ultrasoundPerformed?.trim() ||
+                            (isFollowUp ? getDefaultFollowUpUltrasoundNote() : getDefaultUltrasoundNote())
                           : ""
                       }
                     }
                   }), { regenerate: true, overwriteEdited: true })}
                 />
-                Ultrasound
+                Ultrasound Performed
               </label>
             )}
             {otvEligible ? (
@@ -1003,6 +1101,15 @@ const showProjectedFractionsInput = false;
                   </p>
                   <p><strong>Daily Dose:</strong> {site.dailyDose ? `${site.dailyDose} cGy` : "-"}</p>
                   <p><strong>Total Dose:</strong> {site.totalDose ? `${site.totalDose} cGy` : "-"}</p>
+                  {isFollowUp ? (
+                    <>
+                      <p><strong>Fractions Completed:</strong> {site.prescribedFractions ?? (editor.course.prescribedFractions || "-")}</p>
+                      <p><strong>Energy:</strong> {site.energyKv || "-"}</p>
+                      <p><strong>Cone Size:</strong> {site.coneSize ? `${site.coneSize.replace(/\s*mm$/i, "")} mm` : "-"}</p>
+                      <p><strong>Flex Shield Cutout:</strong> {site.cutoutSize || "-"}</p>
+                      <p><strong>Other Shields / Devices:</strong> {[site.shields, site.additionalDevices].filter(Boolean).join(", ") || "None"}</p>
+                    </>
+                  ) : null}
                 </div>
               </div>
             ))}
@@ -1012,7 +1119,13 @@ const showProjectedFractionsInput = false;
             const sitePhotos = editor.existingPhotos.filter((p) => (p.siteNumber ?? 1) === site.siteNumber);
             const pendingPhotos = editor.note.newPhotoUploads.filter((u) => (u.siteNumber ?? 1) === site.siteNumber);
             const locationLabel = site.treatmentLocationText || `Lesion ${site.siteNumber}`;
-            const uploadLabel = isTwoSite ? `${locationLabel} Photos` : "Attach Daily Treatment Photos";
+            const uploadLabel = isFollowUp
+              ? isTwoSite
+                ? `${locationLabel} Follow-up Photos`
+                : "Attach Follow-up Photos"
+              : isTwoSite
+                ? `${locationLabel} Photos`
+                : "Attach Daily Treatment Photos";
             return (
               <div key={site.siteNumber}>
                 <label className="file-picker">

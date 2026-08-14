@@ -3612,4 +3612,70 @@ describe("RadiationNoteService workflow", () => {
     expect(getSuggestedNoteType(10)).toBe("otv");
     expect(getSuggestedNoteType(15)).toBe("otv");
   });
+
+  it("creates editable follow-up notes for completed courses without changing treatment history", async () => {
+    const { patient, course } = await createPatientAndCourse();
+    const finalTreatmentDraft = service.buildVisitDraft(course.id, "next_treatment", undefined, {
+      visitDate: "2026-04-20",
+      treatmentNumber: 15
+    });
+    service.saveVisit(finalTreatmentDraft.note);
+    service.completeCourse(course.id);
+    const doseBeforeFollowUp = service.getPatientDetail(patient.id).courses[0].sites[0].dailyDose;
+
+    const schedule = service.getScheduleSnapshot("2026-05-01", "2026-07-31");
+    const completedCourse = schedule.activeCourses.find((row) => row.courseId === course.id);
+    expect(completedCourse?.suggestedNoteType).toBe("follow_up");
+    expect(completedCourse?.nextTemplateKey).toBe("one_site:follow_up");
+
+    const followUpDraft = service.buildVisitDraft(course.id, "follow_up", undefined, {
+      visitDate: "2026-06-01"
+    });
+    expect(followUpDraft.note.noteType).toBe("follow_up");
+    expect(followUpDraft.note.treatmentNumber).toBeNull();
+    expect(followUpDraft.templateKey).toBe("one_site:follow_up");
+    expect(followUpDraft.note.structuredFields.lastTreatmentDate).toBe("2026-04-20");
+    expect(followUpDraft.note.generatedText).toContain("Completed Treatment Parameters:");
+    expect(followUpDraft.note.generatedText).toContain("Fractions Completed: 15");
+    expect(followUpDraft.note.generatedText).not.toContain("Treatment was delivered today");
+
+    followUpDraft.note.structuredFields.healingDescription =
+      "The treated site is healing appropriately with no clinical concern documented today.";
+    followUpDraft.note.structuredFields.followUp = "Follow up in 6 months.";
+    const savedFollowUp = service.saveVisit(followUpDraft.note);
+
+    expect(savedFollowUp.generatedText).toContain("The treated site is healing appropriately");
+    expect(savedFollowUp.generatedText).toContain("Follow Up: Follow up in 6 months.");
+    const detailAfterFollowUp = service.getPatientDetail(patient.id);
+    const courseAfterFollowUp = detailAfterFollowUp.courses.find((entry) => entry.course.id === course.id)!;
+    expect(courseAfterFollowUp.course.status).toBe("completed");
+    expect(courseAfterFollowUp.course.prescribedFractions).toBe(15);
+    expect(courseAfterFollowUp.sites[0].dailyDose).toBe(doseBeforeFollowUp);
+    expect(courseAfterFollowUp.visits.filter((visit) => visit.note.noteType === "follow_up")).toHaveLength(1);
+
+    const laterFollowUp = service.buildVisitDraft(course.id, "follow_up", undefined, {
+      visitDate: "2026-12-01"
+    });
+    expect(laterFollowUp.note.visitDate).toBe("2026-12-01");
+    const savedLaterFollowUp = service.saveVisit(laterFollowUp.note);
+    expect(savedLaterFollowUp.id).not.toBe(savedFollowUp.id);
+    expect(savedLaterFollowUp.noteType).toBe("follow_up");
+    const finalDetail = service.getPatientDetail(patient.id);
+    expect(
+      finalDetail.courses[0].visits.map((visit) => ({
+        id: visit.note.id,
+        noteType: visit.note.noteType,
+        visitDate: visit.note.visitDate
+      }))
+    ).toEqual([
+      { id: savedFollowUp.id, noteType: "follow_up", visitDate: "2026-06-01" },
+      { id: savedLaterFollowUp.id, noteType: "follow_up", visitDate: "2026-12-01" },
+      { id: expect.any(String), noteType: "otv", visitDate: "2026-04-20" }
+    ]);
+  });
+
+  it("seeds follow-up templates for both supported course layouts", () => {
+    expect(repository.getTemplate("one_site:follow_up")?.noteType).toBe("follow_up");
+    expect(repository.getTemplate("two_site:follow_up")?.noteType).toBe("follow_up");
+  });
 });

@@ -89,6 +89,23 @@ describe("schedule recurring treatment defaults", () => {
     expect(getTreatmentAppointmentCount(form, course)).toBe(8);
   });
 
+  it("builds a single non-recurring follow-up appointment for a completed course", () => {
+    const course = makeCourse({
+      prescribedFractions: 10,
+      currentFraction: 10,
+      suggestedTreatmentNumber: null,
+      suggestedNoteType: "follow_up",
+      nextTemplateKey: "one_site:follow_up"
+    });
+    const form = buildLinkedForm(course, "2026-06-01", "09:00");
+
+    expect(form.appointmentType).toBe("follow_up");
+    expect(form.appointmentNumber).toBe("");
+    expect(form.totalAppointments).toBe("");
+    expect(form.recurring).toBe(false);
+    expect(form.recurringCount).toBe("1");
+  });
+
   it("keeps manual recurring appointments driven by the selected recurring count", () => {
     const form: AppointmentFormState = {
       ...buildLinkedForm(makeCourse(), "2026-06-01", "09:00", true),

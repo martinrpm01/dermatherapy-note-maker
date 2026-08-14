@@ -2923,6 +2923,22 @@ export class RadiationNoteRepository implements StructuredDataStore {
       }
     } else {
       for (const template of DEFAULT_TEMPLATE_DEFINITIONS) {
+        const timestamp = nowIso();
+        this.run(
+          `INSERT OR IGNORE INTO template_definitions (
+            id, key, course_type, note_type, template_text, default_template_text, active, created_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+          [
+            template.id,
+            template.key,
+            template.courseType,
+            template.noteType,
+            template.templateText,
+            template.defaultTemplateText,
+            timestamp,
+            timestamp
+          ]
+        );
         this.run(
           `UPDATE template_definitions
            SET template_text = CASE WHEN template_text = default_template_text THEN ? ELSE template_text END,

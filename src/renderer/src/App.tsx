@@ -83,6 +83,7 @@ import type {
   TreatmentCourseRecord,
   TreatmentSiteRecord,
   VisitDraftOptions,
+  VisitDraftMode,
   VisitEditorState,
   VisitInput
 } from "../../shared/types";
@@ -90,7 +91,7 @@ import type {
 type Screen =
   | { name: "dashboard" }
   | { name: "patient"; patientId: string }
-  | { name: "visit"; courseId: string; mode: "next_treatment" | "consult_sim"; existingVisitId?: string; visitDate?: string; treatmentNumber?: number | null }
+  | { name: "visit"; courseId: string; mode: VisitDraftMode; existingVisitId?: string; visitDate?: string; treatmentNumber?: number | null }
   | { name: "completed" }
   | { name: "archive" }
   | { name: "documents" }
@@ -1189,7 +1190,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
 
   async function loadVisit(
     courseId: string,
-    mode: "next_treatment" | "consult_sim",
+    mode: VisitDraftMode,
     existingVisitId?: string,
     options?: VisitDraftOptions
   ) {
@@ -1471,10 +1472,6 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
 
   async function startScheduleAppointmentNote(appointment: ScheduleAppointmentRecord) {
     if (!appClient) return;
-    if (appointment.appointmentType === "follow_up") {
-      window.alert("Follow-up appointments can be tracked on the schedule, but follow-up note generation is not built yet.");
-      return;
-    }
     if (!appointment.courseId || !appointment.patientId) {
       window.alert("Link this appointment to Active Patients before starting a note.");
       return;
@@ -1495,7 +1492,12 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     setScreen({
       name: "visit",
       courseId: appointment.courseId,
-      mode: appointment.appointmentType === "sim_consult" ? "consult_sim" : "next_treatment",
+      mode:
+        appointment.appointmentType === "follow_up"
+          ? "follow_up"
+          : appointment.appointmentType === "sim_consult"
+            ? "consult_sim"
+            : "next_treatment",
       visitDate: appointment.appointmentDate,
       treatmentNumber: appointment.appointmentType === "treatment" ? appointment.appointmentNumber : null
     });
@@ -1979,7 +1981,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     await generateDocumentOnlyCompletedLesionForm(recordId, { mode: "upload", upload });
   }
 
-  async function saveVisit(generatePdf = false) {
+  async function saveVisit(generatePdf = false, openCompletedLesionFormAfter = false) {
     if (!visitEditor) return;
     if (autosaveTimerRef.current !== null) {
       window.clearTimeout(autosaveTimerRef.current);
@@ -2007,10 +2009,19 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
         await appClient.completeScheduleAppointmentForVisit(saved.id);
         await loadPatient(currentPatientId);
         setScreen({ name: "patient", patientId: currentPatientId });
+        if (openCompletedLesionFormAfter) {
+          await generateCourseCompletedLesionFormForCourse(currentPatientId, saved.courseId);
+        }
       } else {
         await loadVisit(visitEditor.course.id, "next_treatment", saved.id);
       }
-      showToast(generatePdf ? "Visit saved and PDF generated." : "Visit saved.");
+      showToast(
+        generatePdf
+          ? openCompletedLesionFormAfter
+            ? "Follow-up note finalized. Complete the lesion form to generate both documents."
+            : "Visit saved and PDF generated."
+          : "Visit saved."
+      );
       if (revealTarget) {
         await appClient.openAsset(revealTarget);
       }
@@ -2558,6 +2569,10 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
             textDirty={textDirty}
             onSaveDraft={() => void saveVisit(false)}
             onSaveAndGeneratePdf={() => void saveVisit(true)}
+            onOpenCompletedLesionForm={() =>
+              void generateCourseCompletedLesionFormForCourse(visitEditor.patient.id, visitEditor.course.id)
+            }
+            onSaveAndOpenCompletedLesionForm={() => void saveVisit(true, true)}
             onOpenPatient={() => void (async () => {
               if (!appClient) return;
               await appClient.saveVisit(visitEditor.note);

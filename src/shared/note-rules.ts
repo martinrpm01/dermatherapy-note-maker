@@ -10,8 +10,13 @@ export const NOTE_TYPE_LABELS: Record<NoteType, string> = {
   consult_sim: "Sim / Consult",
   first_fraction: "First Fraction",
   standard_treatment: "Standard Treatment",
-  otv: "OTV"
+  otv: "OTV",
+  follow_up: "Follow-up"
 };
+
+export function isTreatmentNoteType(noteType: NoteType): boolean {
+  return noteType === "first_fraction" || noteType === "standard_treatment" || noteType === "otv";
+}
 
 export const MAX_TREATMENT_NUMBER = 15;
 export const DEVICE_OPTIONS = [
@@ -708,7 +713,7 @@ export function buildTreatmentDeliveryStatement(
   noteType: NoteType,
   sites: Array<Partial<Pick<SiteSnapshot, "bodyLocation" | "treatmentLocationText" | "diagnosisText" | "machine" | "energyKv">>>
 ): string {
-  if (noteType === "consult_sim") {
+  if (!isTreatmentNoteType(noteType)) {
     return "";
   }
 
@@ -967,6 +972,10 @@ export function getDefaultUltrasoundNote(): string {
   return "Ultrasound Performed: An ultrasound of the lesion was performed to assess tumor extent and guide treatment selection. The images were reviewed, and radiation therapy was selected as the treatment plan.";
 }
 
+export function getDefaultFollowUpUltrasoundNote(): string {
+  return "Ultrasound Performed: An ultrasound of the treated site was performed. Findings: ";
+}
+
 export function normalizePostCareText(value: string): string {
   return value.trim() === LEGACY_VASELINE_POST_CARE ? PETROLATUM_POST_CARE : value;
 }
@@ -993,9 +1002,18 @@ export function buildDefaultStructuredFields(
   const secondSiteLocation = siteSnapshots[1]?.bodyLocation || "second treatment site";
   const combinedSiteLabel =
     siteSnapshots.length === 2 ? `${firstSiteLocation} and ${secondSiteLocation}` : firstSiteLocation;
+  const diagnosisSummary = joinClinicalList(
+    siteSnapshots.map((site) => site.diagnosisText),
+    "the treated lesion"
+  );
+  const followUpCounseling =
+    "Skin care counseling was reviewed, including broad-spectrum sunscreen SPF 30+ and sun-protective clothing. The patient was advised to monitor the treated area and contact the office for new discoloration, a bump, or a nonhealing lesion.";
 
   return {
-    chiefComplaint: "",
+    chiefComplaint:
+      noteType === "follow_up"
+        ? `Follow-up after completed XRT for ${diagnosisSummary} at ${combinedSiteLabel}.`
+        : "",
     additionalNotes: "",
     includeExamVitals: true,
     finalTreatment: false,
@@ -1004,20 +1022,30 @@ export function buildDefaultStructuredFields(
     projectedFractionsInput: null,
     biopsyDate: defaults.biopsyDate ?? "",
     lastTreatmentDate: defaults.lastTreatmentDate ?? "",
-    focusedExam: `An exam was performed including the ${combinedSiteLabel}.`,
-    healingDescription: `Appropriately healing biopsy site distributed on the ${combinedSiteLabel}.`,
+    focusedExam:
+      noteType === "follow_up"
+        ? `An examination of the treated site was performed, including the ${combinedSiteLabel}.`
+        : `An exam was performed including the ${combinedSiteLabel}.`,
+    healingDescription:
+      noteType === "follow_up"
+        ? "Treatment response and healing were evaluated at today's visit."
+        : `Appropriately healing biopsy site distributed on the ${combinedSiteLabel}.`,
     examComment: noteType === "otv" ? getDefaultOtvNote(siteSnapshots) : "",
     impressionPlanComments:
       noteType === "consult_sim"
         ? "The patient would like to proceed with radiotherapy and declines traditional surgical removal due to concerns with healing from surgery due to irreversible changes to anatomical structures.\n\nTotal time was spent by the physician and radiation therapist assessing and managing the patient on the date of the encounter doing the following: preparing to see the patient (eg: review of tests), obtaining and/or reviewing separately obtained history, performing a medically appropriate examination and/or evaluation, counseling and educating the patient/family/caregiver, ordering medications, tests, or procedures, referring and communicating with other health care professionals, documenting clinical information in the electronic or other health record, and care coordination.\n\nThe patient will undergo hypofractionated external beam radiation therapy for the treatment of non-melanoma skin cancer. A simulation was medically necessary to measure the lesion and to determine the appropriate flex shield blocking to ensure adequate coverage of the target lesion while sparing normal tissue. On today's visit, following informed consent, the treatment field was demarcated, and depth measurements were performed for the radiotherapy treatment plan. Multiple clinical setup photographs were taken which will be used for the development of the prescription and treatment plan. The radiation oncologist will provide a recommended treatment plan. Appropriate treatment devices and targeted prescriptions will be utilized pending radiation oncologist and medical physics review."
         : noteType === "first_fraction"
           ? `Patient will undergo hypofractionated external beam radiation therapy with curative intent for the treatment of ${combinedSiteLabel} as an alternative to surgical resection or topical therapy. Following simulation, a clinical treatment plan was medically necessary to ensure the target skin lesion was covered adequately and nearby healthy adjacent tissues were maximally spared. The patient will be treated to the following prescription, delivered twice weekly to allow normal tissue recovery in between treatments.`
-          : "",
+          : noteType === "follow_up"
+            ? followUpCounseling
+            : "",
     postCare: "Aquaphor was applied to the treated area.",
     followUp:
-      siteSnapshots.length === 2
-        ? "As previously scheduled for both treatment sites."
-        : "As previously scheduled.",
+      noteType === "follow_up"
+        ? "Follow up in 1 year."
+        : siteSnapshots.length === 2
+          ? "As previously scheduled for both treatment sites."
+          : "As previously scheduled.",
     simulationComplications: buildSimulationComplicationText(siteSnapshots[0]?.additionalDevices || ""),
     treatmentComment: DEFAULT_TREATMENT_COMMENT,
     includePhysicsNote: noteType === "otv",

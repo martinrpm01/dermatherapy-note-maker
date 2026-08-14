@@ -656,7 +656,7 @@ export async function buildVisitPdf({ noteText, photoInputs, attachmentInputs, l
         const dateEntry = secondUnderline ? findNextNonEmptyLine(bodyLines, secondUnderline.index + 1) : null;
 
         if (signatureMarker?.value === "Physician Signature" && signerEntry && secondUnderline && isUnderlineLine(secondUnderline.value) && dateEntry?.value === "Date") {
-          const minimumBlockSpace = 108;
+          const minimumBlockSpace = 76;
           if (cursorY < margin + minimumBlockSpace) {
             page = pdfDoc.addPage(pageSize);
             cursorY = drawVisitPageHeader(page, logo, margin, metadata, regularFont, boldFont);

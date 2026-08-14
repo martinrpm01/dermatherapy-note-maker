@@ -1084,5 +1084,125 @@ ______________________
 Date
 
     `
+  ),
+  buildTemplate(
+    "one_site",
+    "follow_up",
+    `
+Name: {{patient.fullName}}
+Sex: {{patient.sex}}    DOB: {{patient.dob}}    MRN: {{patient.mrn}}    Date: {{visit.date}}
+
+Chief Complaint:
+{{structured.chiefComplaint}}
+
+HPI:
+This is a {{patient.age}} year old {{patient.sexLower}} returning for follow-up of {{site1.diagnosisText}} treated with XRT at the {{site1.bodyLocation}}.
+The prescribed course was completed on {{structured.lastTreatmentDate}}. The patient presents for evaluation of treatment response and healing.
+
+Exam:
+{{structured.focusedExam}}
+
+Impression / Plan:
+1. History of {{site1.diagnosisText}} ({{site1.icd10}})
+Location: {{site1.bodyLocation}}
+{{structured.healingDescription}}
+
+Completed Treatment Parameters:
+Energy: {{site1.energyKv}}
+Fractions Completed: {{site1.prescribedFractions}}
+Daily Dose: {{site1.dailyDose}} cGy
+Total Dose Delivered: {{site1.totalDose}} cGy
+Cone Size: {{site1.coneSizeDisplay}}
+Flex Shield Cutout: {{site1.cutoutSizeDisplay}}
+Other Shields / Devices: {{site1.shields}}
+
+Plan: Counseling and Reassurance.
+{{structured.impressionPlanComments}}
+
+{{structured.ultrasoundPerformed}}
+
+{{structured.additionalNotesSection}}
+
+Follow Up: {{structured.followUp}}
+
+Documented by: {{visit.therapistName}}
+
+Supervised by:
+
+
+
+
+________________________________________
+Physician Signature
+{{structured.supervisedBy}} - {{settings.dermatologyOfficeName}}
+
+
+______________________
+Date
+    `
+  ),
+  buildTemplate(
+    "two_site",
+    "follow_up",
+    `
+Name: {{patient.fullName}}
+Sex: {{patient.sex}}    DOB: {{patient.dob}}    MRN: {{patient.mrn}}    Date: {{visit.date}}
+
+Chief Complaint:
+{{structured.chiefComplaint}}
+
+HPI:
+This is a {{patient.age}} year old {{patient.sexLower}} returning for follow-up of two lesions treated with XRT:
+1. {{site1.diagnosisText}} at the {{site1.bodyLocation}}.
+2. {{site2.diagnosisText}} at the {{site2.bodyLocation}}.
+The prescribed course was completed on {{structured.lastTreatmentDate}}. The patient presents for evaluation of treatment response and healing.
+
+Exam:
+{{structured.focusedExam}}
+
+Impression / Plan:
+1. History of {{site1.diagnosisText}} ({{site1.icd10}})
+Location: {{site1.bodyLocation}}
+
+Completed Treatment Parameters - Lesion 1:
+Energy: {{site1.energyKv}}    Fractions Completed: {{site1.prescribedFractions}}    Daily Dose: {{site1.dailyDose}} cGy
+Total Dose Delivered: {{site1.totalDose}} cGy    Cone Size: {{site1.coneSizeDisplay}}    Flex Shield Cutout: {{site1.cutoutSizeDisplay}}
+Other Shields / Devices: {{site1.shields}}
+
+2. History of {{site2.diagnosisText}} ({{site2.icd10}})
+Location: {{site2.bodyLocation}}
+
+Completed Treatment Parameters - Lesion 2:
+Energy: {{site2.energyKv}}    Fractions Completed: {{site2.prescribedFractions}}    Daily Dose: {{site2.dailyDose}} cGy
+Total Dose Delivered: {{site2.totalDose}} cGy    Cone Size: {{site2.coneSizeDisplay}}    Flex Shield Cutout: {{site2.cutoutSizeDisplay}}
+Other Shields / Devices: {{site2.shields}}
+
+Healing / Recurrence Assessment:
+{{structured.healingDescription}}
+
+Plan: Counseling and Reassurance.
+{{structured.impressionPlanComments}}
+
+{{structured.ultrasoundPerformed}}
+
+{{structured.additionalNotesSection}}
+
+Follow Up: {{structured.followUp}}
+
+Documented by: {{visit.therapistName}}
+
+Supervised by:
+
+
+
+
+________________________________________
+Physician Signature
+{{structured.supervisedBy}} - {{settings.dermatologyOfficeName}}
+
+
+______________________
+Date
+    `
   )
 ];

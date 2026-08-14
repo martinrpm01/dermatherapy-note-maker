@@ -5,7 +5,7 @@ import { appendFileSync, cpSync, existsSync, mkdirSync, realpathSync, rmSync, wr
 import { app, BrowserWindow, dialog, ipcMain, net, protocol, shell } from "electron";
 import type { OpenDialogOptions } from "electron";
 
-import type { AssetReference, LaunchReadyScreen, VisitDraftOptions } from "../shared/types";
+import type { AssetReference, LaunchReadyScreen, VisitDraftMode, VisitDraftOptions } from "../shared/types";
 import type { PatientArchiveIoHandle } from "../shared/archive";
 import {
   DESKTOP_INSTALLER_DOWNLOAD_URL,
@@ -334,7 +334,7 @@ function registerIpc() {
 
   ipcMain.handle(
     "visit:buildDraft",
-    (_, courseId: string, mode?: "next_treatment" | "consult_sim", existingVisitId?: string, options?: VisitDraftOptions) =>
+    (_, courseId: string, mode?: VisitDraftMode, existingVisitId?: string, options?: VisitDraftOptions) =>
       service.buildVisitDraft(courseId, mode, existingVisitId, options)
   );
   ipcMain.handle("visit:save", (_, input) => service.saveVisit(input));

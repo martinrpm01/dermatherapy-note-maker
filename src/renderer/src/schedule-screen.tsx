@@ -602,8 +602,9 @@ function getLinkedTreatmentRemainingCount(course: DashboardCourseRow) {
 export function buildLinkedForm(course: DashboardCourseRow, dateIso: string, startTime: string, forceTreatment = false): AppointmentFormState {
   const duration = getCourseDuration(course);
   const isSimConsult = !forceTreatment && course.suggestedNoteType === "consult_sim";
-  const startNumber = isSimConsult ? 0 : course.suggestedTreatmentNumber ?? 1;
-  const remaining = isSimConsult ? "1" : getLinkedTreatmentRemainingCount(course);
+  const isFollowUp = !forceTreatment && course.suggestedNoteType === "follow_up";
+  const startNumber = isSimConsult ? 0 : isFollowUp ? "" : course.suggestedTreatmentNumber ?? 1;
+  const remaining = isSimConsult || isFollowUp ? "1" : getLinkedTreatmentRemainingCount(course);
   const patientName = splitStoredPatientName(course.patientName);
   return {
     source: "linked",
@@ -618,12 +619,12 @@ export function buildLinkedForm(course: DashboardCourseRow, dateIso: string, sta
     appointmentDate: dateIso,
     startTime,
     durationMinutes: duration,
-    appointmentType: isSimConsult ? "sim_consult" : "treatment",
+    appointmentType: isFollowUp ? "follow_up" : isSimConsult ? "sim_consult" : "treatment",
     appointmentNumber: `${startNumber}`,
-    totalAppointments: !isSimConsult && course.prescribedFractions ? `${course.prescribedFractions}` : "",
+    totalAppointments: !isSimConsult && !isFollowUp && course.prescribedFractions ? `${course.prescribedFractions}` : "",
     status: "scheduled",
     notes: "",
-    recurring: !isSimConsult,
+    recurring: !isSimConsult && !isFollowUp,
     recurringCount: remaining,
     recurringWeekdays: [],
     seriesId: null,
@@ -1583,7 +1584,16 @@ export function ScheduleScreen(props: {
       return;
     }
     setAppointmentForm((current) => {
-      const appointmentType = current?.appointmentType ?? (course.suggestedNoteType === "consult_sim" ? "sim_consult" : "treatment");
+      const defaultAppointmentType =
+        course.suggestedNoteType === "follow_up"
+          ? "follow_up"
+          : course.suggestedNoteType === "consult_sim"
+            ? "sim_consult"
+            : "treatment";
+      const appointmentType =
+        current?.source === "linked" && current.courseId === course.courseId
+          ? current.appointmentType
+          : defaultAppointmentType;
       const isTreatment = appointmentType === "treatment";
       const manualLinkedRecurringCount =
         current?.source === "linked" && current.courseId === course.courseId ? current.recurringCount : "";
@@ -1882,7 +1892,7 @@ export function ScheduleScreen(props: {
                   }}
                 >
                   <option value="manual">Manual patient</option>
-                  <option value="linked">Active course</option>
+                  <option value="linked">Existing course</option>
                 </select>
               </label>
               {appointmentForm.source === "linked" ? (
@@ -1893,6 +1903,7 @@ export function ScheduleScreen(props: {
                     {snapshot?.activeCourses.map((course) => (
                       <option key={course.courseId} value={course.courseId}>
                         {course.patientName} - {course.siteSummary || course.courseName}
+                        {course.suggestedNoteType === "follow_up" ? " (Follow-up)" : ""}
                       </option>
                     ))}
                   </select>

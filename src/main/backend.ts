@@ -47,6 +47,7 @@ import {
   getNextTreatmentNumber,
   getSuggestedNoteType,
   getTemplateKey,
+  isTreatmentNoteType,
   isLegacyDefaultOtvNote,
   isFinalTreatmentEligible,
   normalizeVacLokAreaValue,
@@ -99,6 +100,7 @@ import type {
   StoredAssetUpload,
   TreatmentCourseRecord,
   VisitDraftOptions,
+  VisitDraftMode,
   VisitEditorState,
   VisitInput,
   VisitNoteRecord
@@ -427,6 +429,9 @@ function buildFlexShieldCutoutText(cutoutSize: string, coneSize: string) {
 }
 
 function buildTreatmentLabel(note: VisitInput) {
+  if (note.noteType === "follow_up") {
+    return "follow-up";
+  }
   if (note.treatmentNumber === null) {
     return "consult";
   }
@@ -702,11 +707,43 @@ export class RadiationNoteService {
       latestDraftVisitId: null,
       latestDraftUpdatedAt: null
     }));
+    const completedCourses = this.repository.fetchCourses("status = ?", ["completed"]);
+    const completedPatients = new Map(
+      this.repository.fetchPatients("1 = 1", []).map((patient) => [patient.id, patient])
+    );
+    const completedCourseRows = completedCourses
+      .map((course) => {
+        const patient = completedPatients.get(course.patientId);
+        if (!patient) return null;
+        const visits = this.repository.fetchVisitsByCourseIds([course.id]);
+        const latestFollowUpDraft = visits
+          .filter((visit) => visit.note.noteType === "follow_up" && visit.note.status === "draft")
+          .sort((left, right) => right.note.updatedAt.localeCompare(left.note.updatedAt))[0];
+        return {
+          patientId: patient.id,
+          patientName: `${patient.lastName}, ${patient.firstName}`,
+          patientMrn: patient.mrn,
+          patientDob: patient.dob,
+          patientFacePhoto: patient.facePhoto,
+          courseId: course.id,
+          courseName: course.courseName,
+          courseType: course.courseType,
+          prescribedFractions: course.prescribedFractions,
+          currentFraction: getCurrentFraction(visits),
+          suggestedTreatmentNumber: null,
+          suggestedNoteType: "follow_up" as const,
+          nextTemplateKey: getTemplateKey(course.courseType, "follow_up"),
+          siteSummary: this.repository.fetchSites([course.id]).map((site) => site.bodyLocation).join(" + "),
+          latestDraftVisitId: latestFollowUpDraft?.note.id ?? null,
+          latestDraftUpdatedAt: latestFollowUpDraft?.note.updatedAt ?? null
+        };
+      })
+      .filter(Boolean) as DashboardSnapshot["activeCourses"];
     return {
       appointments: this.repository.fetchScheduleAppointments(startDate, endDate),
       blocks: this.repository.fetchScheduleBlocks(startDate, endDate),
       settings: this.repository.getScheduleSettings(),
-      activeCourses: [...pendingCourses, ...dashboard.activeCourses]
+      activeCourses: [...pendingCourses, ...dashboard.activeCourses, ...completedCourseRows].sort(compareDashboardPatientRows)
     };
   }
 
@@ -773,6 +810,9 @@ export class RadiationNoteService {
         }
         if (appointment.patientId && appointment.patientId !== visit.patientId) {
           return false;
+        }
+        if (visit.noteType === "follow_up") {
+          return appointment.appointmentType === "follow_up";
         }
         if (visit.noteType === "consult_sim") {
           return appointment.appointmentType === "sim_consult";
@@ -1050,7 +1090,7 @@ export class RadiationNoteService {
 
   buildVisitDraft(
     courseId: string,
-    mode: "next_treatment" | "consult_sim" = "next_treatment",
+    mode: VisitDraftMode = "next_treatment",
     existingVisitId?: string,
     options: VisitDraftOptions = {}
   ) {
@@ -1079,7 +1119,7 @@ export class RadiationNoteService {
     const scheduleDates = this.repository.syncCourseScheduleDates(course.id);
     const hasPlannedConsult = Boolean(scheduleDates.simConsultDate || course.simConsultDate);
     const scheduledTreatmentNumber =
-      mode !== "consult_sim" && typeof options.treatmentNumber === "number" && options.treatmentNumber > 0
+      mode === "next_treatment" && typeof options.treatmentNumber === "number" && options.treatmentNumber > 0
         ? Math.trunc(options.treatmentNumber)
         : null;
     const shouldStartWithConsult =
@@ -1089,7 +1129,7 @@ export class RadiationNoteService {
       currentFraction === 0 &&
       (hasPlannedConsult || course.prescribedFractions <= 0);
     const treatmentNumber =
-      mode === "consult_sim" || shouldStartWithConsult
+      mode === "consult_sim" || mode === "follow_up" || shouldStartWithConsult
         ? null
         : scheduledTreatmentNumber ?? getNextTreatmentNumber(visits);
     if (mode === "next_treatment" && treatmentNumber === null) {
@@ -1098,14 +1138,31 @@ export class RadiationNoteService {
       }
     }
 
-    const noteType = mode === "consult_sim" || shouldStartWithConsult ? "consult_sim" : getSuggestedNoteType(treatmentNumber);
+    const noteType = mode === "follow_up"
+      ? "follow_up"
+      : mode === "consult_sim" || shouldStartWithConsult
+        ? "consult_sim"
+        : getSuggestedNoteType(treatmentNumber);
+    const visitDate = options.visitDate || (noteType === "consult_sim"
+      ? scheduleDates.simConsultDate || course.simConsultDate || todayIso()
+      : todayIso());
     const existingSlotVisit = visits
-      .filter((visit) => (visit.note.treatmentNumber ?? null) === (treatmentNumber ?? null))
+      .filter((visit) => {
+        if (noteType === "follow_up") {
+          return visit.note.noteType === "follow_up" && visit.note.visitDate === visitDate;
+        }
+        if (noteType === "consult_sim") {
+          return visit.note.noteType === "consult_sim";
+        }
+        return isTreatmentNoteType(visit.note.noteType) && visit.note.treatmentNumber === treatmentNumber;
+      })
       .sort((left, right) => right.note.updatedAt.localeCompare(left.note.updatedAt))[0];
     if (existingSlotVisit) {
       return this.loadExistingVisit(existingSlotVisit.note.id);
     }
-      const courseDocuments = noteType === "consult_sim" ? this.repository.fetchCourseDocuments(courseId) : [];
+      const courseDocuments = noteType === "consult_sim" || noteType === "follow_up"
+        ? this.repository.fetchCourseDocuments(courseId)
+        : [];
       let siteSnapshots = applyAutoNumberOfBlocks(noteType, buildSiteSnapshots(sites, treatmentNumber));
       const settings = this.repository.getSettingsRecord();
       const latestConsultVisit = visits
@@ -1119,9 +1176,16 @@ export class RadiationNoteService {
           .filter(Boolean)
           .sort()
         .at(-1) ?? course.startDate;
+      const mostRecentTreatmentDate =
+        visits
+          .filter((visit) => isTreatmentNoteType(visit.note.noteType))
+          .map((visit) => visit.note.visitDate)
+          .filter(Boolean)
+          .sort()
+          .at(-1) ?? course.endDate ?? mostRecentVisitDate;
     const structuredFields = buildDefaultStructuredFields(noteType, siteSnapshots, settings.supervisingPhysician, {
       biopsyDate: course.startDate,
-      lastTreatmentDate: mostRecentVisitDate
+      lastTreatmentDate: noteType === "follow_up" ? mostRecentTreatmentDate : mostRecentVisitDate
     });
     structuredFields.siteSnapshots = structuredFields.siteSnapshots.map((site) => ({
       ...site,
@@ -1134,7 +1198,7 @@ export class RadiationNoteService {
     if (noteType === "consult_sim" && scheduleDates.treatmentStartDate) {
       structuredFields.startRadiationDate = scheduleDates.treatmentStartDate;
     }
-      if (noteType !== "consult_sim") {
+      if (isTreatmentNoteType(noteType)) {
         if (treatmentNumber === 1) {
           siteSnapshots = fillMissingSitePrescribedFractions(
             siteSnapshots.map((site) => {
@@ -1176,7 +1240,7 @@ export class RadiationNoteService {
       const note: VisitInput = {
         patientId: patient.id,
         courseId: course.id,
-        visitDate: options.visitDate || (noteType === "consult_sim" ? scheduleDates.simConsultDate || course.simConsultDate || todayIso() : todayIso()),
+        visitDate,
         noteType,
         treatmentNumber,
         status: "draft",
@@ -1213,6 +1277,7 @@ export class RadiationNoteService {
       throw new Error("Visit context is incomplete.");
     }
 
+    const treatmentVisit = isTreatmentNoteType(input.noteType);
     const normalizedSiteSnapshots = (
       input.structuredFields.siteSnapshots.length === 1
         ? input.structuredFields.siteSnapshots.map((site) => ({
@@ -1220,9 +1285,11 @@ export class RadiationNoteService {
             prescribedFractions:
               input.noteType === "consult_sim"
                 ? input.structuredFields.projectedFractionsInput ?? site.prescribedFractions ?? undefined
-                : input.structuredFields.prescribedFractionsInput ??
+                : treatmentVisit
+                  ? input.structuredFields.prescribedFractionsInput ??
                   site.prescribedFractions ??
                   (course.prescribedFractions > 0 ? course.prescribedFractions : undefined)
+                  : site.prescribedFractions ?? (course.prescribedFractions > 0 ? course.prescribedFractions : undefined)
           }))
         : input.structuredFields.siteSnapshots
     ).map((site) =>
@@ -1232,15 +1299,17 @@ export class RadiationNoteService {
             null,
             site.prescribedFractions ?? input.structuredFields.projectedFractionsInput ?? null
           )
-        : applyAutomaticDoseValuesToSiteSnapshot(
+        : treatmentVisit
+          ? applyAutomaticDoseValuesToSiteSnapshot(
             { ...site, doseManuallyAdjusted: Boolean(site.doseManuallyAdjusted) },
             input.treatmentNumber,
             site.prescribedFractions ?? null
           )
+          : { ...site, cumulativeDose: 0 }
     );
 
     const prescribedFractionsInput =
-      input.noteType !== "consult_sim"
+      treatmentVisit
         ? input.structuredFields.prescribedFractionsInput ??
           getMaxSitePrescribedFractions(normalizedSiteSnapshots)
         : null;
@@ -1252,12 +1321,12 @@ export class RadiationNoteService {
 
     let courseSites = this.repository.fetchSites([course.id]);
     let courseUpdated = false;
-    if (prescribedFractionsInput && prescribedFractionsInput > 0 && prescribedFractionsInput !== course.prescribedFractions) {
+    if (treatmentVisit && prescribedFractionsInput && prescribedFractionsInput > 0 && prescribedFractionsInput !== course.prescribedFractions) {
       this.repository.updateCoursePrescribedFractions(course.id, prescribedFractionsInput);
       this.repository.trimCourseTreatmentAppointments(course.id, prescribedFractionsInput);
       courseUpdated = true;
     }
-    if (input.noteType !== "consult_sim") {
+    if (treatmentVisit) {
       for (const siteSnapshot of normalizedSiteSnapshots) {
         const sitePrescribedFractions = siteSnapshot.prescribedFractions ?? null;
         const storedSite = courseSites.find((site) => site.siteNumber === siteSnapshot.siteNumber);
@@ -1300,9 +1369,7 @@ export class RadiationNoteService {
             input.structuredFields.projectedFractionsInput ??
             getMaxSitePrescribedFractions(latestConsultVisit?.note.structuredFields.siteSnapshots ?? []) ??
             latestConsultVisit?.note.structuredFields.projectedFractionsInput;
-      const finalTreatmentEligible =
-        input.noteType !== "consult_sim" &&
-        isFinalTreatmentEligible(input.treatmentNumber, finalTreatmentFraction);
+      const finalTreatmentEligible = treatmentVisit && isFinalTreatmentEligible(input.treatmentNumber, finalTreatmentFraction);
       const structuredFields = {
         ...input.structuredFields,
           additionalNotes: input.structuredFields.additionalNotes ?? "",
@@ -1361,7 +1428,10 @@ export class RadiationNoteService {
     const slotVisits = priorCourseVisits
       .filter((visit) =>
         visit.note.courseId === input.courseId &&
-        (visit.note.treatmentNumber ?? null) === (input.treatmentNumber ?? null)
+        visit.note.noteType === input.noteType &&
+        (input.noteType === "follow_up"
+          ? visit.note.visitDate === input.visitDate
+          : (visit.note.treatmentNumber ?? null) === (input.treatmentNumber ?? null))
       )
       .sort((left, right) => right.note.updatedAt.localeCompare(left.note.updatedAt));
     const targetSlotVisit = input.id
@@ -1428,7 +1498,11 @@ export class RadiationNoteService {
       .filter((visit) =>
         visit.note.id !== savedVisit.id &&
         visit.note.courseId === input.courseId &&
-        (visit.note.treatmentNumber ?? null) === (savedVisit.treatmentNumber ?? null)
+        (savedVisit.noteType === "follow_up"
+          ? visit.note.noteType === "follow_up" && visit.note.visitDate === savedVisit.visitDate
+          : savedVisit.noteType === "consult_sim"
+            ? visit.note.noteType === "consult_sim"
+            : isTreatmentNoteType(visit.note.noteType) && visit.note.treatmentNumber === savedVisit.treatmentNumber)
       );
 
     for (const duplicate of duplicateSlotVisits) {
@@ -2383,7 +2457,9 @@ export class RadiationNoteService {
       }
 
       const sites = this.repository.fetchSites([course.id]);
-      const courseDocuments = visit.noteType === "consult_sim" ? this.repository.fetchCourseDocuments(course.id) : [];
+      const courseDocuments = visit.noteType === "consult_sim" || visit.noteType === "follow_up"
+        ? this.repository.fetchCourseDocuments(course.id)
+        : [];
       const scheduleDates = this.repository.syncCourseScheduleDates(course.id);
       const refreshedSiteSnapshots = refreshVisitSiteSnapshots(
         visit.noteType,
@@ -2696,7 +2772,11 @@ export class RadiationNoteService {
 
   private buildPdfBaseName(patient: PatientRecord, visit: VisitNoteRecord) {
     const patientName = `${patient.firstName} ${patient.lastName}`.trim() || patient.id;
-    const treatmentLabel = visit.treatmentNumber === null ? "consult" : `tx${visit.treatmentNumber}`;
+    const treatmentLabel = visit.noteType === "follow_up"
+      ? "follow-up"
+      : visit.treatmentNumber === null
+        ? "consult"
+        : `tx${visit.treatmentNumber}`;
     return sanitizeNamePart(`${patientName} ${treatmentLabel} note`) || `visit-${visit.id}`;
   }
 
@@ -2706,7 +2786,9 @@ export class RadiationNoteService {
       .filter((visit) =>
         visit.note.id !== currentVisit.id &&
         visit.note.noteType === currentVisit.noteType &&
-        (visit.note.treatmentNumber ?? null) === (currentVisit.treatmentNumber ?? null) &&
+        (currentVisit.noteType === "follow_up"
+          ? visit.note.visitDate === currentVisit.visitDate
+          : (visit.note.treatmentNumber ?? null) === (currentVisit.treatmentNumber ?? null)) &&
         (
           visit.note.status === "finalized" ||
           Boolean(visit.note.pdfAsset) ||
@@ -2723,11 +2805,16 @@ export class RadiationNoteService {
     const libraryRoot = this.patientNoteLibraryRoot || path.join(this.repository.baseDir, "All Patient Notes");
     this.assetStore.ensureDirectory(path.join(libraryRoot, "Consult Notes"));
     this.assetStore.ensureDirectory(path.join(libraryRoot, "Treatment Notes"));
+    this.assetStore.ensureDirectory(path.join(libraryRoot, "Follow-up Notes"));
     return libraryRoot;
   }
 
   private getPdfCategoryFolder(noteType: VisitInput["noteType"]) {
-    return noteType === "consult_sim" ? "Consult Notes" : "Treatment Notes";
+    return noteType === "consult_sim"
+      ? "Consult Notes"
+      : noteType === "follow_up"
+        ? "Follow-up Notes"
+        : "Treatment Notes";
   }
 
   private buildPatientFolderName(patient: PatientRecord) {

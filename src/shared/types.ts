@@ -8,7 +8,8 @@ import type {
 import type { AppUpdateCheckResult } from "./app-update";
 export type { AppUpdateCheckResult } from "./app-update";
 export type CourseType = "one_site" | "two_site" | "consult";
-export type NoteType = "consult_sim" | "first_fraction" | "standard_treatment" | "otv";
+export type NoteType = "consult_sim" | "first_fraction" | "standard_treatment" | "otv" | "follow_up";
+export type VisitDraftMode = "next_treatment" | "consult_sim" | "follow_up";
 export type PatientStatus = "active" | "archived" | "deleted";
 export type CourseStatus = "pending" | "active" | "completed" | "archived";
 export type VisitStatus = "draft" | "finalized" | "archived";
@@ -812,7 +813,7 @@ export interface AppClient {
   deleteCourse: (courseId: string) => Promise<void>;
   buildVisitDraft: (
     courseId: string,
-    mode?: "next_treatment" | "consult_sim",
+    mode?: VisitDraftMode,
     existingVisitId?: string,
     options?: VisitDraftOptions
   ) => Promise<VisitEditorState>;
