@@ -17,6 +17,7 @@ import {
   getDefaultFinalTreatmentNote,
   getDefaultPhysicsComment,
   getMaxSitePrescribedFractions,
+  getVisitTemplateKey,
   isFinalTreatmentEligible,
   normalizeVacLokAreaValue,
   normalizeWorksheetDeviceDetailsForSite,
@@ -256,7 +257,9 @@ export function buildVisitPreviewText(
   note: VisitInput,
   settings?: AppSettingsView | null
 ) {
-  const template = templates.find((item) => item.key === `${course.courseType}:${note.noteType}`);
+  const template = templates.find(
+    (item) => item.key === getVisitTemplateKey(course.courseType, note.noteType, note.structuredFields.siteSnapshots)
+  );
   if (!template) {
     return note.editedText || note.generatedText;
   }
@@ -284,7 +287,9 @@ export function buildVisitPreviewText(
   });
 
   const normalizedSites = applyAutoNumberOfBlocks(note.noteType, note.structuredFields.siteSnapshots);
-  const site1Base = normalizedSites.find((site) => site.siteNumber === 1) || emptySite(1);
+  const site1Base = normalizedSites.length === 1
+    ? normalizedSites[0]
+    : normalizedSites.find((site) => site.siteNumber === 1) || emptySite(1);
   const site2Base = normalizedSites.find((site) => site.siteNumber === 2) || emptySite(2);
   const projectedFractionsInput = note.structuredFields.projectedFractionsInput ?? null;
   const courseFractions = course.prescribedFractions > 0 ? course.prescribedFractions : null;

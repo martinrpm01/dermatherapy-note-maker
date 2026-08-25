@@ -149,6 +149,18 @@ export function getTemplateKey(courseType: CourseType, noteType: NoteType): stri
   return `${templateCourseType}:${noteType}`;
 }
 
+export function getVisitTemplateKey(
+  courseType: CourseType,
+  noteType: NoteType,
+  siteSnapshots: Array<Pick<SiteSnapshot, "siteNumber">>
+): string {
+  const templateCourseType =
+    courseType === "two_site" && isTreatmentNoteType(noteType) && siteSnapshots.length === 1
+      ? "one_site"
+      : courseType;
+  return getTemplateKey(templateCourseType, noteType);
+}
+
 export function normalizeOptionValue(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
@@ -752,6 +764,21 @@ export function getDefaultPhysicsComment(noteType: NoteType): string {
   return noteType === "otv"
     ? 'In accordance with the standard of care for radiotherapy treatment, a review of care following every 5th fraction was performed by a medical physicist for the patient. The medical physicist reviewed the treatment documentation and parameters, clinical photos of the treatment set-up, the treatment prescription, any prescription changes, that the dose calculation was correct, that the fractional dose was charted correctly, that elapsed days and treatment days were charted correctly, that the cumulative dose is correct, and that the radiation dose administered to the patient was accurate. The medical physicist also ensured that the radiation therapy equipment was properly calibrated and is functioning effectively to ensure treatment efficacy and continued safe delivery of radiotherapy.\n\nContinued medical physics review following every 5th fraction of therapy is requested by the provider for appropriate radiotherapy management and is deemed medically necessary and a standard of care to meet state and regulatory standards.\n\nSee attached Documents within patient chart "Weekly chart review note".'
     : "";
+}
+
+export function getSitesForTreatmentNumber<T extends { prescribedFractions?: number | null }>(
+  siteSnapshots: T[],
+  treatmentNumber: number | null | undefined
+): T[] {
+  const safeTreatmentNumber = clampTreatmentNumber(treatmentNumber ?? null);
+  if (safeTreatmentNumber === null) {
+    return siteSnapshots;
+  }
+
+  return siteSnapshots.filter((site) => {
+    const prescribedFractions = site.prescribedFractions ?? null;
+    return !(typeof prescribedFractions === "number" && prescribedFractions > 0) || safeTreatmentNumber <= prescribedFractions;
+  });
 }
 
 export function shouldIncludePhysicsNote(

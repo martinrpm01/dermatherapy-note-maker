@@ -32,7 +32,9 @@ import {
   getMaxSitePrescribedFractions,
   getNextTreatmentNumber,
   getSuggestedNoteType,
+  getSitesForTreatmentNumber,
   getTemplateKey,
+  getVisitTemplateKey,
   isTreatmentNoteType,
   isLegacyDefaultOtvNote,
   isFinalTreatmentEligible,
@@ -444,7 +446,7 @@ export class BrowserAppClient implements AppClient {
       visit.structuredFields.siteSnapshots,
       visit.structuredFields.biopsyDate || course.startDate || ""
     );
-    const resolvedSiteSnapshots = fillMissingSitePrescribedFractions(
+    const resolvedSiteSnapshots = getSitesForTreatmentNumber(fillMissingSitePrescribedFractions(
       refreshedSiteSnapshots,
       visit.noteType === "consult_sim"
         ? visit.structuredFields.projectedFractionsInput ?? null
@@ -458,7 +460,7 @@ export class BrowserAppClient implements AppClient {
             visit.treatmentNumber,
             site.prescribedFractions ?? null
           )
-    );
+    ), isTreatmentNoteType(visit.noteType) ? visit.treatmentNumber : null);
     const settings = structuredDataStore.getSettingsRecord();
     const finalTreatmentFraction =
       course.prescribedFractions > 0
@@ -545,7 +547,7 @@ export class BrowserAppClient implements AppClient {
       existingPhotos: structuredDataStore.fetchVisitPhotos(visit.id),
       existingAttachments: structuredDataStore.fetchVisitAttachments(visit.id),
       generatedPdfs: structuredDataStore.fetchGeneratedPdfs(visit.id),
-      templateKey: getTemplateKey(course.courseType, visit.noteType)
+      templateKey: getVisitTemplateKey(course.courseType, visit.noteType, refreshedNote.structuredFields.siteSnapshots)
     };
   }
 
@@ -1531,6 +1533,20 @@ export class BrowserAppClient implements AppClient {
               getMaxSitePrescribedFractions(projectedFractionsBySiteFromConsult) ??
               projectedFractionsFromConsult;
         structuredFields.finalTreatment = isFinalTreatmentEligible(treatmentNumber, finalTreatmentFraction);
+        structuredFields.siteSnapshots = getSitesForTreatmentNumber(
+          structuredFields.siteSnapshots,
+          treatmentNumber
+        );
+        const activeSiteDefaults = buildDefaultStructuredFields(
+          noteType,
+          structuredFields.siteSnapshots,
+          settings.supervisingPhysician,
+          { biopsyDate: course.startDate, lastTreatmentDate: mostRecentVisitDate }
+        );
+        structuredFields.focusedExam = activeSiteDefaults.focusedExam;
+        structuredFields.healingDescription = activeSiteDefaults.healingDescription;
+        structuredFields.followUp = activeSiteDefaults.followUp;
+        structuredFields.simulationComplications = activeSiteDefaults.simulationComplications;
       }
       if (noteType === "otv") {
         structuredFields.examComment = getDefaultOtvNote(structuredFields.siteSnapshots, treatmentNumber);
@@ -1565,7 +1581,7 @@ export class BrowserAppClient implements AppClient {
       existingPhotos: [],
       existingAttachments: [],
       generatedPdfs: [],
-      templateKey: getTemplateKey(course.courseType, note.noteType)
+      templateKey: getVisitTemplateKey(course.courseType, note.noteType, note.structuredFields.siteSnapshots)
     } satisfies VisitEditorState;
   }
 
@@ -1706,18 +1722,21 @@ export class BrowserAppClient implements AppClient {
       mipsNote: input.structuredFields.mipsNote?.trim() || "",
       supervisedBy:
         input.structuredFields.supervisedBy?.trim() || settings.supervisingPhysician,
-      siteSnapshots: refreshVisitSiteSnapshots(
-        input.noteType,
-        courseSites.map((site) => ({
-          ...site,
-          cutoutSize: normalizeCutoutSizeLabel(site.cutoutSize)
-        })),
-        input.treatmentNumber,
-        normalizedSiteSnapshots.map((snapshot) => ({
-          ...snapshot,
-          cutoutSize: normalizeCutoutSizeLabel(snapshot.cutoutSize)
-        })),
-        input.structuredFields.biopsyDate || ""
+      siteSnapshots: getSitesForTreatmentNumber(
+        refreshVisitSiteSnapshots(
+          input.noteType,
+          courseSites.map((site) => ({
+            ...site,
+            cutoutSize: normalizeCutoutSizeLabel(site.cutoutSize)
+          })),
+          input.treatmentNumber,
+          normalizedSiteSnapshots.map((snapshot) => ({
+            ...snapshot,
+            cutoutSize: normalizeCutoutSizeLabel(snapshot.cutoutSize)
+          })),
+          input.structuredFields.biopsyDate || ""
+        ),
+        treatmentVisit ? input.treatmentNumber : null
       )
     };
     const selectedSupervisingPhysician = structuredFields.supervisedBy.trim();

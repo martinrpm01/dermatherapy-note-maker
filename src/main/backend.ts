@@ -46,7 +46,9 @@ import {
   getMaxSitePrescribedFractions,
   getNextTreatmentNumber,
   getSuggestedNoteType,
+  getSitesForTreatmentNumber,
   getTemplateKey,
+  getVisitTemplateKey,
   isTreatmentNoteType,
   isLegacyDefaultOtvNote,
   isFinalTreatmentEligible,
@@ -1232,6 +1234,20 @@ export class RadiationNoteService {
               getMaxSitePrescribedFractions(projectedFractionsBySiteFromConsult) ??
               projectedFractionsFromConsult;
         structuredFields.finalTreatment = isFinalTreatmentEligible(treatmentNumber, finalTreatmentFraction);
+        structuredFields.siteSnapshots = getSitesForTreatmentNumber(
+          structuredFields.siteSnapshots,
+          treatmentNumber
+        );
+        const activeSiteDefaults = buildDefaultStructuredFields(
+          noteType,
+          structuredFields.siteSnapshots,
+          settings.supervisingPhysician,
+          { biopsyDate: course.startDate, lastTreatmentDate: mostRecentVisitDate }
+        );
+        structuredFields.focusedExam = activeSiteDefaults.focusedExam;
+        structuredFields.healingDescription = activeSiteDefaults.healingDescription;
+        structuredFields.followUp = activeSiteDefaults.followUp;
+        structuredFields.simulationComplications = activeSiteDefaults.simulationComplications;
       }
       if (noteType === "otv") {
         structuredFields.examComment = getDefaultOtvNote(structuredFields.siteSnapshots, treatmentNumber);
@@ -1265,7 +1281,7 @@ export class RadiationNoteService {
       existingPhotos: [],
       existingAttachments: [],
       generatedPdfs: [],
-      templateKey: getTemplateKey(course.courseType, note.noteType)
+      templateKey: getVisitTemplateKey(course.courseType, note.noteType, note.structuredFields.siteSnapshots)
     } satisfies VisitEditorState;
   }
 
@@ -1398,18 +1414,21 @@ export class RadiationNoteService {
         mipsNote: input.structuredFields.mipsNote?.trim() || "",
         supervisedBy:
           input.structuredFields.supervisedBy?.trim() || settings.supervisingPhysician,
-        siteSnapshots: refreshVisitSiteSnapshots(
-          input.noteType,
-          courseSites.map((site) => ({
-            ...site,
-            cutoutSize: normalizeCutoutSizeLabel(site.cutoutSize)
-          })),
-          input.treatmentNumber,
-          normalizedSiteSnapshots.map((snapshot) => ({
-            ...snapshot,
-            cutoutSize: normalizeCutoutSizeLabel(snapshot.cutoutSize)
-          })),
-          input.structuredFields.biopsyDate || ""
+        siteSnapshots: getSitesForTreatmentNumber(
+          refreshVisitSiteSnapshots(
+            input.noteType,
+            courseSites.map((site) => ({
+              ...site,
+              cutoutSize: normalizeCutoutSizeLabel(site.cutoutSize)
+            })),
+            input.treatmentNumber,
+            normalizedSiteSnapshots.map((snapshot) => ({
+              ...snapshot,
+              cutoutSize: normalizeCutoutSizeLabel(snapshot.cutoutSize)
+            })),
+            input.structuredFields.biopsyDate || ""
+          ),
+          treatmentVisit ? input.treatmentNumber : null
         )
       };
       const selectedSupervisingPhysician = structuredFields.supervisedBy.trim();
@@ -2468,7 +2487,7 @@ export class RadiationNoteService {
         visit.structuredFields.siteSnapshots,
         visit.structuredFields.biopsyDate || course.startDate || ""
       );
-      const resolvedSiteSnapshots = fillMissingSitePrescribedFractions(
+      const resolvedSiteSnapshots = getSitesForTreatmentNumber(fillMissingSitePrescribedFractions(
         refreshedSiteSnapshots,
         visit.noteType === "consult_sim"
           ? visit.structuredFields.projectedFractionsInput ?? null
@@ -2482,7 +2501,7 @@ export class RadiationNoteService {
               visit.treatmentNumber,
               site.prescribedFractions ?? null
             )
-      );
+      ), isTreatmentNoteType(visit.noteType) ? visit.treatmentNumber : null);
       const settings = this.repository.getSettingsRecord();
       const finalTreatmentFraction =
         course.prescribedFractions > 0
@@ -2563,7 +2582,7 @@ export class RadiationNoteService {
         existingPhotos: this.repository.fetchVisitPhotos(visit.id),
         existingAttachments: this.repository.fetchVisitAttachments(visit.id),
         generatedPdfs: this.repository.fetchGeneratedPdfs(visit.id),
-      templateKey: getTemplateKey(course.courseType, visit.noteType)
+      templateKey: getVisitTemplateKey(course.courseType, visit.noteType, refreshedNote.structuredFields.siteSnapshots)
     };
   }
 
@@ -2572,7 +2591,9 @@ export class RadiationNoteService {
     course: TreatmentCourseRecord,
     note: VisitInput
   ) {
-    const template = this.repository.getTemplate(getTemplateKey(course.courseType, note.noteType));
+    const template = this.repository.getTemplate(
+      getVisitTemplateKey(course.courseType, note.noteType, note.structuredFields.siteSnapshots)
+    );
     const settings = this.repository.toSettingsView(this.repository.getSettingsRecord());
     if (!template) {
       throw new Error("Template not found.");
@@ -2606,7 +2627,9 @@ export class RadiationNoteService {
       });
 
     const normalizedSites = applyAutoNumberOfBlocks(note.noteType, note.structuredFields.siteSnapshots);
-    const site1 = normalizedSites.find((site) => site.siteNumber === 1) || emptySite(1);
+    const site1 = normalizedSites.length === 1
+      ? normalizedSites[0]
+      : normalizedSites.find((site) => site.siteNumber === 1) || emptySite(1);
     const site2 = normalizedSites.find((site) => site.siteNumber === 2) || emptySite(2);
     const projectedFractionsInput = note.structuredFields.projectedFractionsInput ?? null;
     const courseFractions = course.prescribedFractions > 0 ? course.prescribedFractions : null;

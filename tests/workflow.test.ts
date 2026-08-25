@@ -1022,6 +1022,36 @@ describe("RadiationNoteService workflow", () => {
     ).toBe(14);
   });
 
+  it("stops carrying a completed lesion into later notes while the other lesion continues", async () => {
+    const { course } = await createTwoSitePatientAndCourse();
+
+    const consultDraft = service.buildVisitDraft(course.id, "consult_sim");
+    consultDraft.note.structuredFields.siteSnapshots = consultDraft.note.structuredFields.siteSnapshots.map((site) => ({
+      ...site,
+      prescribedFractions: site.siteNumber === 1 ? 8 : 10
+    }));
+    consultDraft.note.structuredFields.projectedFractionsInput = 10;
+    service.saveVisit(consultDraft.note);
+
+    const firstDraft = service.buildVisitDraft(course.id, "next_treatment");
+    firstDraft.note.structuredFields.prescribedFractionsInput = 10;
+    service.saveVisit(firstDraft.note);
+
+    const eighthDraft = service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 8 });
+    expect(eighthDraft.note.structuredFields.siteSnapshots.map((site) => site.siteNumber)).toEqual([1, 2]);
+
+    const ninthDraft = service.buildVisitDraft(course.id, "next_treatment", undefined, { treatmentNumber: 9 });
+    expect(ninthDraft.note.structuredFields.siteSnapshots.map((site) => site.siteNumber)).toEqual([2]);
+    expect(ninthDraft.templateKey).toBe("one_site:standard_treatment");
+    expect(ninthDraft.note.generatedText).toContain("Right ear");
+    expect(ninthDraft.note.generatedText).not.toContain("Left cheek");
+
+    const savedNinth = service.saveVisit(ninthDraft.note);
+    const reopenedNinth = service.buildVisitDraft(course.id, "next_treatment", savedNinth.id);
+    expect(reopenedNinth.note.structuredFields.siteSnapshots.map((site) => site.siteNumber)).toEqual([2]);
+    expect(reopenedNinth.templateKey).toBe("one_site:standard_treatment");
+  });
+
   it("shows prescribed fractions on treatment 2+ only when the course still has none, then hides it after save", async () => {
     const patient = service.savePatient({
       firstName: "Later",
