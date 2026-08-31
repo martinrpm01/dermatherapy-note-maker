@@ -4,7 +4,10 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { PDFDocument } from "pdf-lib";
 
-import { buildConsentFormPdfFromTemplateBytes } from "../src/shared/consent-form-pdf";
+import {
+  buildConsentFormPdfFromTemplateBytes,
+  shouldIncludePregnancyAcknowledgment
+} from "../src/shared/consent-form-pdf";
 import type { PatientRecord, TreatmentCourseRecord, TreatmentSiteRecord } from "../src/shared/types";
 
 const templateBytes = fs.readFileSync(
@@ -106,7 +109,7 @@ describe("consent form pdf", () => {
     expect(form.getTextField("Text Box 1_5").getText()).toBe("MRN-123");
     expect(form.getTextField("Text Box 4").getText()).toBe("04/16/2026");
     expect(form.getTextField("Text Box 4_2").getText()).toBe("04/16/2026");
-    expect(form.getTextField("Text Box 2").getText() ?? "").toBe("");
+    expect(form.getFields().some((field) => field.getName() === "Text Box 2")).toBe(false);
     expect(form.getTextField("Text Box 1_3").getText()).toBe("Rt nasal ala");
     expect(form.getCheckBox("Check Box 2").isChecked()).toBe(true);
     expect(form.getCheckBox("Check Box 2_2").isChecked()).toBe(false);
@@ -148,5 +151,23 @@ describe("consent form pdf", () => {
     expect(form.getCheckBox("Check Box 2_4").isChecked()).toBe(false);
     expect(form.getCheckBox("Check Box 3").isChecked()).toBe(false);
     expect(form.getCheckBox("Check Box 2_5").isChecked()).toBe(true);
+  });
+
+  it("shows pregnancy acknowledgment only for a confirmed female patient under 55 on the consent date", () => {
+    const courseDate = "2026-04-16";
+    expect(shouldIncludePregnancyAcknowledgment({ ...buildPatient(), sex: "Female", dob: "1971-04-17" }, courseDate)).toBe(true);
+    expect(shouldIncludePregnancyAcknowledgment({ ...buildPatient(), sex: "Female", dob: "1971-04-16" }, courseDate)).toBe(false);
+    expect(shouldIncludePregnancyAcknowledgment({ ...buildPatient(), sex: "Male", dob: "1990-01-01" }, courseDate)).toBe(false);
+    expect(shouldIncludePregnancyAcknowledgment({ ...buildPatient(), sex: "Female", dob: "" }, courseDate)).toBe(false);
+  });
+
+  it("keeps the pregnancy initials field for an eligible female patient", async () => {
+    const result = await buildConsentFormPdfFromTemplateBytes(templateBytes, {
+      patient: { ...buildPatient(), sex: "Female", dob: "1990-03-01" },
+      course: buildCourse("one_site"),
+      sites: []
+    });
+    const form = await loadForm(result.bytes);
+    expect(form.getTextField("Text Box 2").getText() ?? "").toBe("");
   });
 });

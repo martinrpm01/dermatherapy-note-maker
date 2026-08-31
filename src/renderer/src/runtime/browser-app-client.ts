@@ -74,7 +74,11 @@ import {
   buildConsentUploadPdf,
   buildSignedConsentFormPdfFromTemplateBytes
 } from "../../../shared/consent-form-pdf";
-import { buildConsultQuestionnairePdfFromTemplateBytes } from "../../../shared/consult-questionnaire-pdf";
+import {
+  buildConsultQuestionnairePdfFromTemplateBytes,
+  fillMissingVitals,
+  getQuestionnaireVitals
+} from "../../../shared/consult-questionnaire-pdf";
 import { buildSimWorksheetPdfFromTemplateBytes } from "../../../shared/sim-worksheet-pdf";
 import { buildCompletedLesionFormPdf, type CompletedLesionPhotoInput } from "../../../shared/completed-lesion-form-pdf";
 import { validateTemplate } from "../../../shared/template-engine";
@@ -478,7 +482,9 @@ export class BrowserAppClient implements AppClient {
       treatmentNumber: visit.treatmentNumber,
       status: visit.status,
       therapistName: visit.therapistName,
-      vitals: visit.vitals,
+      vitals: visit.noteType === "consult_sim"
+        ? fillMissingVitals(visit.vitals, getQuestionnaireVitals(courseDocuments))
+        : visit.vitals,
       structuredFields: {
         ...visit.structuredFields,
         additionalNotes: visit.structuredFields.additionalNotes ?? "",
@@ -1560,7 +1566,9 @@ export class BrowserAppClient implements AppClient {
         treatmentNumber,
         status: "draft",
       therapistName: settings.defaultTherapist,
-      vitals: createEmptyVitals(),
+      vitals: noteType === "consult_sim"
+        ? fillMissingVitals(createEmptyVitals(), getQuestionnaireVitals(courseDocuments))
+        : createEmptyVitals(),
       structuredFields,
       generatedText: "",
       editedText: "",
@@ -2166,7 +2174,8 @@ export class BrowserAppClient implements AppClient {
         patient,
         course,
         sites,
-        questionnaire: input
+        questionnaire: input,
+        logoInput: await this.readPdfLogoInput()
       }
     );
 
@@ -2386,7 +2395,8 @@ export class BrowserAppClient implements AppClient {
         patient,
         course,
         sites,
-        questionnaire: input
+        questionnaire: input,
+        logoInput: await this.readPdfLogoInput()
       }
     );
 
@@ -2406,7 +2416,8 @@ export class BrowserAppClient implements AppClient {
       filePath,
       consultQuestionnaire.caption,
       "application/pdf",
-      consultQuestionnaire.fileName
+      consultQuestionnaire.fileName,
+      input.vitals
     );
 
     const previousPath = existingDocument ? this.getStoredAssetPath(binaryAssetStore, existingDocument.fileAsset) : null;

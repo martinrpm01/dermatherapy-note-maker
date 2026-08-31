@@ -123,7 +123,7 @@ describe("signed consent pdf", () => {
 
   it("uses drawn pregnancy initials instead of typed initials for female consent signing", async () => {
     const result = await buildSignedConsentFormPdfFromTemplateBytes(templateBytes, {
-      patient: { ...buildPatient(), sex: "Female" },
+      patient: { ...buildPatient(), sex: "Female", dob: "1990-03-01" },
       course: buildCourse("one_site"),
       sites: [
         buildSite({

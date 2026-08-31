@@ -3643,6 +3643,36 @@ describe("RadiationNoteService workflow", () => {
     expect(getSuggestedNoteType(15)).toBe("otv");
   });
 
+  it("stores questionnaire vitals and carries them into the consult note without replacing later note edits", async () => {
+    const { course } = await createPatientAndCourse();
+    const questionnaire = createDefaultConsultQuestionnaireInput();
+    questionnaire.vitals = {
+      ...questionnaire.vitals,
+      bloodPressure: "120/80",
+      heartRate: "72",
+      oxygenSaturation: "98"
+    };
+
+    await service.generateCourseConsultQuestionnaire(course.id, questionnaire);
+    const document = repository.fetchCourseDocuments(course.id).find((item) => item.documentType === "consult_questionnaire");
+    expect(document?.questionnaireVitals).toMatchObject({
+      bloodPressure: "120/80",
+      heartRate: "72",
+      oxygenSaturation: "98"
+    });
+
+    const draft = service.buildVisitDraft(course.id, "consult_sim");
+    expect(draft.note.vitals).toMatchObject({
+      bloodPressure: "120/80",
+      heartRate: "72",
+      oxygenSaturation: "98"
+    });
+
+    const saved = service.saveVisit({ ...draft.note, vitals: { ...draft.note.vitals, heartRate: "80" } });
+    const reopened = service.buildVisitDraft(course.id, "consult_sim", saved.id);
+    expect(reopened.note.vitals.heartRate).toBe("80 BPM");
+  });
+
   it("creates editable follow-up notes for completed courses without changing treatment history", async () => {
     const { patient, course } = await createPatientAndCourse();
     const finalTreatmentDraft = service.buildVisitDraft(course.id, "next_treatment", undefined, {

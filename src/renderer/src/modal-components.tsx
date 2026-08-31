@@ -34,6 +34,7 @@ import type {
   TreatmentSiteRecord
 } from "../../shared/types";
 import { CalendarDateInput, DobInput, LesionSizeInput, NumericInput } from "./screen-components";
+import { shouldIncludePregnancyAcknowledgment } from "../../shared/consent-form-pdf";
 
 const FRACTION_PRESETS = [8, 10, 12];
 const DEPTH_OPTIONS = ["3", "4", "5"];
@@ -447,13 +448,16 @@ export function ConsentSigningModal(props: {
   onClose: () => void;
   onSave: () => void;
 }) {
-  const isFemalePatient = props.patient.sex.trim().toLowerCase() === "female";
+  const includePregnancyAcknowledgment = shouldIncludePregnancyAcknowledgment(
+    props.patient,
+    props.signingInput.signDate || props.course.simConsultDate || props.course.startDate || ""
+  );
   const [reviewAcknowledged, setReviewAcknowledged] = useState(false);
   const [step, setStep] = useState<"review" | "patient" | "witness">("review");
   const patientStepComplete =
     props.signingInput.signDate.trim().length > 0 &&
     props.signingInput.patientPrintedName.trim().length > 0 &&
-    (!isFemalePatient || Boolean(props.signingInput.patientInitialsDataUrl)) &&
+    (!includePregnancyAcknowledgment || Boolean(props.signingInput.patientInitialsDataUrl)) &&
     props.signingInput.formerRadiationAcknowledged &&
     props.signingInput.medicalDevicesAcknowledged &&
     Boolean(props.signingInput.patientSignatureDataUrl);
@@ -554,7 +558,7 @@ export function ConsentSigningModal(props: {
                 />
               </label>
             </div>
-            {isFemalePatient ? (
+            {includePregnancyAcknowledgment ? (
               <div className="subpanel">
                 <h4>Female Pregnancy Statement</h4>
                 <div className="consent-pregnancy-grid">
@@ -811,6 +815,42 @@ export function ConsultQuestionnaireModal(props: {
             Ask these around the consent and sim/consult step. Yes answers should include enough detail for the clinical team to review before treatment starts.
           </p>
           {props.title ? <p className="muted" style={{ marginTop: "0.4rem" }}>{props.title}</p> : null}
+        </div>
+        <div className="subpanel compact-course-subpanel">
+          <div className="section-header compact">
+            <div>
+              <h4 style={{ marginBottom: "0.25rem" }}>Patient Vital Signs</h4>
+              <p className="muted" style={{ margin: 0, fontSize: "0.86rem", lineHeight: 1.35 }}>
+                These carry into the Sim / Consult note. If all three are left empty, the vitals section will not appear on the questionnaire PDF.
+              </p>
+            </div>
+          </div>
+          <div className="form-grid course-top-grid">
+            <label>
+              Blood Pressure
+              <input
+                placeholder="Example: 120/80"
+                value={q.vitals.bloodPressure}
+                onChange={(event) => props.onChange({ ...q, vitals: { ...q.vitals, bloodPressure: event.target.value } })}
+              />
+            </label>
+            <label>
+              Heart Rate
+              <input
+                placeholder="bpm"
+                value={q.vitals.heartRate}
+                onChange={(event) => props.onChange({ ...q, vitals: { ...q.vitals, heartRate: event.target.value } })}
+              />
+            </label>
+            <label>
+              Oxygen Saturation
+              <input
+                placeholder="%"
+                value={q.vitals.oxygenSaturation}
+                onChange={(event) => props.onChange({ ...q, vitals: { ...q.vitals, oxygenSaturation: event.target.value } })}
+              />
+            </label>
+          </div>
         </div>
         <div className="site-grid two-site-course-grid">
           <QuestionnaireItemField

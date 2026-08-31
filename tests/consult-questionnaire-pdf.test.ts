@@ -6,7 +6,8 @@ import { PDFDocument } from "pdf-lib";
 
 import {
   buildConsultQuestionnairePdfFromTemplateBytes,
-  createDefaultConsultQuestionnaireInput
+  createDefaultConsultQuestionnaireInput,
+  fillMissingVitals
 } from "../src/shared/consult-questionnaire-pdf";
 import type { PatientRecord, TreatmentCourseRecord, TreatmentSiteRecord } from "../src/shared/types";
 
@@ -86,6 +87,12 @@ describe("consult questionnaire pdf", () => {
     const questionnaire = createDefaultConsultQuestionnaireInput();
     questionnaire.medicalDevices = { answer: "yes", details: "Pacemaker" };
     questionnaire.diabetes = { answer: "yes", details: "", controlled: "Yes", diabetesType: "Type 2" };
+    questionnaire.vitals = {
+      ...questionnaire.vitals,
+      bloodPressure: "120/80",
+      heartRate: "72",
+      oxygenSaturation: "98"
+    };
 
     const result = await buildConsultQuestionnairePdfFromTemplateBytes(templateBytes, {
       patient: buildPatient(),
@@ -99,5 +106,21 @@ describe("consult questionnaire pdf", () => {
     expect(result.fileName).toBe("John Smith - Radiation Questionaire.pdf");
     expect(result.caption).toBe("John Smith - Radiation Questionaire");
     expect(result.bytes.length).toBeGreaterThan(10_000);
+  });
+
+  it("carries questionnaire vitals into empty consult fields without replacing values already entered", () => {
+    const existing = createDefaultConsultQuestionnaireInput().vitals;
+    const questionnaireVitals = {
+      ...existing,
+      bloodPressure: "120/80",
+      heartRate: "72",
+      oxygenSaturation: "98"
+    };
+    expect(fillMissingVitals(existing, questionnaireVitals)).toMatchObject({
+      bloodPressure: "120/80",
+      heartRate: "72",
+      oxygenSaturation: "98"
+    });
+    expect(fillMissingVitals({ ...existing, heartRate: "80" }, questionnaireVitals).heartRate).toBe("80");
   });
 });

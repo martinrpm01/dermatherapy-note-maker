@@ -7,7 +7,7 @@ import {
   createEmptyDocumentOnlyInput,
   buildDocumentOnlySyntheticContext
 } from "../../shared/document-only";
-import { createDefaultConsultQuestionnaireInput } from "../../shared/consult-questionnaire-pdf";
+import { createDefaultConsultQuestionnaireInput, fillMissingVitals } from "../../shared/consult-questionnaire-pdf";
 import { createDefaultCompletedLesionFormInput } from "../../shared/completed-lesion-form-pdf";
 import {
   buildVisitPreviewText,
@@ -1740,12 +1740,17 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     if (!detail || !targetCourse) {
       return;
     }
+    const input = createDefaultConsultQuestionnaireInput();
+    input.vitals = fillMissingVitals(
+      input.vitals,
+      targetCourse.documents.find((document) => document.documentType === "consult_questionnaire")?.questionnaireVitals
+    );
     setConsultQuestionnaire({
       kind: "course",
       patientId,
       courseId,
       title: `${detail.patient.lastName}, ${detail.patient.firstName} - ${targetCourse.course.courseName || "Pending course"}`,
-      input: createDefaultConsultQuestionnaireInput()
+      input
     });
   }
 
@@ -1782,6 +1787,9 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     try {
       if (consultQuestionnaire.kind === "course") {
         await appClient.generateCourseConsultQuestionnaire(consultQuestionnaire.courseId, consultQuestionnaire.input);
+        setVisitEditor((current) => current && current.course.id === consultQuestionnaire.courseId && current.note.noteType === "consult_sim"
+          ? { ...current, note: { ...current.note, vitals: fillMissingVitals(current.note.vitals, consultQuestionnaire.input.vitals) } }
+          : current);
         await loadDashboard();
         if (patientDetail?.patient.id === consultQuestionnaire.patientId) {
           await loadPatient(consultQuestionnaire.patientId);

@@ -228,6 +228,7 @@ export interface CourseDocumentRecord {
   caption: string;
   mimeType: string;
   originalName: string;
+  questionnaireVitals?: Vitals | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -556,6 +557,7 @@ export interface ConsultQuestionnaireItemInput {
 }
 
 export interface ConsultQuestionnaireInput {
+  vitals: Vitals;
   medicalDevices: ConsultQuestionnaireItemInput;
   delayedWoundHealing: ConsultQuestionnaireItemInput;
   pastRadiation: ConsultQuestionnaireItemInput;

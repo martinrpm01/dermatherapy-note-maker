@@ -220,11 +220,17 @@ export class RadiationNoteRepository implements StructuredDataStore {
   }
 
   private toCourseDocumentRecord(
-    row: Omit<CourseDocumentRecord, "fileAsset"> & { filePath: string; fileAssetId?: string | null }
+    row: Omit<CourseDocumentRecord, "fileAsset" | "questionnaireVitals"> & {
+      filePath: string;
+      fileAssetId?: string | null;
+      questionnaireVitalsJson?: string | null;
+    }
   ): CourseDocumentRecord {
+    const { questionnaireVitalsJson, filePath, fileAssetId, ...record } = row;
     return {
-      ...row,
-      fileAsset: this.toAssetReference(row.filePath, "course_document", row.fileAssetId)!
+      ...record,
+      fileAsset: this.toAssetReference(filePath, "course_document", fileAssetId)!,
+      questionnaireVitals: questionnaireVitalsJson ? JSON.parse(questionnaireVitalsJson) : null
     };
   }
 
@@ -1460,7 +1466,8 @@ export class RadiationNoteRepository implements StructuredDataStore {
     file: AssetReference | string,
     caption: string,
     mimeType: string,
-    originalName: string
+    originalName: string,
+    questionnaireVitals?: CourseDocumentRecord["questionnaireVitals"]
   ) {
     const filePath = typeof file === "string" ? file : this.assetStore.resolveAssetPath(file);
     const existing = this.queryOne<{ id: string; filePath: string | null; fileAssetId: string | null; createdAt: string }>(
@@ -1485,9 +1492,19 @@ export class RadiationNoteRepository implements StructuredDataStore {
       if (existing) {
         this.run(
           `UPDATE course_documents
-           SET file_path = ?, file_asset_id = ?, caption = ?, mime_type = ?, original_name = ?, updated_at = ?
+           SET file_path = ?, file_asset_id = ?, caption = ?, mime_type = ?, original_name = ?,
+               questionnaire_vitals_json = COALESCE(?, questionnaire_vitals_json), updated_at = ?
            WHERE id = ?`,
-          [filePath, fileAssetId, caption, mimeType, originalName, timestamp, existing.id]
+          [
+            filePath,
+            fileAssetId,
+            caption,
+            mimeType,
+            originalName,
+            questionnaireVitals === undefined ? null : JSON.stringify(questionnaireVitals),
+            timestamp,
+            existing.id
+          ]
         );
         return;
       }
@@ -1502,10 +1519,23 @@ export class RadiationNoteRepository implements StructuredDataStore {
            caption,
            mime_type,
            original_name,
+           questionnaire_vitals_json,
            created_at,
            updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [makeId("course-document"), courseId, documentType, filePath, fileAssetId, caption, mimeType, originalName, timestamp, timestamp]
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          makeId("course-document"),
+          courseId,
+          documentType,
+          filePath,
+          fileAssetId,
+          caption,
+          mimeType,
+          originalName,
+          questionnaireVitals === undefined ? null : JSON.stringify(questionnaireVitals),
+          timestamp,
+          timestamp
+        ]
       );
     });
 
@@ -1814,9 +1844,10 @@ export class RadiationNoteRepository implements StructuredDataStore {
 
   fetchCourseDocuments(courseId: string) {
     return this.queryAll<
-      Omit<CourseDocumentRecord, "fileAsset"> & {
+      Omit<CourseDocumentRecord, "fileAsset" | "questionnaireVitals"> & {
         filePath: string;
         fileAssetId: string | null;
+        questionnaireVitalsJson: string | null;
       }
     >(
       `SELECT
@@ -1828,6 +1859,7 @@ export class RadiationNoteRepository implements StructuredDataStore {
          caption,
          mime_type AS mimeType,
          original_name AS originalName,
+         questionnaire_vitals_json AS questionnaireVitalsJson,
          created_at AS createdAt,
          updated_at AS updatedAt
        FROM course_documents
@@ -1839,9 +1871,10 @@ export class RadiationNoteRepository implements StructuredDataStore {
 
   fetchCourseDocument(documentId: string) {
     const row = this.queryOne<
-      Omit<CourseDocumentRecord, "fileAsset"> & {
+      Omit<CourseDocumentRecord, "fileAsset" | "questionnaireVitals"> & {
         filePath: string;
         fileAssetId: string | null;
+        questionnaireVitalsJson: string | null;
       }
     >(
       `SELECT
@@ -1853,6 +1886,7 @@ export class RadiationNoteRepository implements StructuredDataStore {
          caption,
          mime_type AS mimeType,
          original_name AS originalName,
+         questionnaire_vitals_json AS questionnaireVitalsJson,
          created_at AS createdAt,
          updated_at AS updatedAt
        FROM course_documents
@@ -2759,6 +2793,7 @@ export class RadiationNoteRepository implements StructuredDataStore {
         caption TEXT NOT NULL DEFAULT '',
         mime_type TEXT NOT NULL DEFAULT '',
         original_name TEXT NOT NULL DEFAULT '',
+        questionnaire_vitals_json TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         FOREIGN KEY(course_id) REFERENCES treatment_courses(id)
@@ -2898,6 +2933,7 @@ export class RadiationNoteRepository implements StructuredDataStore {
     try { this.run(`ALTER TABLE schedule_appointments ADD COLUMN intake_course_type TEXT`); } catch { /* already exists */ }
     try { this.run(`ALTER TABLE schedule_appointments ADD COLUMN intake_biopsy_date TEXT NOT NULL DEFAULT ''`); } catch { /* already exists */ }
     try { this.run(`ALTER TABLE schedule_appointments ADD COLUMN intake_sites_json TEXT NOT NULL DEFAULT '[]'`); } catch { /* already exists */ }
+    try { this.run(`ALTER TABLE course_documents ADD COLUMN questionnaire_vitals_json TEXT`); } catch { /* already exists */ }
 
     this.backfillMissingAssetIds();
 

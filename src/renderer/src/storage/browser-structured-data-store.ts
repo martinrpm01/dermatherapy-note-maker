@@ -1167,7 +1167,8 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
     filePath: string,
     caption: string,
     mimeType: string,
-    originalName: string
+    originalName: string,
+    questionnaireVitals?: CourseDocumentRecord["questionnaireVitals"]
   ) {
     this.ensureInitialized();
     const existing = this.fetchCourseDocuments(courseId).find((document) => document.documentType === documentType) ?? null;
@@ -1180,6 +1181,9 @@ export class BrowserStructuredDataStore implements StructuredDataStore {
       caption,
       mimeType,
       originalName,
+      questionnaireVitals: questionnaireVitals === undefined
+        ? existing?.questionnaireVitals ?? null
+        : questionnaireVitals,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now
     };

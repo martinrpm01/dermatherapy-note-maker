@@ -14,6 +14,7 @@ import { buildVisitPdf } from "./pdf";
 import { buildConsentFormPdf, buildSignedConsentFormPdf, buildUploadedConsentPdf } from "./consent-form";
 import { buildSimWorksheetPdf } from "./sim-worksheet";
 import { buildConsultQuestionnairePdf } from "./consult-questionnaire";
+import { fillMissingVitals, getQuestionnaireVitals } from "../shared/consult-questionnaire-pdf";
 import { buildCompletedLesionFormPdf, type CompletedLesionPhotoInput } from "../shared/completed-lesion-form-pdf";
 import { PatientArchivePreparationService } from "./archive-preparation";
 import { DesktopPatientArchiveExportService } from "./archive-export";
@@ -1261,7 +1262,9 @@ export class RadiationNoteService {
         treatmentNumber,
         status: "draft",
       therapistName: settings.defaultTherapist,
-      vitals: createEmptyVitals(),
+      vitals: noteType === "consult_sim"
+        ? fillMissingVitals(createEmptyVitals(), getQuestionnaireVitals(courseDocuments))
+        : createEmptyVitals(),
       structuredFields,
       generatedText: "",
       editedText: "",
@@ -1799,7 +1802,8 @@ export class RadiationNoteService {
       patient,
       course,
       sites,
-      questionnaire
+      questionnaire,
+      logoInput: this.readPdfOptionalPathInput(this.getCurrentNoteLogoPath(), "questionnaire logo")
     });
     const preferredPath = path.join(documentsDir, consultQuestionnaire.fileName);
     let outputPath = preferredPath;
@@ -1999,7 +2003,8 @@ export class RadiationNoteService {
       patient,
       course,
       sites,
-      questionnaire
+      questionnaire,
+      logoInput: this.readPdfOptionalPathInput(this.getCurrentNoteLogoPath(), "questionnaire logo")
     });
     const preferredPath = path.join(documentsDir, consultQuestionnaire.fileName);
     let outputPath = preferredPath;
@@ -2019,7 +2024,8 @@ export class RadiationNoteService {
       this.assetStore.createAssetReference(outputPath, "course_document")!,
       consultQuestionnaire.caption,
       "application/pdf",
-      consultQuestionnaire.fileName
+      consultQuestionnaire.fileName,
+      questionnaire.vitals
     );
 
     const previousPath = existingDocument ? this.resolveAssetPath(existingDocument.fileAsset) : null;
@@ -2519,7 +2525,9 @@ export class RadiationNoteService {
         treatmentNumber: visit.treatmentNumber,
         status: visit.status,
         therapistName: visit.therapistName,
-        vitals: visit.vitals,
+        vitals: visit.noteType === "consult_sim"
+          ? fillMissingVitals(visit.vitals, getQuestionnaireVitals(courseDocuments))
+          : visit.vitals,
         structuredFields: {
           ...visit.structuredFields,
           additionalNotes: visit.structuredFields.additionalNotes ?? "",

@@ -1,6 +1,6 @@
-import { PDFDocument, StandardFonts, type PDFCheckBox, type PDFTextField } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb, type PDFCheckBox, type PDFTextField } from "pdf-lib";
 
-import { formatDisplayDate, normalizeOptionValue } from "./note-rules";
+import { calculateAgeAtDate, formatDisplayDate, normalizeOptionValue } from "./note-rules";
 import type {
   ConsentSigningInput,
   PatientRecord,
@@ -242,8 +242,15 @@ function fillConsentSite(
   setCheckbox(form, fields.sccis, pathology.sccis);
 }
 
-function shouldIncludePregnancyInitials(patient: PatientRecord) {
-  return patient.sex.trim().toLowerCase() === "female";
+export function shouldIncludePregnancyAcknowledgment(patient: PatientRecord, referenceDate: string) {
+  const age = calculateAgeAtDate(patient.dob, referenceDate);
+  return patient.sex.trim().toLowerCase() === "female" && age !== "" && age < 55;
+}
+
+function hidePregnancyAcknowledgment(
+  page: ReturnType<PDFDocument["getPages"]>[number]
+) {
+  page.drawRectangle({ x: 50, y: 274, width: 512, height: 48, color: rgb(1, 1, 1) });
 }
 
 export async function buildConsentFormPdfFromTemplateBytes(
@@ -262,6 +269,11 @@ export async function buildConsentFormPdfFromTemplateBytes(
   const sites = input.sites.slice().sort((left, right) => left.siteNumber - right.siteNumber);
   fillConsentSite(form, SITE_1_FIELDS, sites[0] ?? null);
   fillConsentSite(form, SITE_2_FIELDS, sites[1] ?? null);
+
+  if (!shouldIncludePregnancyAcknowledgment(input.patient, input.course.simConsultDate || input.course.startDate || "")) {
+    form.removeField(form.getField(INITIALS_FIELD));
+    hidePregnancyAcknowledgment(pdfDoc.getPages()[0]);
+  }
 
   const documentIdentity = buildConsentDocumentIdentity(input.patient);
 
@@ -316,8 +328,16 @@ export async function buildSignedConsentFormPdfFromTemplateBytes(
   const signDate = formatDisplayDate(input.signing.signDate || input.course.simConsultDate || input.course.startDate || "");
   const dateRects = DATE_FIELDS.map((fieldName) => getFieldRect(form, fieldName));
   DATE_FIELDS.forEach((fieldName) => setText(form, fieldName, ""));
-  const pregnancyInitialsRect = getFieldRect(form, INITIALS_FIELD);
-  setText(form, INITIALS_FIELD, "");
+  const includePregnancyAcknowledgment = shouldIncludePregnancyAcknowledgment(
+    input.patient,
+    input.signing.signDate || input.course.simConsultDate || input.course.startDate || ""
+  );
+  const pregnancyInitialsRect = includePregnancyAcknowledgment ? getFieldRect(form, INITIALS_FIELD) : null;
+  if (includePregnancyAcknowledgment) {
+    setText(form, INITIALS_FIELD, "");
+  } else {
+    form.removeField(form.getField(INITIALS_FIELD));
+  }
   setCheckbox(form, FORMER_RADIATION_ACKNOWLEDGMENT_FIELD, input.signing.formerRadiationAcknowledged);
   setCheckbox(form, MEDICAL_DEVICES_ACKNOWLEDGMENT_FIELD, input.signing.medicalDevicesAcknowledged);
   const patientPrintedNameRect = getFieldRect(form, PATIENT_PRINTED_NAME_FIELD);
@@ -334,6 +354,9 @@ export async function buildSignedConsentFormPdfFromTemplateBytes(
 
   const page = pdfDoc.getPages()[0];
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  if (!includePregnancyAcknowledgment) {
+    hidePregnancyAcknowledgment(page);
+  }
 
   dateRects.forEach((rect) => {
     drawFittedText(page, font, signDate, rect, {
@@ -351,7 +374,7 @@ export async function buildSignedConsentFormPdfFromTemplateBytes(
     align: "center"
   });
 
-  if (shouldIncludePregnancyInitials(input.patient) && input.signing.patientInitialsDataUrl) {
+  if (pregnancyInitialsRect && input.signing.patientInitialsDataUrl) {
     await drawSignatureImage(pdfDoc, page, input.signing.patientInitialsDataUrl, pregnancyInitialsRect, {
       widthScale: 1.05,
       heightScale: 1.05,

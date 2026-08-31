@@ -140,7 +140,8 @@ export interface StructuredDataStore {
     filePath: string,
     caption: string,
     mimeType: string,
-    originalName: string
+    originalName: string,
+    questionnaireVitals?: CourseDocumentRecord["questionnaireVitals"]
   ): CourseDocumentRecord;
   deleteCourseDocumentRecord(documentId: string): void;
   deleteVisitRecords(visitId: string): void;
