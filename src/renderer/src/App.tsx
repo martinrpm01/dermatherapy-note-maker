@@ -90,7 +90,7 @@ import type {
 
 type Screen =
   | { name: "dashboard" }
-  | { name: "patient"; patientId: string }
+  | { name: "patient"; patientId: string; courseId?: string }
   | { name: "visit"; courseId: string; mode: VisitDraftMode; existingVisitId?: string; visitDate?: string; treatmentNumber?: number | null }
   | { name: "completed" }
   | { name: "archive" }
@@ -617,6 +617,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
   const [recoveryDraftPrompt, setRecoveryDraftPrompt] = useState<RecoveryDraft | null>(null);
   const autosaveTimerRef = useRef<number | null>(null);
   const autosaveSignatureRef = useRef("");
+  const visitLoadRequestRef = useRef(0);
 
   async function refreshBrowserBuildIfNeeded() {
     if (!canCheckRefreshPulse()) {
@@ -1092,6 +1093,9 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
         treatmentNumber: screen.treatmentNumber
       });
     }
+    return () => {
+      visitLoadRequestRef.current += 1;
+    };
   }, [screen, boot, authGateActive]);
 
   useEffect(() => {
@@ -1195,12 +1199,16 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     options?: VisitDraftOptions
   ) {
     if (!appClient) return;
+    const requestId = ++visitLoadRequestRef.current;
+    setVisitEditor(null);
     try {
       const editor = await appClient.buildVisitDraft(courseId, mode, existingVisitId, options);
+      if (requestId !== visitLoadRequestRef.current) return;
       setVisitEditor(editor);
       setTextDirty(false);
       autosaveSignatureRef.current = JSON.stringify(buildAutosaveVisitInput(editor.note));
     } catch (error) {
+      if (requestId !== visitLoadRequestRef.current) return;
       const message = error instanceof Error ? error.message : "Could not start that note.";
       showToast(message);
       setScreen({ name: "schedule" });
@@ -1324,7 +1332,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
   }
 
   useEffect(() => {
-    if (!appClient || screen.name !== "visit" || !visitEditor) {
+    if (!appClient || screen.name !== "visit" || !visitEditor || visitEditor.course.id !== screen.courseId) {
       return;
     }
 
@@ -1427,9 +1435,9 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
       setCourseFormMode("full");
       setCourseCompletionFacePhotoUpload(null);
       setCourseCompletionNeedsFacePhoto(false);
-      setScreen({ name: "patient", patientId: course.patientId });
       await loadDashboard();
       await loadPatient(course.patientId);
+      setScreen({ name: "patient", patientId: course.patientId, courseId: course.id });
       if (courseFormMode === "intake") {
         showToast(isEditing ? "Path intake updated. Re-sign consent if details changed." : "Consent intake saved.");
       } else if (courseForm.status === "pending") {
@@ -2016,7 +2024,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
         revealTarget = pdfResult.pdfAsset;
         await appClient.completeScheduleAppointmentForVisit(saved.id);
         await loadPatient(currentPatientId);
-        setScreen({ name: "patient", patientId: currentPatientId });
+        setScreen({ name: "patient", patientId: currentPatientId, courseId: saved.courseId });
         if (openCompletedLesionFormAfter) {
           await generateCourseCompletedLesionFormForCourse(currentPatientId, saved.courseId);
         }
@@ -2449,7 +2457,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
             search={dashboardSearch}
             onSearchChange={setDashboardSearch}
             onAddPatient={() => setPatientForm(createEmptyPatientForm())}
-            onOpenPatient={(patientId) => setScreen({ name: "patient", patientId })}
+            onOpenPatient={(patientId, courseId) => setScreen({ name: "patient", patientId, courseId })}
             onArchivePatient={(patientId) => void (async () => {
               if (!appClient) return;
               await appClient.archivePatient(patientId);
@@ -2495,10 +2503,12 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
           />
         ) : null}
 
-        {screen.name === "patient" && patientDetail ? (
+        {screen.name === "patient" && patientDetail?.patient.id === screen.patientId ? (
           <PatientScreen
+            key={`${patientDetail.patient.id}:${screen.courseId ?? "default"}`}
             appClient={appClient}
             patientDetail={patientDetail}
+            initialCourseId={screen.courseId}
               onEditPatient={() => setPatientForm(toPatientFormInput(patientDetail.patient))}
             onAddCourse={() => {
               setCourseForm(createEmptyConsentCourseForm(patientDetail.patient.id));
@@ -2569,7 +2579,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
           />
         ) : null}
 
-        {screen.name === "visit" && visitEditor ? (
+        {screen.name === "visit" && visitEditor && visitEditor.course.id === screen.courseId ? (
           <VisitEditorScreen
             appClient={appClient}
             visitEditor={visitEditor}
@@ -2584,7 +2594,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
             onOpenPatient={() => void (async () => {
               if (!appClient) return;
               await appClient.saveVisit(visitEditor.note);
-              setScreen({ name: "patient", patientId: visitEditor.patient.id });
+              setScreen({ name: "patient", patientId: visitEditor.patient.id, courseId: visitEditor.course.id });
             })()}
             onResetNoteText={() => updateVisitEditor((current) => current, { regenerate: true, overwriteEdited: true })}
             onRemoveExistingPhoto={(photoId) => void (async () => {

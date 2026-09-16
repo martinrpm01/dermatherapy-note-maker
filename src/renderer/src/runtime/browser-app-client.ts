@@ -1,4 +1,5 @@
 import { readPatientArchiveFromBytes } from "../../../shared/archive-read";
+import { buildCourseVisitPdfBaseName, prepareIsolatedCourseInput, requireVisitInCourse, requireVisitSaveContext } from "../../../shared/course-isolation";
 import {
   ensureValidPin,
   generatePinSalt,
@@ -57,6 +58,7 @@ import type {
   PatientRecord,
   SettingsPayload,
   StoredAssetUpload,
+  TreatmentCourseRecord,
   VisitDraftOptions,
   VisitEditorState,
   VisitInput,
@@ -98,30 +100,6 @@ export interface BrowserArchiveClientDependencies {
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
-}
-
-function sanitizeNamePart(value: string) {
-  return value
-    .trim()
-    .replace(/[^a-zA-Z0-9]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
-    .toLowerCase();
-}
-
-function ensureUniqueCourseSiteIds(sites: Parameters<AppClient["saveCourse"]>[0]["sites"]) {
-  const seen = new Set<string>();
-  return sites.map((site) => {
-    if (!site.id) {
-      return site;
-    }
-    if (seen.has(site.id)) {
-      const { id, ...siteWithoutDuplicateId } = site;
-      return siteWithoutDuplicateId;
-    }
-    seen.add(site.id);
-    return site;
-  });
 }
 
 function comparePatientNameParts(
@@ -220,16 +198,6 @@ export class BrowserAppClient implements AppClient {
     }
 
     return `tx ${note.treatmentNumber}`;
-  }
-
-  private buildPdfBaseName(patient: PatientRecord, visit: VisitNoteRecord) {
-    const patientName = `${patient.firstName} ${patient.lastName}`.trim() || patient.id;
-    const treatmentLabel = visit.noteType === "follow_up"
-      ? "follow-up"
-      : visit.treatmentNumber === null
-        ? "consult"
-        : `tx${visit.treatmentNumber}`;
-    return sanitizeNamePart(`${patientName} ${treatmentLabel} note`) || `visit-${visit.id}`;
   }
 
   private getParentDir(filePath: string) {
@@ -1262,9 +1230,10 @@ export class BrowserAppClient implements AppClient {
   async saveCourse(input: Parameters<AppClient["saveCourse"]>[0]) {
     this.assertUnlocked();
     const structuredDataStore = await this.getStructuredDataStore();
+    const isolatedInput = prepareIsolatedCourseInput(structuredDataStore, input);
         const normalizedInput = {
-          ...input,
-          sites: ensureUniqueCourseSiteIds(input.sites).map((site) => ({
+          ...isolatedInput,
+          sites: isolatedInput.sites.map((site) => ({
             ...site,
             ...normalizeVacLokPlacement(site.additionalDevices, site.worksheetPositioning),
             ...normalizeWorksheetDeviceDetailsForSite({
@@ -1406,6 +1375,7 @@ export class BrowserAppClient implements AppClient {
   ) {
     this.assertUnlocked();
     if (existingVisitId) {
+      requireVisitInCourse(await this.getStructuredDataStore(), existingVisitId, courseId);
       return this.loadExistingVisit(existingVisitId);
     }
 
@@ -1599,11 +1569,9 @@ export class BrowserAppClient implements AppClient {
     this.assertUnlocked();
     const structuredDataStore = await this.getStructuredDataStore();
     const binaryAssetStore = await this.getBinaryAssetStore();
-    const patient = structuredDataStore.fetchPatient(input.patientId);
-    let course = structuredDataStore.fetchCourse(input.courseId);
-    if (!patient || !course) {
-      throw new Error("Visit context is incomplete.");
-    }
+    const context = requireVisitSaveContext(structuredDataStore, input);
+    const patient = context.patient;
+    let course: TreatmentCourseRecord | null = context.course;
 
     const treatmentVisit = isTreatmentNoteType(input.noteType);
     const normalizedSiteSnapshots = (
@@ -1917,7 +1885,7 @@ export class BrowserAppClient implements AppClient {
     const attachments = structuredDataStore.fetchVisitAttachments(visitId);
     const existingPdfs = structuredDataStore.fetchGeneratedPdfs(visitId);
     const versionNumber = Math.max(0, ...existingPdfs.map((pdf) => pdf.versionNumber)) + 1;
-    const pdfBaseName = this.buildPdfBaseName(patient, visit);
+    const pdfBaseName = buildCourseVisitPdfBaseName(patient, course, visit);
     const pdfFileName = `${pdfBaseName}.pdf`;
 
     const pdfBytes = await buildVisitPdf({

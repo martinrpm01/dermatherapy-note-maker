@@ -1975,7 +1975,7 @@ export function DashboardScreen(props: {
   search: string;
   onSearchChange: (value: string) => void;
   onAddPatient: () => void;
-  onOpenPatient: (patientId: string) => void;
+  onOpenPatient: (patientId: string, courseId?: string) => void;
   onArchivePatient: (patientId: string) => void;
   onOpenVisit: (courseId: string, mode: "next_treatment" | "consult_sim", existingVisitId?: string) => void;
   onEditPendingCourse: (patientId: string, courseId: string, mode: "intake" | "full") => void;
@@ -2153,7 +2153,7 @@ export function DashboardScreen(props: {
                       </div>
                     </div>
                     <div className="patient-row-actions">
-                      <button onClick={() => props.onOpenPatient(patientId)}>Open Patient</button>
+                      <button onClick={() => props.onOpenPatient(patientId, ref.courseId)}>Open Patient</button>
                       <button
                         style={{ color: "var(--danger)", borderColor: "var(--danger)" }}
                         onClick={() => {
@@ -2366,6 +2366,7 @@ export function DocumentOnlyScreen(props: {
 }
 
 export function PatientScreen(props: {
+  initialCourseId?: string;
   appClient: AppClient | null;
   patientDetail: PatientDetail;
   onEditPatient: () => void;
@@ -2389,7 +2390,8 @@ export function PatientScreen(props: {
 }) {
   const detail = props.patientDetail;
   const facePhotoSrc = useResolvedAssetUrl(props.appClient, detail.patient.facePhoto);
-  const defaultSelectedCourseId = detail.courses.find((courseDetail) => courseDetail.course.status === "active")?.course.id
+  const defaultSelectedCourseId = detail.courses.find((courseDetail) => courseDetail.course.id === props.initialCourseId)?.course.id
+    ?? detail.courses.find((courseDetail) => courseDetail.course.status === "active")?.course.id
     ?? detail.courses[0]?.course.id
     ?? "all";
   const [selectedCourseId, setSelectedCourseId] = useState<string>(defaultSelectedCourseId);
@@ -2444,7 +2446,7 @@ export function PatientScreen(props: {
         </div>
         <div className="button-row">
           {detail.courses.length > 1 ? (
-            <select value={selectedCourseId} onChange={(e) => setSelectedCourseId(e.target.value)} style={{ fontSize: "0.9rem" }}>
+            <select aria-label="Selected course" value={selectedCourseId} onChange={(e) => setSelectedCourseId(e.target.value)} style={{ fontSize: "0.9rem" }}>
               <option value="all">All Courses</option>
               {detail.courses.map((cd) => (
                 <option key={cd.course.id} value={cd.course.id}>
@@ -2458,6 +2460,9 @@ export function PatientScreen(props: {
           <button onClick={props.onArchivePatient}>Archive Patient</button>
         </div>
       </div>
+      {detail.courses.length > 1 ? (
+        <p className="muted">Each course has its own notes, photos, documents, and treatment count. Select the course you are working on before starting a note.</p>
+      ) : null}
       {detail.patient.facePhoto ? (
         <div className="profile-row">
           {facePhotoSrc ? <img className="face-photo" src={facePhotoSrc} alt="" /> : null}
@@ -2538,6 +2543,11 @@ export function PatientScreen(props: {
                   onPrintSchedule={() => props.onPrintCourseSchedule(courseDetail.course.id)}
                   onDeleteSchedule={() => void deleteCourseSchedule(courseDetail.course.id)}
                 />
+              ) : null}
+              {courseDetail.course.status === "active" ? (
+                <button onClick={() => props.onOpenVisit(courseDetail.course.id, "consult_sim")}>
+                  {courseDetail.visits.some((visit) => visit.note.noteType === "consult_sim") ? "Open Sim / Consult" : "Start Sim / Consult"}
+                </button>
               ) : null}
               <button className="primary" onClick={() => props.onOpenVisit(courseDetail.course.id, "next_treatment")}>
                 Start Today's Note

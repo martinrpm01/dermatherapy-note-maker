@@ -19,7 +19,8 @@ The MVP is local-first and single-site:
 
 - Structured data is stored in a local SQLite database powered by `sql.js`.
 - Patient face photos, visit treatment photos, and app-managed history files are stored under the hidden Electron user-data directory.
-- Generated PDFs are filed into a Desktop library folder for easy access: `All Patient Notes\Consult Notes\[Last, First]` and `All Patient Notes\Treatment Notes\[Last, First]`.
+- Desktop PDFs are filed in `All Patient Notes\[Consult Notes, Treatment Notes, or Follow-up Notes]\[Last, First]\[course ID]\[visit ID]`. Each visit has its own folder, and filenames include the course label and a course reference so concurrent courses cannot overwrite each other's notes. Regenerating or deleting a note preserves a legacy PDF path while another historical visit still references it.
+- Browser PDFs remain in local visit storage and use the same course-labeled filenames when downloaded.
 - There is no cloud sync, no shared cross-site database, and no telemetry.
 
 On Windows, a packaged app creates its hidden working data under the Electron user-data folder, typically inside:
@@ -55,6 +56,8 @@ Each site/device keeps its own isolated data set.
 ### Treatment Courses
 
 Each patient can have multiple courses.
+
+To prepare a new course while another is still treating, follow the [separate-course guide](docs/adding-a-separate-course.md). Adding a course creates fresh clinical records; the patient identity stays the same. Saving intake or course setup selects that course, and `Start Sim / Consult` opens its consultation directly.
 
 For each course you can define:
 

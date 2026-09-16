@@ -1119,7 +1119,11 @@ const showProjectedFractionsInput = false;
             const sitePhotos = editor.existingPhotos.filter((p) => (p.siteNumber ?? 1) === site.siteNumber);
             const pendingPhotos = editor.note.newPhotoUploads.filter((u) => (u.siteNumber ?? 1) === site.siteNumber);
             const locationLabel = site.treatmentLocationText || `Lesion ${site.siteNumber}`;
-            const uploadLabel = isFollowUp
+            const uploadLabel = editor.note.noteType === "consult_sim"
+              ? isTwoSite
+                ? `${locationLabel} Sim / Consult Photos`
+                : "Attach Sim / Consult Photos"
+              : isFollowUp
               ? isTwoSite
                 ? `${locationLabel} Follow-up Photos`
                 : "Attach Follow-up Photos"

@@ -1392,6 +1392,9 @@ export function PendingCourseIntakeModal(props: {
       <div className={`modal-card pending-course-modal${isTwoSite ? " wide" : ""}`}>
         <h3>{courseForm.id ? "Edit Consent / Path Intake" : "New Consent / Path Intake"}</h3>
         <div className="pending-course-intro">
+          {!courseForm.id ? (
+            <p className="muted">This creates a separate course for this patient. Previous course details, notes, photos, and documents are not copied. An ongoing course can continue while this one is prepared.</p>
+          ) : null}
           <p className="muted">
             Start the course with the pathology details we already know. Full treatment setup can be completed after the sim / consult.
           </p>

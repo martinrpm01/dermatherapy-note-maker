@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import JSZip from "jszip";
+import { buildCourseVisitPdfBaseName } from "../shared/course-isolation";
 
 import type {
   ArchiveAssetDescriptor,
@@ -40,15 +41,6 @@ type AssetAwareStructuredDataStore = StructuredDataStore & {
   restoreGeneratedPdfRecord(record: GeneratedPdfRecord, file: AssetReference): void;
 };
 
-function sanitizeNamePart(value: string) {
-  return value
-    .trim()
-    .replace(/[^a-zA-Z0-9]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
-    .toLowerCase();
-}
-
 function sanitizeFolderName(value: string) {
   return value
     .trim()
@@ -69,12 +61,6 @@ function buildIdentityKey(patient: Pick<PatientRecord, "firstName" | "lastName" 
     normalizeIdentityPart(patient.mrn),
     patient.dob
   ].join("|");
-}
-
-function buildPdfBaseName(patient: PatientRecord, visit: VisitNoteRecord) {
-  const patientName = `${patient.firstName} ${patient.lastName}`.trim() || patient.id;
-  const treatmentLabel = visit.treatmentNumber === null ? "consult" : `tx${visit.treatmentNumber}`;
-  return sanitizeNamePart(`${patientName} ${treatmentLabel} note`) || `visit-${visit.id}`;
 }
 
 function buildDeterministicId(prefix: string, seed: string) {
@@ -337,7 +323,7 @@ export class DesktopPatientArchiveRestoreService {
 
       for (const pdf of [...(pdfsByVisitId.get(visit.id) || [])].sort((left, right) => left.versionNumber - right.versionNumber)) {
         const descriptor = this.requireDescriptor(importedArchive, "generated_pdf", plan.sourceRecordIds.generatedPdfs.get(pdf.id) ?? pdf.id);
-        const targetPath = this.buildGeneratedPdfTargetPath(patient, visit, pdf, plan.mode);
+        const targetPath = this.buildGeneratedPdfTargetPath(patient, courseById.get(visit.courseId)!, visit, pdf, plan.mode);
         const filePath = await this.restoreBinaryAsset(zip, descriptor, targetPath);
         this.registerStoredAssetReference(pdf.fileAsset, filePath);
         (this.repository as AssetAwareStructuredDataStore).restoreGeneratedPdfRecord(pdf, pdf.fileAsset);
@@ -645,12 +631,14 @@ export class DesktopPatientArchiveRestoreService {
     }
 
     const visitById = new Map(plan.visits.map((visit) => [visit.id, visit]));
+    const courseById = new Map(plan.courses.map((course) => [course.id, course]));
     const generatedPdfPaths = plan.generatedPdfs.map((pdf) => {
       const visit = visitById.get(pdf.visitNoteId);
       if (!visit) {
         return null;
       }
-      return this.buildGeneratedPdfTargetPath(plan.canonicalPatient, visit, pdf, plan.mode);
+      const course = courseById.get(visit.courseId);
+      return course ? this.buildGeneratedPdfTargetPath(plan.canonicalPatient, course, visit, pdf, plan.mode) : null;
     });
 
     for (const outputPath of generatedPdfPaths) {
@@ -718,18 +706,25 @@ export class DesktopPatientArchiveRestoreService {
 
   private buildGeneratedPdfTargetPath(
     patient: PatientRecord,
+    course: TreatmentCourseRecord,
     visit: VisitNoteRecord,
     pdf: GeneratedPdfRecord,
     mode: PatientArchiveRestoreMode
   ) {
-    const categoryFolder = visit.noteType === "consult_sim" ? "Consult Notes" : "Treatment Notes";
-    const patientFolder = sanitizeFolderName(`${patient.lastName}, ${patient.firstName}`) || patient.id;
+    const categoryFolder = visit.noteType === "consult_sim"
+      ? "Consult Notes"
+      : visit.noteType === "follow_up" ? "Follow-up Notes" : "Treatment Notes";
+    const patientFolder = sanitizeFolderName(`${patient.lastName}, ${patient.firstName}`).slice(0, 32).replace(/[. ]+$/g, "") || patient.id;
     const mergeSuffix = mode === "merge_existing_patient" ? `-imported-${visit.id.slice(-8)}` : "";
-    return path.join(
+    const outputDirectory = path.join(
       this.patientNoteLibraryRoot,
       categoryFolder,
       patientFolder,
-      `${buildPdfBaseName(patient, visit)}${mergeSuffix}-v${pdf.versionNumber}.pdf`
+      course.id,
+      visit.id
     );
+    const suffix = `${mergeSuffix}-v${pdf.versionNumber}.pdf`;
+    const baseName = buildCourseVisitPdfBaseName(patient, course, visit, 250 - outputDirectory.length - suffix.length - 1);
+    return path.join(outputDirectory, `${baseName}${suffix}`);
   }
 }

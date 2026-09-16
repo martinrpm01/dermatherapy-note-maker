@@ -11,6 +11,7 @@ import type {
   PreparedPatientArchiveDescription
 } from "../shared/archive";
 import { buildVisitPdf } from "./pdf";
+import { buildCourseVisitPdfBaseName, prepareIsolatedCourseInput, requireVisitInCourse, requireVisitSaveContext } from "../shared/course-isolation";
 import { buildConsentFormPdf, buildSignedConsentFormPdf, buildUploadedConsentPdf } from "./consent-form";
 import { buildSimWorksheetPdf } from "./sim-worksheet";
 import { buildConsultQuestionnairePdf } from "./consult-questionnaire";
@@ -232,15 +233,6 @@ function normalizeIcd10(value: string) {
   return `${trimmed.charAt(0).toUpperCase()}${trimmed.slice(1)}`;
 }
 
-function sanitizeNamePart(value: string) {
-  return value
-    .trim()
-    .replace(/[^a-zA-Z0-9]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
-    .toLowerCase();
-}
-
 function sanitizeFolderName(value: string) {
   return value
     .trim()
@@ -440,21 +432,6 @@ function buildTreatmentLabel(note: VisitInput) {
   }
 
   return `tx ${note.treatmentNumber}`;
-}
-
-function ensureUniqueCourseSiteIds(sites: CourseInput["sites"]) {
-  const seen = new Set<string>();
-  return sites.map((site) => {
-    if (!site.id) {
-      return site;
-    }
-    if (seen.has(site.id)) {
-      const { id, ...siteWithoutDuplicateId } = site;
-      return siteWithoutDuplicateId;
-    }
-    seen.add(site.id);
-    return site;
-  });
 }
 
 export class RadiationNoteService {
@@ -997,7 +974,7 @@ export class RadiationNoteService {
 
     this.repository.hardDeletePatientRecords(patientId);
 
-    this.assetStore.deleteFiles(pdfPaths);
+    this.assetStore.deleteFiles(this.unreferencedPdfPaths(pdfPaths));
     this.assetStore.deleteFiles(attachmentPaths);
     this.assetStore.deleteFiles(photoPaths);
     this.assetStore.deleteFiles(documentPaths);
@@ -1019,9 +996,10 @@ export class RadiationNoteService {
 
   saveCourse(input: CourseInput) {
     this.assertUnlocked();
+    const isolatedInput = prepareIsolatedCourseInput(this.repository, input);
         const normalizedInput: CourseInput = {
-          ...input,
-          sites: ensureUniqueCourseSiteIds(input.sites).map((site) => ({
+          ...isolatedInput,
+          sites: isolatedInput.sites.map((site) => ({
             ...site,
             ...normalizeVacLokPlacement(site.additionalDevices, site.worksheetPositioning),
             ...normalizeWorksheetDeviceDetailsForSite({
@@ -1075,7 +1053,7 @@ export class RadiationNoteService {
     const documentPaths = assetSet.documents
       .map((document) => this.resolveAssetPath(document.fileAsset))
       .filter(Boolean) as string[];
-    this.assetStore.deleteFiles(pdfPaths);
+    this.assetStore.deleteFiles(this.unreferencedPdfPaths(pdfPaths));
     this.assetStore.deleteFiles(attachmentPaths);
     this.assetStore.deleteFiles(photoPaths);
     this.assetStore.deleteFiles(documentPaths);
@@ -1099,6 +1077,7 @@ export class RadiationNoteService {
   ) {
     this.assertUnlocked();
     if (existingVisitId) {
+      requireVisitInCourse(this.repository, existingVisitId, courseId);
       return this.loadExistingVisit(existingVisitId);
     }
 
@@ -1290,11 +1269,9 @@ export class RadiationNoteService {
 
   saveVisit(input: VisitInput) {
     this.assertUnlocked();
-    const patient = this.repository.fetchPatient(input.patientId);
-    let course = this.repository.fetchCourse(input.courseId);
-    if (!patient || !course) {
-      throw new Error("Visit context is incomplete.");
-    }
+    const context = requireVisitSaveContext(this.repository, input);
+    const patient = context.patient;
+    let course: TreatmentCourseRecord | null = context.course;
 
     const treatmentVisit = isTreatmentNoteType(input.noteType);
     const normalizedSiteSnapshots = (
@@ -1548,7 +1525,7 @@ export class RadiationNoteService {
       .map((attachment) => this.resolveAssetPath(attachment.fileAsset))
       .filter(Boolean) as string[];
     const photoPaths = assetSet.photos.map((photo) => this.resolveAssetPath(photo.imageAsset)).filter(Boolean) as string[];
-    this.assetStore.deleteFiles(pdfPaths);
+    this.assetStore.deleteFiles(this.unreferencedPdfPaths(pdfPaths));
     this.assetStore.deleteFiles(attachmentPaths);
     this.assetStore.deleteFiles(photoPaths);
 
@@ -1583,16 +1560,18 @@ export class RadiationNoteService {
     const attachments = this.repository.fetchVisitAttachments(visitId);
     const existingPdfs = this.repository.fetchGeneratedPdfs(visitId);
     const versionNumber = Math.max(0, ...existingPdfs.map((pdf) => pdf.versionNumber)) + 1;
-    const pdfBaseName = this.buildPdfBaseName(patient, visit);
     const libraryRoot = this.getPatientNoteLibraryRoot();
     const categoryFolder = this.getPdfCategoryFolder(visit.noteType);
     const patientFolder = this.buildPatientFolderName(patient);
-    const outputPath = path.join(
+    const outputDirectory = path.join(
       libraryRoot,
       categoryFolder,
       patientFolder,
-      `${pdfBaseName}.pdf`
+      course.id,
+      visit.id
     );
+    const pdfBaseName = buildCourseVisitPdfBaseName(patient, course, visit, 250 - outputDirectory.length - 5);
+    const outputPath = path.join(outputDirectory, `${pdfBaseName}.pdf`);
 
     const pdfBytes = await buildVisitPdf({
       noteText: visit.editedText || visit.generatedText,
@@ -2801,16 +2780,6 @@ export class RadiationNoteService {
     return `${siteLabel} ${buildTreatmentLabel(note)} attachment`.trim();
   }
 
-  private buildPdfBaseName(patient: PatientRecord, visit: VisitNoteRecord) {
-    const patientName = `${patient.firstName} ${patient.lastName}`.trim() || patient.id;
-    const treatmentLabel = visit.noteType === "follow_up"
-      ? "follow-up"
-      : visit.treatmentNumber === null
-        ? "consult"
-        : `tx${visit.treatmentNumber}`;
-    return sanitizeNamePart(`${patientName} ${treatmentLabel} note`) || `visit-${visit.id}`;
-  }
-
   private removeSupersededFinalizedVisits(currentVisit: VisitNoteRecord) {
     const duplicateVisits = this.repository
       .fetchVisitsByCourseIds([currentVisit.courseId])
@@ -2849,7 +2818,7 @@ export class RadiationNoteService {
   }
 
   private buildPatientFolderName(patient: PatientRecord) {
-    const folderName = sanitizeFolderName(`${patient.lastName}, ${patient.firstName}`);
+    const folderName = sanitizeFolderName(`${patient.lastName}, ${patient.firstName}`).slice(0, 32).replace(/[. ]+$/g, "");
     return folderName || patient.id;
   }
 
@@ -2865,11 +2834,26 @@ export class RadiationNoteService {
       (this.repository as AssetAwareStructuredDataStore).deleteGeneratedPdfRecord(pdf.id);
     }
 
-    const uniqueOldPaths = [...new Set(oldPathsToDelete)];
+    const uniqueOldPaths = this.unreferencedPdfPaths([...new Set(oldPathsToDelete)]);
     this.assetStore.deleteFiles(uniqueOldPaths);
     for (const oldPath of uniqueOldPaths) {
       this.assetStore.cleanupEmptyDirectoryChain(path.dirname(oldPath), this.getPatientNoteLibraryRoot());
     }
+  }
+
+  private unreferencedPdfPaths(candidatePaths: string[]) {
+    if (candidatePaths.length === 0) {
+      return [];
+    }
+    // Older versions used one filename per patient and treatment number. Other visits may still reference it.
+    const referencedPaths = new Set(
+      this.repository.fetchVisitsByCourseIds(this.repository.fetchCourses().map((course) => course.id))
+        .flatMap((bundle) => [bundle.note.pdfAsset, ...bundle.pdfs.map((pdf) => pdf.fileAsset)])
+        .map((asset) => this.resolveAssetPath(asset))
+        .filter((filePath): filePath is string => Boolean(filePath))
+        .map((filePath) => path.resolve(filePath).toLowerCase())
+    );
+    return candidatePaths.filter((filePath) => !referencedPaths.has(path.resolve(filePath).toLowerCase()));
   }
 
   private getCurrentNoteLogoPath() {
