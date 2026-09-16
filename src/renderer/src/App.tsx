@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useResolvedAssetUrl } from "./asset-url";
+import { syncEditedVisitVitals } from "../../shared/visit-vitals";
 import {
   createDefaultDocumentOnlyConsentSigningInput,
   createDocumentOnlyInputFromDetail,
@@ -618,6 +619,8 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
   const autosaveTimerRef = useRef<number | null>(null);
   const autosaveSignatureRef = useRef("");
   const visitLoadRequestRef = useRef(0);
+  const visitEditorRef = useRef(visitEditor);
+  visitEditorRef.current = visitEditor;
 
   async function refreshBrowserBuildIfNeeded() {
     if (!canCheckRefreshPulse()) {
@@ -1205,7 +1208,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
       const editor = await appClient.buildVisitDraft(courseId, mode, existingVisitId, options);
       if (requestId !== visitLoadRequestRef.current) return;
       setVisitEditor(editor);
-      setTextDirty(false);
+      setTextDirty(Boolean(editor.note.editedText.trim()) && editor.note.editedText.trim() !== editor.note.generatedText.trim());
       autosaveSignatureRef.current = JSON.stringify(buildAutosaveVisitInput(editor.note));
     } catch (error) {
       if (requestId !== visitLoadRequestRef.current) return;
@@ -1326,9 +1329,15 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
       note: {
         ...updated.note,
         generatedText,
-        editedText: options.overwriteEdited ? generatedText : updated.note.editedText
+        editedText: options.overwriteEdited ? generatedText : syncEditedVisitVitals(updated.note.editedText, generatedText, updated.note.noteType, updated.note.vitals)
       }
     });
+  }
+
+  function isCurrentVisitRequest(requestId: number, note: VisitInput, savedId?: string) {
+    const current = visitEditorRef.current;
+    return requestId === visitLoadRequestRef.current && current?.course.id === note.courseId &&
+      (current.note.id === note.id || (savedId !== undefined && current.note.id === savedId));
   }
 
   useEffect(() => {
@@ -1337,6 +1346,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     }
 
     const autosaveInput = buildAutosaveVisitInput(visitEditor.note);
+    const requestId = visitLoadRequestRef.current;
     const signature = JSON.stringify(autosaveInput);
     if (signature === autosaveSignatureRef.current) {
       return;
@@ -1348,7 +1358,9 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
 
     autosaveTimerRef.current = window.setTimeout(() => {
       void (async () => {
+        if (!isCurrentVisitRequest(requestId, autosaveInput)) return;
         const saved = await appClient.saveVisit(autosaveInput);
+        if (!isCurrentVisitRequest(requestId, autosaveInput, saved.id)) return;
         autosaveSignatureRef.current = JSON.stringify({
           ...autosaveInput,
           id: saved.id,
@@ -1357,7 +1369,8 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
           editedText: autosaveInput.editedText
         });
         setVisitEditor((current) => {
-          if (!current || current.course.id !== saved.courseId) {
+          if (requestId !== visitLoadRequestRef.current || !current || current.course.id !== saved.courseId ||
+            (current.note.id !== autosaveInput.id && current.note.id !== saved.id)) {
             return current;
           }
 
@@ -1371,7 +1384,11 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
           };
         });
         await loadDashboard();
-      })();
+      })().catch((error) => {
+        if (isCurrentVisitRequest(requestId, autosaveInput)) {
+          showToast(error instanceof Error ? error.message : "Could not save this visit draft.");
+        }
+      });
     }, 800);
 
     return () => {
@@ -1999,6 +2016,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
 
   async function saveVisit(generatePdf = false, openCompletedLesionFormAfter = false) {
     if (!visitEditor) return;
+    const requestId = visitLoadRequestRef.current;
     if (autosaveTimerRef.current !== null) {
       window.clearTimeout(autosaveTimerRef.current);
       autosaveTimerRef.current = null;
@@ -2011,24 +2029,31 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
         ? { ...visitEditor.note, status: "finalized" as const, editedText: textDirty ? visitEditor.note.editedText : "" }
         : visitEditor.note;
       const saved = await appClient.saveVisit(noteInput);
-      autosaveSignatureRef.current = JSON.stringify({
-        ...buildAutosaveVisitInput(noteInput),
-        id: saved.id,
-        status: saved.status,
-        generatedText: saved.generatedText,
-        editedText: noteInput.editedText
-      });
+      if (isCurrentVisitRequest(requestId, noteInput, saved.id)) {
+        autosaveSignatureRef.current = JSON.stringify({
+          ...buildAutosaveVisitInput(noteInput),
+          id: saved.id,
+          status: saved.status,
+          generatedText: saved.generatedText,
+          editedText: noteInput.editedText
+        });
+      }
       let revealTarget = null;
       if (generatePdf) {
         const pdfResult = await appClient.generatePdf(saved.id);
         revealTarget = pdfResult.pdfAsset;
         await appClient.completeScheduleAppointmentForVisit(saved.id);
-        await loadPatient(currentPatientId);
-        setScreen({ name: "patient", patientId: currentPatientId, courseId: saved.courseId });
-        if (openCompletedLesionFormAfter) {
-          await generateCourseCompletedLesionFormForCourse(currentPatientId, saved.courseId);
+        if (isCurrentVisitRequest(requestId, noteInput, saved.id)) {
+          const detail = await appClient.getPatientDetail(currentPatientId);
+          if (isCurrentVisitRequest(requestId, noteInput, saved.id)) {
+            setPatientDetail(detail);
+            setScreen({ name: "patient", patientId: currentPatientId, courseId: saved.courseId });
+            if (openCompletedLesionFormAfter) {
+              await generateCourseCompletedLesionFormForCourse(currentPatientId, saved.courseId);
+            }
+          }
         }
-      } else {
+      } else if (isCurrentVisitRequest(requestId, noteInput, saved.id)) {
         await loadVisit(visitEditor.course.id, "next_treatment", saved.id);
       }
       showToast(
@@ -2049,7 +2074,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     }
   }
 
-  async function saveVisitDraftPoint(noteInput: VisitInput, toastMessage = "Draft saved.") {
+  async function saveVisitDraftPoint(noteInput: VisitInput, toastMessage = "Draft saved.", requestId = visitLoadRequestRef.current) {
     if (!appClient) return null;
     if (autosaveTimerRef.current !== null) {
       window.clearTimeout(autosaveTimerRef.current);
@@ -2057,6 +2082,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
     }
 
     const saved = await appClient.saveVisit(noteInput);
+    if (!isCurrentVisitRequest(requestId, noteInput, saved.id)) return saved;
     autosaveSignatureRef.current = JSON.stringify({
       ...buildAutosaveVisitInput(noteInput),
       id: saved.id,
@@ -2593,25 +2619,35 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
             onSaveAndOpenCompletedLesionForm={() => void saveVisit(true, true)}
             onOpenPatient={() => void (async () => {
               if (!appClient) return;
-              await appClient.saveVisit(visitEditor.note);
-              setScreen({ name: "patient", patientId: visitEditor.patient.id, courseId: visitEditor.course.id });
+              const requestId = visitLoadRequestRef.current;
+              const saved = await appClient.saveVisit(visitEditor.note);
+              if (isCurrentVisitRequest(requestId, visitEditor.note, saved.id)) {
+                setScreen({ name: "patient", patientId: visitEditor.patient.id, courseId: visitEditor.course.id });
+              }
             })()}
             onResetNoteText={() => updateVisitEditor((current) => current, { regenerate: true, overwriteEdited: true })}
             onRemoveExistingPhoto={(photoId) => void (async () => {
               if (!appClient) return;
+              const requestId = visitLoadRequestRef.current;
               await appClient.removeVisitPhoto(photoId);
-              await loadVisit(visitEditor.course.id, "next_treatment", visitEditor.note.id);
+              if (isCurrentVisitRequest(requestId, visitEditor.note)) {
+                await loadVisit(visitEditor.course.id, "next_treatment", visitEditor.note.id);
+              }
             })()}
             onRemoveExistingAttachment={(attachmentId) => void (async () => {
               if (!appClient) return;
+              const requestId = visitLoadRequestRef.current;
               await appClient.removeVisitAttachment(attachmentId);
-              await loadVisit(visitEditor.course.id, "next_treatment", visitEditor.note.id);
+              if (isCurrentVisitRequest(requestId, visitEditor.note)) {
+                await loadVisit(visitEditor.course.id, "next_treatment", visitEditor.note.id);
+              }
             })()}
             onOpenExistingAttachment={(asset) => void appClient?.openAsset(asset)}
             onOpenCourseDocument={(asset) => void appClient?.openAsset(asset)}
             onVisitPhotoAdd={(files, siteNumber) => {
               void (async () => {
                 if (!files || !visitEditor) return;
+                const requestId = visitLoadRequestRef.current;
                 const uploads = [];
                 for (const file of Array.from(files)) {
                   const upload = await fileToCompressedUpload(file, 1600);
@@ -2621,9 +2657,11 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
                   ...visitEditor.note,
                   newPhotoUploads: [...visitEditor.note.newPhotoUploads, ...uploads]
                 };
-                setVisitEditor({ ...visitEditor, note: nextNote });
+                if (isCurrentVisitRequest(requestId, nextNote)) {
+                  setVisitEditor({ ...visitEditor, note: nextNote });
+                }
                 try {
-                  await saveVisitDraftPoint(nextNote, "Photo saved to draft.");
+                  await saveVisitDraftPoint(nextNote, "Photo saved to draft.", requestId);
                 } catch (error) {
                   const message = error instanceof Error ? error.message : "Unknown error.";
                   showToast(`Could not save photo to draft: ${message}`);
@@ -2633,6 +2671,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
             onVisitAttachmentAdd={(files) => {
               void (async () => {
                 if (!files || !visitEditor) return;
+                const requestId = visitLoadRequestRef.current;
                 const uploads = [];
                 for (const file of Array.from(files)) {
                   uploads.push(
@@ -2645,12 +2684,14 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
                   ...visitEditor.note,
                   newAttachmentUploads: [...visitEditor.note.newAttachmentUploads, ...uploads]
                 };
-                setVisitEditor({
-                  ...visitEditor,
-                  note: nextNote
-                });
+                if (isCurrentVisitRequest(requestId, nextNote)) {
+                  setVisitEditor({
+                    ...visitEditor,
+                    note: nextNote
+                  });
+                }
                 try {
-                  await saveVisitDraftPoint(nextNote, "Attachment saved to draft.");
+                  await saveVisitDraftPoint(nextNote, "Attachment saved to draft.", requestId);
                 } catch (error) {
                   const message = error instanceof Error ? error.message : "Unknown error.";
                   showToast(`Could not save attachment to draft: ${message}`);

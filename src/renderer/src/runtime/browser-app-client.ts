@@ -1,5 +1,6 @@
 import { readPatientArchiveFromBytes } from "../../../shared/archive-read";
 import { buildCourseVisitPdfBaseName, prepareIsolatedCourseInput, requireVisitInCourse, requireVisitSaveContext } from "../../../shared/course-isolation";
+import { syncEditedVisitVitals } from "../../../shared/visit-vitals";
 import {
   ensureValidPin,
   generatePinSalt,
@@ -516,7 +517,9 @@ export class BrowserAppClient implements AppClient {
       note: {
         ...refreshedNote,
         generatedText,
-        editedText: shouldRefreshEditedText ? generatedText : visit.editedText
+        editedText: shouldRefreshEditedText
+          ? generatedText
+          : syncEditedVisitVitals(visit.editedText, generatedText, refreshedNote.noteType, refreshedNote.vitals)
       },
       existingPhotos: structuredDataStore.fetchVisitPhotos(visit.id),
       existingAttachments: structuredDataStore.fetchVisitAttachments(visit.id),
@@ -1743,7 +1746,7 @@ export class BrowserAppClient implements AppClient {
         const targetSlotVisit = input.id
           ? slotVisits.find((visit) => visit.note.id === input.id) ?? slotVisits[0] ?? null
           : slotVisits[0] ?? null;
-        return targetSlotVisit?.note.id ?? input.id;
+        return input.id ?? targetSlotVisit?.note.id;
       })(),
       therapistName: input.therapistName.trim(),
       vitals: formatVitals(input.vitals),
@@ -1758,7 +1761,7 @@ export class BrowserAppClient implements AppClient {
       normalizedInput,
       structuredDataStore.toSettingsView(structuredDataStore.getSettingsRecord())
     );
-    const editedText = normalizedInput.editedText.trim() || generatedText;
+    const editedText = syncEditedVisitVitals(normalizedInput.editedText.trim() || generatedText, generatedText, normalizedInput.noteType, normalizedInput.vitals);
     const savedVisit = structuredDataStore.saveVisit(normalizedInput, generatedText, editedText);
 
     const existingPhotos = structuredDataStore.fetchVisitPhotos(savedVisit.id);
@@ -1889,7 +1892,7 @@ export class BrowserAppClient implements AppClient {
     const pdfFileName = `${pdfBaseName}.pdf`;
 
     const pdfBytes = await buildVisitPdf({
-      noteText: visit.editedText || visit.generatedText,
+      noteText: syncEditedVisitVitals(visit.editedText || visit.generatedText, visit.generatedText, visit.noteType, visit.vitals),
       photoInputs: await Promise.all(
         photos.map(async (photo) => ({
           image: await this.readStoredAssetInput(photo.imageAsset, `visit photo ${photo.id}`),

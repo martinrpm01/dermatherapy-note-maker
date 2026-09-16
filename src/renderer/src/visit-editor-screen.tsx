@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { AppClient, SettingsPayload, VisitEditorState } from "../../shared/types";
+import { resetVitalsForVisitTypeChange } from "../../shared/visit-vitals";
 import {
   applyAutomaticDoseValuesToSiteSnapshot,
   buildDefaultStructuredFields,
@@ -252,6 +253,7 @@ const showProjectedFractionsInput = false;
                         note: {
                           ...current.note,
                           noteType: "follow_up",
+                          vitals: resetVitalsForVisitTypeChange(current.note.noteType, "follow_up", current.note.vitals),
                           treatmentNumber: null,
                           structuredFields: buildDefaultStructuredFields(
                             "follow_up",
@@ -272,6 +274,7 @@ const showProjectedFractionsInput = false;
                         note: {
                           ...current.note,
                           noteType: "consult_sim",
+                          vitals: resetVitalsForVisitTypeChange(current.note.noteType, "consult_sim", current.note.vitals),
                           treatmentNumber: null,
                           structuredFields: {
                             ...current.note.structuredFields,
@@ -304,6 +307,7 @@ const showProjectedFractionsInput = false;
                         ...current.note,
                         treatmentNumber: nextTreatmentNumber,
                         noteType: nextNoteType,
+                        vitals: resetVitalsForVisitTypeChange(current.note.noteType, nextNoteType, current.note.vitals),
                         structuredFields: {
                           ...current.note.structuredFields,
                           includePhysicsNote: nextNoteType === "otv",
@@ -668,6 +672,7 @@ const showProjectedFractionsInput = false;
           {(editor.note.noteType === "consult_sim" || editor.note.noteType === "otv") ? (
             <div>
               <h4 style={{ margin: "0 0 0.4rem" }}>Exam Vitals</h4>
+              {editor.note.noteType === "otv" ? <p className="muted">Enter vitals for this visit only. Blank fields are omitted from the note and PDF.</p> : null}
               <div className="form-grid">
                 <label>
                   Blood Pressure

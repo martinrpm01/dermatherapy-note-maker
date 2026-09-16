@@ -1,7 +1,16 @@
 import type { StructuredDataStore } from "./storage";
 import type { CourseInput, PatientRecord, TreatmentCourseRecord, VisitInput, VisitNoteRecord } from "./types";
+import { isTreatmentNoteType } from "./note-rules";
 
-type CourseContextStore = Pick<StructuredDataStore, "fetchPatient" | "fetchCourse" | "fetchVisit" | "fetchSites">;
+type CourseContextStore = Pick<StructuredDataStore, "fetchPatient" | "fetchCourse" | "fetchVisit" | "fetchSites" | "fetchVisitsByCourseIds">;
+
+function sameVisitSlot(left: Pick<VisitInput, "noteType" | "treatmentNumber" | "visitDate">, right: Pick<VisitInput, "noteType" | "treatmentNumber" | "visitDate">) {
+  if (isTreatmentNoteType(left.noteType) && isTreatmentNoteType(right.noteType)) {
+    return left.treatmentNumber === right.treatmentNumber;
+  }
+  if (left.noteType !== right.noteType) return false;
+  return left.noteType === "follow_up" ? left.visitDate === right.visitDate : true;
+}
 
 export function prepareIsolatedCourseInput(store: CourseContextStore, input: CourseInput): CourseInput {
   if (!store.fetchPatient(input.patientId)) {
@@ -52,7 +61,12 @@ export function requireVisitSaveContext(store: CourseContextStore, input: VisitI
     throw new Error("This course belongs to a different patient. Reopen the correct course.");
   }
   if (input.id) {
-    requireVisitInCourse(store, input.id, course.id);
+    const existing = requireVisitInCourse(store, input.id, course.id);
+    if (!sameVisitSlot(existing, input) && store.fetchVisitsByCourseIds([course.id]).some(
+      ({ note }) => note.id !== existing.id && sameVisitSlot(note, input)
+    )) {
+      throw new Error("A note already exists for that visit in this course. Open that note instead of changing this note's visit type or treatment number.");
+    }
   }
   return { patient, course };
 }

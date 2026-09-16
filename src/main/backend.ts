@@ -12,6 +12,7 @@ import type {
 } from "../shared/archive";
 import { buildVisitPdf } from "./pdf";
 import { buildCourseVisitPdfBaseName, prepareIsolatedCourseInput, requireVisitInCourse, requireVisitSaveContext } from "../shared/course-isolation";
+import { syncEditedVisitVitals } from "../shared/visit-vitals";
 import { buildConsentFormPdf, buildSignedConsentFormPdf, buildUploadedConsentPdf } from "./consent-form";
 import { buildSimWorksheetPdf } from "./sim-worksheet";
 import { buildConsultQuestionnairePdf } from "./consult-questionnaire";
@@ -1439,14 +1440,14 @@ export class RadiationNoteService {
 
     const normalizedInput: VisitInput = {
       ...input,
-      id: targetSlotVisit?.note.id ?? input.id,
+      id: input.id ?? targetSlotVisit?.note.id,
       therapistName: input.therapistName.trim(),
       vitals: formatVitals(input.vitals),
       structuredFields
     };
 
     const generatedText = this.renderVisitText(patient, course, normalizedInput);
-    const editedText = normalizedInput.editedText.trim() || generatedText;
+    const editedText = syncEditedVisitVitals(normalizedInput.editedText.trim() || generatedText, generatedText, normalizedInput.noteType, normalizedInput.vitals);
     const savedVisit = this.repository.saveVisit(normalizedInput, generatedText, editedText);
 
     const existingPhotos = this.repository.fetchVisitPhotos(savedVisit.id);
@@ -1574,7 +1575,7 @@ export class RadiationNoteService {
     const outputPath = path.join(outputDirectory, `${pdfBaseName}.pdf`);
 
     const pdfBytes = await buildVisitPdf({
-      noteText: visit.editedText || visit.generatedText,
+      noteText: syncEditedVisitVitals(visit.editedText || visit.generatedText, visit.generatedText, visit.noteType, visit.vitals),
       photoInputs: photos.map((photo) => ({
         image: this.readPdfAssetInput(photo.imageAsset, `visit photo ${photo.id}`),
         caption: photo.caption || `Treatment Photo ${photo.sortOrder}`
@@ -2564,7 +2565,9 @@ export class RadiationNoteService {
         note: {
           ...refreshedNote,
           generatedText,
-          editedText: shouldRefreshEditedText ? generatedText : visit.editedText
+          editedText: shouldRefreshEditedText
+            ? generatedText
+            : syncEditedVisitVitals(visit.editedText, generatedText, refreshedNote.noteType, refreshedNote.vitals)
         },
         existingPhotos: this.repository.fetchVisitPhotos(visit.id),
         existingAttachments: this.repository.fetchVisitAttachments(visit.id),

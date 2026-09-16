@@ -23,6 +23,8 @@ Changing **Visit Type** inside the ongoing course does not create a separate cou
 
 Select the ongoing course in the course dropdown, then choose **Start Today's Note** on its card. Confirm the lesion and treatment number. Keep that course active until its treatment is actually completed.
 
+For an **OTV**, enter vitals in that visit's **Exam Vitals** fields. Vitals do not carry over from the questionnaire, consultation, another OTV, or another course. Only filled fields appear in the note and PDF; blank fields disappear. To correct an existing note, open that OTV, edit or clear its fields, then finalize again to regenerate the PDF.
+
 ## What stays separate
 
 The same patient identity and identification photo remain available. Each course has its own lesions, treatment setup, fraction history, consultation, notes, treatment photos, course documents, and note PDFs. A new course starts without the older course's visits or photos. Standard form defaults are not copied treatment history.
