@@ -1447,7 +1447,11 @@ export class RadiationNoteService {
     };
 
     const generatedText = this.renderVisitText(patient, course, normalizedInput);
-    const editedText = syncEditedVisitVitals(normalizedInput.editedText.trim() || generatedText, generatedText, normalizedInput.noteType, normalizedInput.vitals);
+    const incomingText = normalizedInput.editedText.trim();
+    const selectedText = !incomingText || incomingText === normalizedInput.generatedText.trim()
+      ? generatedText
+      : incomingText;
+    const editedText = syncEditedVisitVitals(selectedText, generatedText, normalizedInput.noteType, normalizedInput.vitals);
     const savedVisit = this.repository.saveVisit(normalizedInput, generatedText, editedText);
 
     const existingPhotos = this.repository.fetchVisitPhotos(savedVisit.id);

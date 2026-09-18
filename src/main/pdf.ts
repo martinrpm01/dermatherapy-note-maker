@@ -383,34 +383,43 @@ function drawWrappedParagraph(
   size: number,
   lineHeight: number,
   margin: number,
-  color: ReturnType<typeof rgb>
+  color: ReturnType<typeof rgb>,
+  startNewPage: () => { page: Awaited<ReturnType<PDFDocument["addPage"]>>; cursorY: number }
 ) {
+  let nextY = y;
+  const ensureLineRoom = () => {
+    if (nextY < margin + lineHeight) {
+      const nextPage = startNewPage();
+      page = nextPage.page;
+      nextY = nextPage.cursorY;
+    }
+  };
   const parsed = splitLabelValue(line.trim());
   if (parsed?.value && parsed.label.trim() === "Plan:") {
     const wrappedLines = wrapLine(line, page.getWidth() - margin * 2, boldFont, size);
-    let nextY = y;
     for (const wrappedLine of wrappedLines) {
+      ensureLineRoom();
       drawSimpleLine(page, wrappedLine, margin, nextY, size, boldFont, color);
       nextY -= lineHeight;
     }
-    return nextY;
+    return { page, cursorY: nextY };
   }
 
   if (!parsed || !parsed.value || !shouldBoldBodyLabel(parsed.label)) {
     const wrappedLines = wrapLine(line, page.getWidth() - margin * 2, regularFont, size);
-    let nextY = y;
     for (const wrappedLine of wrappedLines) {
+      ensureLineRoom();
       drawSimpleLine(page, wrappedLine, margin, nextY, size, regularFont, color);
       nextY -= lineHeight;
     }
-    return nextY;
+    return { page, cursorY: nextY };
   }
 
   const labelText = `${parsed.label} `;
   const labelWidth = boldFont.widthOfTextAtSize(labelText, size);
   const wrappedValues = wrapLine(parsed.value, Math.max(44, page.getWidth() - margin * 2 - labelWidth - 2), regularFont, size);
-  let nextY = y;
 
+  ensureLineRoom();
   drawSimpleLine(page, parsed.label, margin, nextY, size, boldFont, color);
 
   if (wrappedValues.length) {
@@ -421,11 +430,12 @@ function drawWrappedParagraph(
   }
 
   for (const wrappedLine of wrappedValues.slice(1)) {
+    ensureLineRoom();
     drawSimpleLine(page, wrappedLine, margin + labelWidth + 2, nextY, size, regularFont, color);
     nextY -= lineHeight;
   }
 
-  return nextY;
+  return { page, cursorY: nextY };
 }
 
 function drawBrandHeader(
@@ -693,6 +703,10 @@ export async function buildVisitPdf({ noteText, photoInputs, attachmentInputs, l
       continue;
     }
 
+    if (parseDiagnosisHeading(cleanLine) && cursorY < margin + bodyLineHeight * 2) {
+      page = pdfDoc.addPage(pageSize);
+      cursorY = drawVisitPageHeader(page, logo, margin, metadata, regularFont, boldFont);
+    }
     const diagnosisHeadingY = drawDiagnosisHeading(
       page,
       cleanLine,
@@ -711,7 +725,7 @@ export async function buildVisitPdf({ noteText, photoInputs, attachmentInputs, l
       cursorY = drawVisitPageHeader(page, logo, margin, metadata, regularFont, boldFont);
     }
 
-    cursorY = drawWrappedParagraph(
+    const paragraphResult = drawWrappedParagraph(
       page,
       cleanLine,
       cursorY,
@@ -720,8 +734,17 @@ export async function buildVisitPdf({ noteText, photoInputs, attachmentInputs, l
       bodySize,
       bodyLineHeight,
       margin,
-      textColor
+      textColor,
+      () => {
+        const continuationPage = pdfDoc.addPage(pageSize);
+        return {
+          page: continuationPage,
+          cursorY: drawVisitPageHeader(continuationPage, logo, margin, metadata, regularFont, boldFont)
+        };
+      }
     );
+    page = paragraphResult.page;
+    cursorY = paragraphResult.cursorY;
   }
 
   if (photoInputs.length > 0) {

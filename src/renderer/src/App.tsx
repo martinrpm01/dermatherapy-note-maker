@@ -2026,7 +2026,7 @@ export default function App({ appClient, initialClientError = "" }: AppProps) {
       if (!appClient) return;
       const currentPatientId = visitEditor.patient.id;
       const noteInput = generatePdf
-        ? { ...visitEditor.note, status: "finalized" as const, editedText: textDirty ? visitEditor.note.editedText : "" }
+        ? { ...visitEditor.note, status: "finalized" as const }
         : visitEditor.note;
       const saved = await appClient.saveVisit(noteInput);
       if (isCurrentVisitRequest(requestId, noteInput, saved.id)) {

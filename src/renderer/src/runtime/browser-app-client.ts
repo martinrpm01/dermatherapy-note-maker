@@ -1761,7 +1761,11 @@ export class BrowserAppClient implements AppClient {
       normalizedInput,
       structuredDataStore.toSettingsView(structuredDataStore.getSettingsRecord())
     );
-    const editedText = syncEditedVisitVitals(normalizedInput.editedText.trim() || generatedText, generatedText, normalizedInput.noteType, normalizedInput.vitals);
+    const incomingText = normalizedInput.editedText.trim();
+    const selectedText = !incomingText || incomingText === normalizedInput.generatedText.trim()
+      ? generatedText
+      : incomingText;
+    const editedText = syncEditedVisitVitals(selectedText, generatedText, normalizedInput.noteType, normalizedInput.vitals);
     const savedVisit = structuredDataStore.saveVisit(normalizedInput, generatedText, editedText);
 
     const existingPhotos = structuredDataStore.fetchVisitPhotos(savedVisit.id);
